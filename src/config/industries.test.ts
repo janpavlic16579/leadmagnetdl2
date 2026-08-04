@@ -15,10 +15,11 @@ describe('Preslikava dejavnost -> segment', () => {
   });
 
   it('reprezentativni primeri se preslikajo pravilno', () => {
-    expect(getSegmentForIndustry('kovinarstvo')).toBe('proizvodnja');
-    expect(getSegmentForIndustry('logistika')).toBe('trgovina');
+    expect(getSegmentForIndustry('proizvodnja')).toBe('proizvodnja');
+    expect(getSegmentForIndustry('trgovina')).toBe('trgovina');
+    expect(getSegmentForIndustry('maloprodaja')).toBe('trgovina');
     expect(getSegmentForIndustry('racunovodstvo')).toBe('racunovodstvo');
-    expect(getSegmentForIndustry('it')).toBe('splosno');
+    expect(getSegmentForIndustry('storitve')).toBe('splosno');
   });
 
   it('vsak od štirih segmentov je dosegljiv iz vsaj ene dejavnosti', () => {
@@ -32,7 +33,7 @@ describe('Preslikava dejavnost -> segment', () => {
   });
 
   it('getIndustryLabel vrne oznako oz. prazen niz za neznano dejavnost', () => {
-    expect(getIndustryLabel('kovinarstvo')).toBe('Kovinska predelava');
+    expect(getIndustryLabel('maloprodaja')).toBe('Maloprodaja');
     expect(getIndustryLabel('neobstojeca-panoga')).toBe('');
   });
 });

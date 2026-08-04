@@ -64,3 +64,61 @@
     flex: 1;
   }
 }
+
+/* Izbirna vprašanja (choice) so diagnostična: odgovor ni število, ampak stanje
+   procesa, iz katerega modul izpelje realistično izboljšljiv delež. */
+.field:where(fieldset) {
+  border: none;
+  padding: 0;
+  margin-inline: 0;
+}
+
+.label:where(legend) {
+  padding: 0;
+}
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+}
+
+.choice:has(input:checked) {
+  border-color: var(--color-primary-text);
+  background: var(--color-accent);
+  font-weight: 600;
+}
+
+.choice input {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.checkbox input {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}

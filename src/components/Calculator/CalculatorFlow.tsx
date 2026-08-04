@@ -1,36 +1,28 @@
 import { useEffect, useMemo, useState } from 'react';
-import { MODULE_E_ITEMS, SEGMENTS, type SegmentId } from '../../config/segments';
+import { SEGMENTS, type SegmentId } from '../../config/segments';
+import { getModules } from '../../config/modules';
 import { getIndustryLabel, getSegmentForIndustry } from '../../config/industries';
 import { getSizeClass } from '../../config/sizeClasses';
+import { calculateAccountingCapacity } from '../../lib/calculations';
 import {
-  calculateAccountingCapacity,
-  calculateModuleA,
-  calculateModuleB,
-  calculateModuleC,
-  calculateModuleD,
-  calculateTotalAnnualLoss,
+  aggregateBuckets,
+  computeModules,
   findHighestModule,
-  hasAnyModuleERisk,
-  type ModuleAResult,
-  type ModuleBResult,
-  type ModuleCResult,
-  type ModuleDResult,
-  type ModuleEChecked,
-} from '../../lib/calculations';
+  groupByModule,
+  resolveActiveModules,
+  resolveInputs,
+  selectTopModules,
+  type TriageScores,
+} from '../../lib/moduleEngine';
 import { selectFollowUpSequence } from '../../lib/followUp';
 import { downloadAsCsv, downloadAsJson, type LeadExportRecord } from '../../lib/exportRecord';
 import type { BasicInfo, FlowStep, ModuleInputsState } from '../../types';
 import { StepBasicInfo } from './StepBasicInfo';
+import { StepTriage } from './StepTriage';
 import { StepInputs } from './StepInputs';
 import { SegmentLanding } from './SegmentLanding';
 import { ResultsView } from '../Results/ResultsView';
 import { EmailGate } from '../Results/EmailGate';
-
-const EMPTY_E_CHECKED: ModuleEChecked = {
-  sqlServer2016: false,
-  windowsServer2016: false,
-  eInvoiceZierded: false,
-};
 
 interface CalculatorFlowProps {
   /** Segment iz ?s= — če je podan, se ne izpelje iz dejavnosti (kampanjska povezava). */
@@ -40,17 +32,13 @@ interface CalculatorFlowProps {
   onActiveSegmentChange?: (id: SegmentId) => void;
 }
 
-interface ComputedResults {
-  A?: ModuleAResult;
-  B?: ModuleBResult;
-  C?: ModuleCResult;
-  D?: ModuleDResult;
-}
-
 export function CalculatorFlow({ initialSegmentOverride, utmSource, onActiveSegmentChange }: CalculatorFlowProps) {
   const [step, setStep] = useState<FlowStep>('basicInfo');
   const [basicInfo, setBasicInfo] = useState<BasicInfo>({ industry: '', employeeCount: 0 });
   const [moduleInputs, setModuleInputs] = useState<ModuleInputsState>({});
+  const [triageScores, setTriageScores] = useState<TriageScores>({});
+  /** null = uporabnik še ni bil v triaži; takrat velja samodejni predlog. */
+  const [triageSelection, setTriageSelection] = useState<string[] | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
   /**
@@ -66,53 +54,64 @@ export function CalculatorFlow({ initialSegmentOverride, utmSource, onActiveSegm
     onActiveSegmentChange?.(activeSegmentId);
   }, [activeSegmentId, onActiveSegmentChange]);
 
-  const effectiveInputs = useMemo(() => {
-    const modules = segment.modulesEnabled;
-    return {
-      A: modules.includes('A') && segment.defaults.A ? { ...segment.defaults.A, ...moduleInputs.A } : undefined,
-      B: modules.includes('B') && segment.defaults.B ? { ...segment.defaults.B, ...moduleInputs.B } : undefined,
-      C: modules.includes('C') && segment.defaults.C ? { ...segment.defaults.C, ...moduleInputs.C } : undefined,
-      D: modules.includes('D') && segment.defaults.D ? { ...segment.defaults.D, ...moduleInputs.D } : undefined,
-      E: modules.includes('E') ? { ...EMPTY_E_CHECKED, ...moduleInputs.E } : EMPTY_E_CHECKED,
-    };
-  }, [segment, moduleInputs]);
-
-  const results: ComputedResults = useMemo(
-    () => ({
-      A: effectiveInputs.A ? calculateModuleA(effectiveInputs.A) : undefined,
-      B: effectiveInputs.B ? calculateModuleB(effectiveInputs.B) : undefined,
-      C: effectiveInputs.C ? calculateModuleC(effectiveInputs.C) : undefined,
-      D: effectiveInputs.D ? calculateModuleD(effectiveInputs.D) : undefined,
-    }),
-    [effectiveInputs],
+  const segmentModules = useMemo(() => getModules(segment.moduleIds), [segment]);
+  /** Samo moduli s triažo se lahko izločijo; diagnostični in E se prikažejo vedno. */
+  const triageableIds = useMemo(
+    () => segmentModules.filter((definition) => definition.triage).map((definition) => definition.id),
+    [segmentModules],
   );
 
-  const totalAnnualLossEUR = calculateTotalAnnualLoss(results);
-  const highestModule = findHighestModule(results);
-  const moduleERisk = hasAnyModuleERisk(effectiveInputs.E);
+  const detailCount = segment.triage?.detailCount ?? 0;
+  const autoSelection = useMemo(
+    () => (segment.triage ? selectTopModules(triageableIds, triageScores, detailCount) : []),
+    [segment.triage, triageableIds, triageScores, detailCount],
+  );
+  const selectedIds = triageSelection ?? autoSelection;
+
+  const activeModules = useMemo(
+    () => resolveActiveModules(segmentModules, segment.triage ? selectedIds : null),
+    [segmentModules, segment.triage, selectedIds],
+  );
+
+  /** Vrednosti, dopolnjene s privzetimi — modul nikoli ne dobi delnega vnosa. */
+  const resolvedValues = useMemo(() => {
+    const values: Record<string, Record<string, number>> = {};
+    for (const definition of activeModules) {
+      values[definition.id] = resolveInputs(definition, moduleInputs[definition.id]);
+    }
+    return values;
+  }, [activeModules, moduleInputs]);
+
+  const outputs = useMemo(
+    () => computeModules(activeModules, resolvedValues),
+    [activeModules, resolvedValues],
+  );
+  const totals = useMemo(() => aggregateBuckets(outputs), [outputs]);
+  const highestModule = findHighestModule(outputs, segment.moduleIds);
 
   const accountingCapacity =
-    segment.id === 'racunovodstvo' && segment.accountingCapacity && results.A
-      ? calculateAccountingCapacity(results.A.hoursFreedPerMonth, segment.accountingCapacity.avgHoursPerClientPerMonth)
+    segment.id === 'racunovodstvo' && segment.accountingCapacity
+      ? calculateAccountingCapacity(totals.capacityHoursPerMonth || hoursFromDirectLoss(outputs), segment.accountingCapacity.avgHoursPerClientPerMonth)
       : undefined;
 
   const followUpSequence = selectFollowUpSequence({
     segment: segment.id,
-    totalAnnualLossEUR,
-    hasModuleERisk: moduleERisk,
+    directLossEUR: totals.directLossEUR,
+    hasModuleERisk: totals.risks.length > 0,
     highLossThresholdEUR: segment.highLossThresholdEUR,
-    highLossThresholdHoursPerMonth: segment.highLossThresholdHoursPerMonth,
-    hoursFreedPerMonth: results.A?.hoursFreedPerMonth,
   });
 
-  async function handleEmailSubmit({ companyName, email }: { companyName: string; email: string }) {
-    const timestampISO = new Date().toISOString();
-    const moduleERisksChecked = (Object.keys(effectiveInputs.E) as Array<keyof ModuleEChecked>).filter(
-      (key) => effectiveInputs.E[key],
-    );
+  /** Moduli, ki jih obiskovalec ni izbral — na rezultatih jih pokažemo kot neizmerjene. */
+  const unmeasuredModules = segmentModules.filter(
+    (definition) => definition.triage && !selectedIds.includes(definition.id),
+  );
 
+  const stepLabel = (current: number) =>
+    `Korak ${current} od ${segment.triage ? 4 : 3}`;
+
+  async function handleEmailSubmit({ companyName, email }: { companyName: string; email: string }) {
     const record: LeadExportRecord = {
-      timestampISO,
+      timestampISO: new Date().toISOString(),
       segment: segment.id,
       industry: basicInfo.industry,
       industryLabel: getIndustryLabel(basicInfo.industry),
@@ -121,25 +120,19 @@ export function CalculatorFlow({ initialSegmentOverride, utmSource, onActiveSegm
       companyName,
       email,
       gdprConsent: true,
-      inputs: {
-        ...(effectiveInputs.A ?? {}),
-        ...(effectiveInputs.B ?? {}),
-        ...(effectiveInputs.C ?? {}),
-        ...(effectiveInputs.D ?? {}),
+      selectedModules: activeModules.map((definition) => definition.id),
+      triageScores,
+      moduleInputs: resolvedValues,
+      outputs,
+      totals: {
+        directLossEUR: totals.directLossEUR,
+        capacityEUR: totals.capacityEUR,
+        capacityHoursPerMonth: totals.capacityHoursPerMonth,
+        oneTimeCapitalEUR: totals.oneTimeCapitalEUR,
       },
-      results: {
-        A: results.A ? { annualEUR: results.A.annualEUR, hoursFreedPerMonth: results.A.hoursFreedPerMonth } : undefined,
-        B: results.B ? { annualEUR: results.B.annualEUR } : undefined,
-        C: results.C ? { releasedCapitalEUR: results.C.releasedCapitalEUR, annualEUR: results.C.annualEUR } : undefined,
-        D: results.D ? { annualEUR: results.D.annualEUR } : undefined,
-      },
-      totalAnnualLossEUR,
-      moduleERisksChecked,
       followUpSequence,
       utmSource,
     };
-
-    const moduleEWarnings = MODULE_E_ITEMS.filter((item) => effectiveInputs.E[item.id]).map((item) => item.warningText);
 
     downloadAsJson(record);
     downloadAsCsv(record);
@@ -149,17 +142,23 @@ export function CalculatorFlow({ initialSegmentOverride, utmSource, onActiveSegm
     generateResultsPdf({
       segment,
       companyName,
-      results,
-      totalAnnualLossEUR,
-      moduleEWarnings,
+      outputs,
+      totals,
       highestModule,
+      accountingCapacity,
     });
 
     setSubmitted(true);
   }
 
   if (step === 'basicInfo') {
-    return <StepBasicInfo value={basicInfo} onChange={setBasicInfo} onNext={() => setStep('inputs')} />;
+    return (
+      <StepBasicInfo
+        value={basicInfo}
+        onChange={setBasicInfo}
+        onNext={() => setStep(segment.triage ? 'triage' : 'inputs')}
+      />
+    );
   }
 
   if (step === 'changeSegment') {
@@ -168,9 +167,31 @@ export function CalculatorFlow({ initialSegmentOverride, utmSource, onActiveSegm
         activeSegmentId={activeSegmentId}
         onSelect={(id) => {
           setSegmentOverride(id);
-          setStep('inputs');
+          // Triažna izbira velja za prejšnji segment — ob zamenjavi se zavrže.
+          setTriageSelection(null);
+          setStep(SEGMENTS[id].triage ? 'triage' : 'inputs');
         }}
         onBack={() => setStep('inputs')}
+      />
+    );
+  }
+
+  if (step === 'triage') {
+    return (
+      <StepTriage
+        modules={segmentModules.filter((definition) => definition.triage)}
+        scores={triageScores}
+        onScoresChange={(scores) => {
+          setTriageScores(scores);
+          // Ročni popravek velja le, dokler uporabnik ne spremeni ocen.
+          setTriageSelection(null);
+        }}
+        selected={selectedIds}
+        onSelectedChange={setTriageSelection}
+        maxSelected={detailCount + 1}
+        stepLabel={stepLabel(2)}
+        onNext={() => setStep('inputs')}
+        onBack={() => setStep('basicInfo')}
       />
     );
   }
@@ -179,11 +200,14 @@ export function CalculatorFlow({ initialSegmentOverride, utmSource, onActiveSegm
     return (
       <StepInputs
         segment={segment}
-        value={moduleInputs}
+        modules={activeModules}
+        values={resolvedValues}
+        raw={moduleInputs}
         onChange={setModuleInputs}
-        liveTotalEUR={totalAnnualLossEUR}
+        liveTotalEUR={totals.directLossEUR}
+        stepLabel={stepLabel(segment.triage ? 3 : 2)}
         onNext={() => setStep('results')}
-        onBack={() => setStep('basicInfo')}
+        onBack={() => setStep(segment.triage ? 'triage' : 'basicInfo')}
         onChangeSegment={() => setStep('changeSegment')}
       />
     );
@@ -193,10 +217,15 @@ export function CalculatorFlow({ initialSegmentOverride, utmSource, onActiveSegm
     return (
       <ResultsView
         segment={segment}
-        results={results}
-        totalAnnualLossEUR={totalAnnualLossEUR}
-        moduleEChecked={effectiveInputs.E}
+        outputsByModule={groupByModule(outputs)}
+        totals={totals}
         accountingCapacity={accountingCapacity}
+        unmeasuredModules={unmeasuredModules}
+        stepLabel={stepLabel(segment.triage ? 4 : 3)}
+        onMeasureModule={(id) => {
+          setTriageSelection([...selectedIds, id]);
+          setStep('inputs');
+        }}
         onProceedToEmail={() => setStep('emailGate')}
         onBack={() => setStep('inputs')}
       />
@@ -211,4 +240,12 @@ export function CalculatorFlow({ initialSegmentOverride, utmSource, onActiveSegm
       onBack={() => setStep('results')}
     />
   );
+}
+
+/**
+ * Računovodstvo meri kapaciteto prek modula A, ki je zaradi ohranjene matematike
+ * v košu directLoss — sproščene ure zato poberemo iz izidov, ne iz koša capacity.
+ */
+function hoursFromDirectLoss(outputs: { hoursPerMonth?: number }[]): number {
+  return outputs.reduce((sum, output) => sum + (output.hoursPerMonth ?? 0), 0);
 }

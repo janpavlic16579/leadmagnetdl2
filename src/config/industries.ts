@@ -17,17 +17,13 @@ export interface IndustryOption {
 
 export const INDUSTRIES: IndustryOption[] = [
   { id: 'proizvodnja', label: 'Proizvodnja', segment: 'proizvodnja' },
-  { id: 'kovinarstvo', label: 'Kovinska predelava', segment: 'proizvodnja' },
-  { id: 'zivilstvo', label: 'Živilska proizvodnja', segment: 'proizvodnja' },
-  { id: 'lesarstvo', label: 'Lesna in pohištvena industrija', segment: 'proizvodnja' },
-  { id: 'veleprodaja', label: 'Veleprodaja / distribucija', segment: 'trgovina' },
-  { id: 'logistika', label: 'Logistika / transport', segment: 'trgovina' },
+  { id: 'trgovina', label: 'Trgovina, veleprodaja in distribucija', segment: 'trgovina' },
+  { id: 'racunovodstvo', label: 'Računovodski servisi', segment: 'racunovodstvo' },
+  { id: 'storitve', label: 'Storitvena in projektna podjetja', segment: 'splosno' },
   { id: 'maloprodaja', label: 'Maloprodaja', segment: 'trgovina' },
-  { id: 'racunovodstvo', label: 'Računovodski servis', segment: 'racunovodstvo' },
-  { id: 'gradbenistvo', label: 'Gradbeništvo', segment: 'splosno' },
-  { id: 'storitve', label: 'Storitve', segment: 'splosno' },
-  { id: 'it', label: 'IT / programska oprema', segment: 'splosno' },
-  { id: 'drugo', label: 'Drugo', segment: 'splosno' },
+  // PANTHEON nima posebne logistične licence — licenci SE in ME (moduli LT, LT3)
+  // pokrivata finance, naročila, dokumentacijo, stroške in obračunavanje, zato gre v segment 'trgovina'.
+  { id: 'logistika', label: 'Logistika in transport', segment: 'trgovina' },
 ];
 
 /** Varovalo: neznana ali prazna dejavnost pade v splošni pogled, nikoli v napako. */

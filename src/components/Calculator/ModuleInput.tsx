@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import styles from './ModuleInput.module.css';
 
 interface SliderFieldProps {
@@ -18,14 +19,64 @@ interface NumberFieldProps {
   helpText?: string;
   value: number;
   unit?: string;
-  placeholder?: string;
   onChange: (value: number) => void;
 }
 
-type ModuleInputProps = SliderFieldProps | NumberFieldProps;
+interface ChoiceFieldProps {
+  mode: 'choice';
+  label: string;
+  helpText?: string;
+  value: number;
+  choices: { value: number; label: string }[];
+  onChange: (value: number) => void;
+}
+
+interface CheckboxFieldProps {
+  mode: 'checkbox';
+  label: string;
+  helpText?: string;
+  value: number;
+  onChange: (value: number) => void;
+}
+
+type ModuleInputProps = SliderFieldProps | NumberFieldProps | ChoiceFieldProps | CheckboxFieldProps;
 
 export function ModuleInput(props: ModuleInputProps) {
-  const { label, helpText, value, unit, onChange } = props;
+  const { label, helpText, value, onChange } = props;
+  const groupId = useId();
+
+  if (props.mode === 'checkbox') {
+    return (
+      <label className={styles.checkbox}>
+        <input type="checkbox" checked={value === 1} onChange={(event) => onChange(event.target.checked ? 1 : 0)} />
+        <span>{label}</span>
+      </label>
+    );
+  }
+
+  if (props.mode === 'choice') {
+    return (
+      <fieldset className={styles.field}>
+        <legend className={styles.label}>{label}</legend>
+        {helpText ? <p className={styles.helpText}>{helpText}</p> : null}
+        <div className={styles.choices}>
+          {props.choices.map((choice) => (
+            <label key={choice.value} className={styles.choice}>
+              <input
+                type="radio"
+                name={groupId}
+                checked={value === choice.value}
+                onChange={() => onChange(choice.value)}
+              />
+              <span>{choice.label}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+    );
+  }
+
+  const { unit } = props;
 
   return (
     <div className={styles.field}>
@@ -48,11 +99,13 @@ export function ModuleInput(props: ModuleInputProps) {
           <input
             className={styles.number}
             type="number"
-            value={Number.isFinite(value) ? value : 0}
+            // Prazno polje namesto dobesedne ničle: sicer mora uporabnik najprej
+            // pobrisati "0", preden začne tipkati, kar da vmesne vrednosti kot "056".
+            value={Number.isFinite(value) && value !== 0 ? value : ''}
+            placeholder="0"
             min={props.mode === 'slider' ? props.min : 0}
             max={props.mode === 'slider' ? props.max : undefined}
             step={props.mode === 'slider' ? props.step : 'any'}
-            placeholder={props.mode === 'number' ? props.placeholder : undefined}
             onChange={(event) => onChange(event.target.value === '' ? 0 : Number(event.target.value))}
             aria-label={`${label} (vrednost)`}
           />

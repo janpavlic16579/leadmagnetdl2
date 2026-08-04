@@ -29,3 +29,31 @@
   font-size: var(--font-size-sm);
   margin: var(--space-1) 0 0;
 }
+
+.subList {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.subList li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 2px 0;
+}
+
+/* Vsak modul pove, katera funkcionalnost PANTHEON naslavlja prav to izgubo —
+   brez tega je razčlenitev diagnoza brez zdravila. */
+.pantheon {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.pantheonLabel {
+  font-weight: 600;
+  color: var(--color-text);
+}

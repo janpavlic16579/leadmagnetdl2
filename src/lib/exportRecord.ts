@@ -1,5 +1,7 @@
+import type { ModuleOutput } from '../config/modules/moduleTypes';
 import type { SegmentId } from '../config/segmentTypes';
 import type { FollowUpSequence } from './followUp';
+import type { TriageScores } from './moduleEngine';
 
 // Ni CRM API — ta modul nadomešča pravo integracijo z ročnim izvozom (spec pogl. 8, MVP tabela).
 // Prenese CSV + JSON datoteko neposredno v brskalniku, brez omrežnega klica.
@@ -7,7 +9,7 @@ import type { FollowUpSequence } from './followUp';
 export interface LeadExportRecord {
   timestampISO: string;
   segment: SegmentId;
-  /** id dejavnosti in njena oznaka — prodajnik dobi "Kovinska predelava", ne le "proizvodnja". */
+  /** id dejavnosti in njena oznaka — prodajnik dobi "Maloprodaja", ne le "trgovina". */
   industry: string;
   industryLabel: string;
   sizeClass: string;
@@ -15,15 +17,18 @@ export interface LeadExportRecord {
   companyName: string;
   email: string;
   gdprConsent: true;
-  inputs: Record<string, number>;
-  results: {
-    A?: { annualEUR: number; hoursFreedPerMonth: number };
-    B?: { annualEUR: number };
-    C?: { releasedCapitalEUR: number; annualEUR: number };
-    D?: { annualEUR: number };
+  /** Moduli, ki so bili dejansko izračunani. */
+  selectedModules: string[];
+  /** Ocene VSEH modulov iz triaže — "stalno prestavljamo naloge" je signal tudi brez evrov. */
+  triageScores: TriageScores;
+  moduleInputs: Record<string, Record<string, number>>;
+  outputs: ModuleOutput[];
+  totals: {
+    directLossEUR: number;
+    capacityEUR: number;
+    capacityHoursPerMonth: number;
+    oneTimeCapitalEUR: number;
   };
-  totalAnnualLossEUR: number;
-  moduleERisksChecked: string[];
   followUpSequence: FollowUpSequence;
   utmSource: string | null;
 }
@@ -45,20 +50,35 @@ export function downloadAsJson(record: LeadExportRecord): void {
   triggerDownload(filename, JSON.stringify(record, null, 2), 'application/json');
 }
 
-const CSV_INPUT_KEYS = [
-  'documentsPerMonth',
-  'minutesPerDocument',
-  'hourlyLaborCostEUR',
-  'transactionsPerMonth',
-  'errorRatePercent',
-  'costPerErrorEUR',
-  'inventoryValueEUR',
-  'achievableReductionPercent',
-  'capitalCostPercent',
-  'annualRevenueEUR',
-  'currentDSODays',
-  'targetReductionDays',
-  'opportunityCostPercent',
+/**
+ * Glava CSV je NAMENOMA fiksna in enaka za vse segmente.
+ *
+ * Moduli se zdaj razlikujejo po dejavnosti, zato bi dinamični stolpci pomenili
+ * drugačno glavo za vsak segment — kar podre vsako CRM preslikavo. Stabilni
+ * stolpci nosijo tisto, po čemer prodaja filtrira; celoten vnos po modulih gre
+ * v en JSON stolpec, kjer ostane na voljo za analizo.
+ */
+const CSV_COLUMNS = [
+  'timestampISO',
+  'segment',
+  'industry',
+  'industryLabel',
+  'sizeClass',
+  'employeeCount',
+  'companyName',
+  'email',
+  'gdprConsent',
+  'directLossEUR',
+  'capacityEUR',
+  'capacityHoursPerMonth',
+  'oneTimeCapitalEUR',
+  'riskCount',
+  'risks',
+  'selectedModules',
+  'triageScores',
+  'moduleInputsJson',
+  'followUpSequence',
+  'utmSource',
 ] as const;
 
 function csvEscape(value: string): string {
@@ -69,28 +89,7 @@ function csvEscape(value: string): string {
 }
 
 export function downloadAsCsv(record: LeadExportRecord): void {
-  const headerColumns = [
-    'timestampISO',
-    'segment',
-    'industry',
-    'industryLabel',
-    'sizeClass',
-    'employeeCount',
-    'companyName',
-    'email',
-    'gdprConsent',
-    ...CSV_INPUT_KEYS.map((key) => `input_${key}`),
-    'result_A_annualEUR',
-    'result_A_hoursFreedPerMonth',
-    'result_B_annualEUR',
-    'result_C_releasedCapitalEUR',
-    'result_C_annualEUR',
-    'result_D_annualEUR',
-    'totalAnnualLossEUR',
-    'moduleERisksChecked',
-    'followUpSequence',
-    'utmSource',
-  ];
+  const risks = record.outputs.filter((output) => output.bucket === 'risk');
 
   const row = [
     record.timestampISO,
@@ -102,20 +101,22 @@ export function downloadAsCsv(record: LeadExportRecord): void {
     record.companyName,
     record.email,
     String(record.gdprConsent),
-    ...CSV_INPUT_KEYS.map((key) => (record.inputs[key] !== undefined ? String(record.inputs[key]) : '')),
-    record.results.A ? String(record.results.A.annualEUR) : '',
-    record.results.A ? String(record.results.A.hoursFreedPerMonth) : '',
-    record.results.B ? String(record.results.B.annualEUR) : '',
-    record.results.C ? String(record.results.C.releasedCapitalEUR) : '',
-    record.results.C ? String(record.results.C.annualEUR) : '',
-    record.results.D ? String(record.results.D.annualEUR) : '',
-    String(record.totalAnnualLossEUR),
-    record.moduleERisksChecked.join(';'),
+    String(Math.round(record.totals.directLossEUR)),
+    String(Math.round(record.totals.capacityEUR)),
+    String(Math.round(record.totals.capacityHoursPerMonth)),
+    String(Math.round(record.totals.oneTimeCapitalEUR)),
+    String(risks.length),
+    risks.map((risk) => `${risk.label} (${risk.riskLevel ?? 'n/a'})`).join('; '),
+    record.selectedModules.join(';'),
+    Object.entries(record.triageScores)
+      .map(([id, score]) => `${id}=${score}`)
+      .join(';'),
+    JSON.stringify(record.moduleInputs),
     record.followUpSequence,
     record.utmSource ?? '',
   ].map((value) => csvEscape(value));
 
-  const csv = `${headerColumns.join(',')}\n${row.join(',')}`;
+  const csv = `${CSV_COLUMNS.join(',')}\n${row.join(',')}`;
   const filename = `datalab-lead-${record.segment}-${record.timestampISO.slice(0, 10)}.csv`;
   triggerDownload(filename, csv, 'text/csv');
 }

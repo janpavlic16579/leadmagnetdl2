@@ -8,12 +8,10 @@ export type FollowUpSequence =
 
 export interface SelectFollowUpParams {
   segment: SegmentId;
-  totalAnnualLossEUR: number;
+  /** Samo neposredne letne izgube — sproščena kapaciteta in enkratni kapital ne štejeta. */
+  directLossEUR: number;
   hasModuleERisk: boolean;
   highLossThresholdEUR?: number;
-  /** Samo za računovodstvo: prag je v urah/mesec sproščenega časa, ne v EUR. */
-  highLossThresholdHoursPerMonth?: number;
-  hoursFreedPerMonth?: number;
 }
 
 /**
@@ -27,7 +25,7 @@ export function selectFollowUpSequence(params: SelectFollowUpParams): FollowUpSe
   }
 
   const isHighLoss =
-    params.highLossThresholdEUR !== undefined && params.totalAnnualLossEUR > params.highLossThresholdEUR;
+    params.highLossThresholdEUR !== undefined && params.directLossEUR > params.highLossThresholdEUR;
 
   if (isHighLoss) {
     return params.hasModuleERisk ? 'high-loss-with-risk' : 'high-loss-no-risk';

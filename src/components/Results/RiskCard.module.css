@@ -1,0 +1,60 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.risk {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.label {
+  font-weight: 600;
+}
+
+.badge {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-md);
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.low {
+  background: var(--color-accent);
+  color: var(--color-text-muted);
+  border-color: var(--color-border);
+}
+
+.medium {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  border-color: var(--color-warning-border);
+}
+
+/* Visoko tveganje uporabi isti vizualni jezik kot nekdanja opozorila modula E —
+   obiskovalec ga mora prepoznati kot rok, ne kot nasvet. */
+.high {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  border-color: var(--color-warning-border);
+  font-weight: 700;
+}
+
+.note {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
