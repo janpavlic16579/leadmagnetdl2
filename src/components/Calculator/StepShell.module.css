@@ -1,0 +1,79 @@
+.wrap {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-3) var(--space-6);
+}
+
+.stepLabel {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 var(--space-1);
+}
+
+.title {
+  font-size: var(--font-size-xl);
+  margin: 0 0 var(--space-4);
+}
+
+/* Uvodni korak nosi glavni naslov orodja, zato je večji od naslovov ostalih korakov. */
+.introTitle {
+  font-size: var(--font-size-xxl);
+  margin: 0 0 var(--space-2);
+}
+
+.introSubtitle {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
+  margin: 0 0 var(--space-5);
+}
+
+.trustNote {
+  margin-top: var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4);
+}
+
+.formRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.formLabel {
+  font-weight: 600;
+}
+
+.input,
+.select {
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: var(--space-5);
+  gap: var(--space-3);
+}
+
+/* Uvodni korak nima gumba "Nazaj", zato edini gumb potisnemo na desno. */
+.actionsEnd {
+  justify-content: flex-end;
+}

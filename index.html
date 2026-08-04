@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="sl">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Vnesite nekaj svojih številk in v dveh minutah dobite razčlenjen izračun letnih skritih stroškov sedanjega načina dela."
+    />
+    <title>Koliko vas stane sedanji način dela? — Datalab</title>
+    <script>
+      // Tema se postavi še pred izrisom, sicer bi ob nalaganju bliskala svetla
+      // različica, preden se React zažene. Ključ mora ostati enak kot v lib/theme.ts.
+      try {
+        if (localStorage.getItem('datalab-kalkulator-tema') === 'dark') {
+          document.documentElement.dataset.theme = 'dark';
+        }
+      } catch (e) {
+        /* zasebno brskanje — ostane privzeta svetla tema */
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

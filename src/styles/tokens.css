@@ -1,0 +1,126 @@
+:root {
+  --color-bg: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-border: #dfe3e8;
+  --color-text: #444444;
+  --color-text-muted: #5b6773;
+  --color-primary: #faaf17;
+  --color-primary-hover: #d59514;
+  --color-primary-text: #8a600d;
+  --color-on-primary: #231f20;
+  --color-accent: #f1ede2;
+  --color-header-bg: #e7e9ec;
+  --color-warning-bg: #fff4e5;
+  --color-warning-border: #f0b429;
+  --color-warning-text: #7a4a00;
+  --color-danger: #c0392b;
+
+  /* Onemogočen gumb: v svetli temi zbledela rumena, kot je bilo doslej. */
+  --color-button-disabled-bg: var(--color-primary);
+  --color-button-disabled-text: var(--color-on-primary);
+  --button-disabled-opacity: 0.5;
+
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-header: 0 1px 3px rgba(16, 24, 40, 0.06);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --space-6: 48px;
+
+  --font-size-sm: 0.875rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.75rem;
+  --font-size-xxl: 2.25rem;
+
+  --font-family:
+    'Titillium Web',
+    'Segoe UI',
+    system-ui,
+    -apple-system,
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+
+  /* Privzeta je svetla tema — tudi če ima obiskovalec v sistemu vklopljen temni
+     način. Temno dobi šele, ko jo sam izbere z gumbom v glavi (data-theme="dark"),
+     zato tu ni @media (prefers-color-scheme: dark) bloka. */
+  color-scheme: light;
+}
+
+/*
+ * TEMNA TEMA — izpeljana iz Datalabove znamčne temne #231f20, ki je topla
+ * (rahlo rdečkasta), ne nevtralno siva. Zato so tudi ozadja, obrobe in besedilo
+ * topli: hladno siva paleta bi ob rumeni #faaf17 izpadla tuje.
+ *
+ * Rumena ostane nespremenjena v obeh temah. Razlika je v --color-primary-text:
+ * na beli podlagi rumena ne dosega kontrasta za besedilo (zato temna #8a600d),
+ * na temni pa ga z lahkoto (≈9:1), zato tam nastopa v polni znamčni obliki.
+ */
+:root[data-theme='dark'] {
+  --color-bg: #171415;
+  --color-surface: #221e1f;
+  --color-border: #383233;
+  --color-text: #ece8e5;
+  --color-text-muted: #a79f9c;
+  --color-primary: #faaf17;
+  /* Na temni podlagi posvetlimo, ne potemnimo — potemnitev bi brala kot onemogočeno. */
+  --color-primary-hover: #ffc44f;
+  --color-primary-text: #faaf17;
+  --color-on-primary: #231f20;
+  --color-accent: #2b2526;
+  --color-header-bg: #1e1a1b;
+  --color-warning-bg: #302512;
+  --color-warning-border: #a8791f;
+  --color-warning-text: #f3ca7d;
+  --color-danger: #e8776b;
+
+  --color-button-disabled-bg: #2e2a2b;
+  --color-button-disabled-text: #7d7573;
+  --button-disabled-opacity: 1;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-header: 0 1px 3px rgba(0, 0, 0, 0.45);
+
+  /* Poskrbi, da se prilagodijo tudi vgrajene kontrole brskalnika
+     (spustni seznami, števci, drsniki). */
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-family);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 600;
+}
+
+button {
+  font-family: inherit;
+}
+
+input[type='range'] {
+  accent-color: var(--color-primary-text);
+}

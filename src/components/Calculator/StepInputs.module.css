@@ -1,0 +1,82 @@
+/* Edina točka, kjer uporabnik izve, da segmenti obstajajo — in izhod, če je
+   preslikava iz dejavnosti zgrešila. */
+.profileBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-4);
+  background: var(--color-accent);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+}
+
+.profileName {
+  font-weight: 600;
+}
+
+.profileChange {
+  background: none;
+  border: none;
+  padding: var(--space-1) var(--space-2);
+  margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-2));
+  font-size: var(--font-size-sm);
+  color: var(--color-primary-text);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.moduleSection {
+  margin-bottom: var(--space-5);
+}
+
+.moduleHeading {
+  font-size: var(--font-size-md);
+  font-weight: 700;
+  margin: 0 0 var(--space-3);
+  color: var(--color-primary-text);
+}
+
+.checklistItem {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  min-height: 44px;
+}
+
+.checklistItem input {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.pinnedTotal {
+  position: sticky;
+  bottom: 0;
+  margin: var(--space-5) calc(-1 * var(--space-3)) 0;
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  box-shadow: 0 -4px 12px rgba(16, 24, 40, 0.08);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.pinnedLabel {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.pinnedValue {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  color: var(--color-primary-text);
+}
