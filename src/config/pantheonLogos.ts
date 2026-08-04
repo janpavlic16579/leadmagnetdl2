@@ -17,25 +17,27 @@ export interface PantheonLogo {
   alt: string;
 }
 
+const base = import.meta.env.BASE_URL;
+
 export const PANTHEON_LOGOS: Record<SegmentId, PantheonLogo> = {
   proizvodnja: {
-    src: '/pantheon-logos/manufacture.svg',
-    srcDark: '/pantheon-logos/manufacture-dark.svg',
+    src: `${base}pantheon-logos/manufacture.svg`,
+    srcDark: `${base}pantheon-logos/manufacture-dark.svg`,
     alt: 'PANTHEON Manufacture',
   },
   trgovina: {
-    src: '/pantheon-logos/retail.svg',
-    srcDark: '/pantheon-logos/retail-dark.svg',
+    src: `${base}pantheon-logos/retail.svg`,
+    srcDark: `${base}pantheon-logos/retail-dark.svg`,
     alt: 'PANTHEON Retail',
   },
   racunovodstvo: {
-    src: '/pantheon-logos/accounting.svg',
-    srcDark: '/pantheon-logos/accounting-dark.svg',
+    src: `${base}pantheon-logos/accounting.svg`,
+    srcDark: `${base}pantheon-logos/accounting-dark.svg`,
     alt: 'PANTHEON Accounting',
   },
   splosno: {
-    src: '/pantheon-logos/enterprise.svg',
-    srcDark: '/pantheon-logos/enterprise-dark.svg',
+    src: `${base}pantheon-logos/enterprise.svg`,
+    srcDark: `${base}pantheon-logos/enterprise-dark.svg`,
     alt: 'PANTHEON Enterprise',
   },
 };
