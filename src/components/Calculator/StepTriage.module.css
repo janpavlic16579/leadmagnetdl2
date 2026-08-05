@@ -73,11 +73,6 @@
   flex-shrink: 0;
 }
 
-.includeRow:has(input:disabled) {
-  color: var(--color-text-muted);
-  cursor: not-allowed;
-}
-
 .note {
   margin: var(--space-3) 0 0;
   font-size: var(--font-size-sm);

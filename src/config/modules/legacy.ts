@@ -303,20 +303,14 @@ export const LEGACY_MODULES: ModuleDefinition[] = [
     documentsUnit: 'dokumentov/mesec',
     minutesDefault: 3,
   }),
-  makeModuleA({
-    id: 'A_racunovodstvo',
-    documentsQuestion: 'Koliko dokumentov skupno mesečno prejmete od vseh strank?',
-    minutesQuestion: 'Koliko minut ročne obdelave zahteva povprečen dokument?',
-    documentsUnit: 'dokumentov/mesec',
-    minutesDefault: 3,
-  }),
-  makeModuleA({
-    id: 'A_splosno',
-    documentsQuestion: 'Koliko dokumentov ročno obdelate mesečno?',
-    minutesQuestion: 'Koliko minut ročne obdelave zahteva povprečen dokument?',
-    documentsUnit: 'dokumentov/mesec',
-    minutesDefault: 3,
-  }),
+  // A_racunovodstvo in A/C/D_splosno so odstranjeni: obe dejavnosti imata od tu
+  // naprej svojih pet področij (config/modules/racunovodstvo.ts oziroma
+  // splosno.ts) in nobenega segmenta ni več, ki bi te module uporabljal.
+  // Ohranjeni bi bili mrtvi vnosi v registru.
+  //
+  // Trgovinski ostanejo: noben segment jih ne uporablja, so pa edina priča
+  // migracijskega testa skladnosti (lib/moduleEngine.test.ts → LEGACY_TRGOVINA),
+  // ki drži, da se matematika ob prepisu v register ni tiho spremenila.
   makeModuleB({
     id: 'B_trgovina',
     transactionsQuestion: 'Koliko pošiljk/naročil odpremite mesečno?',
@@ -326,12 +320,6 @@ export const LEGACY_MODULES: ModuleDefinition[] = [
     errorRateDefault: 0.015,
   }),
   makeModuleC('C_trgovina', 'Kolikšna je povprečna vrednost vaših zalog (EUR)?', 0.04),
-  makeModuleC(
-    'C_splosno',
-    'Kolikšna je povprečna vrednost zalog (EUR)? (pustite 0, če ni relevantno)',
-    0.05,
-  ),
   makeModuleD('D_trgovina', 'Kolikšen je povprečen dejanski plačilni rok kupcev (dni)?'),
-  makeModuleD('D_splosno', 'Kolikšen je povprečen dejanski plačilni rok (dni)?'),
   moduleE,
 ];

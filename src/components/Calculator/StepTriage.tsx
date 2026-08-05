@@ -12,11 +12,23 @@ interface StepTriageProps {
   /** Samodejni predlog, ki ga sme uporabnik popraviti. */
   selected: string[];
   onSelectedChange: (selected: string[]) => void;
-  maxSelected: number;
+  /**
+   * Koliko področij priporočamo — NE omejuje. Obkljukati je mogoče vsa; prej se je
+   * polje ob meji onemogočilo, obiskovalec pa ni izvedel, zakaj je sivo.
+   */
+  recommendedCount: number;
   stepLabel: string;
   onNext: () => void;
   onBack: () => void;
 }
+
+/**
+ * "Priporočamo tri" se bere bolje kot "Priporočamo 3". Nad pet se vrne števka —
+ * toliko področij nima nobena dejavnost in izmišljati si sklanjatve na zalogo ni
+ * smiselno.
+ */
+const NUMERALS = ['nič', 'eno', 'dve', 'tri', 'štiri', 'pet'];
+const numeral = (count: number) => NUMERALS[count] ?? String(count);
 
 export function StepTriage({
   modules,
@@ -24,7 +36,7 @@ export function StepTriage({
   onScoresChange,
   selected,
   onSelectedChange,
-  maxSelected,
+  recommendedCount,
   stepLabel,
   onNext,
   onBack,
@@ -34,20 +46,19 @@ export function StepTriage({
       onSelectedChange(selected.filter((selectedId) => selectedId !== id));
       return;
     }
-    if (selected.length >= maxSelected) return;
-    // Ohrani prioritetni vrstni red, da je vprašalnik predvidljiv.
+    // Ohrani vrstni red prikaza, da je vprašalnik predvidljiv.
     onSelectedChange(modules.filter((m) => m.id === id || selected.includes(m.id)).map((m) => m.id));
   };
-
-  const atLimit = selected.length >= maxSelected;
 
   return (
     <div className={shellStyles.wrap}>
       <p className={shellStyles.stepLabel}>{stepLabel}</p>
       <h1 className={shellStyles.title}>Kje vas najbolj tišči?</h1>
       <p className={styles.intro}>
+        {/* Brez imena dejavnosti: ta zaslon uporabljata proizvodnja in logistika,
+            imena področij pod njim pa že povesta, čigav vprašalnik je to. */}
         Na hitro ocenite vsako področje. Podrobna vprašanja vam nato zastavimo samo za največje težave — tako
-        vprašalnik ostane kratek, izračun pa specifičen za vašo proizvodnjo.
+        vprašalnik ostane kratek, izračun pa specifičen za vaše podjetje.
       </p>
 
       <div className={shellStyles.card}>
@@ -79,7 +90,6 @@ export function StepTriage({
                 <input
                   type="checkbox"
                   checked={isSelected}
-                  disabled={!isSelected && atLimit}
                   onChange={() => toggle(definition.id)}
                 />
                 <span>Izračunaj podrobno</span>
@@ -92,7 +102,7 @@ export function StepTriage({
       <p className={styles.note}>
         {selected.length === 0
           ? 'Izberite vsaj eno področje za podroben izračun.'
-          : `Podrobno bomo izračunali ${selected.length} od ${maxSelected} možnih področij. Ostala ostanejo neizmerjena — nobene številke si ne izmislimo.`}
+          : `Podrobno bomo izračunali ${selected.length} od ${modules.length} področij. Priporočamo ${numeral(recommendedCount)}, izberete pa lahko poljubno mnogo — neizmerjena področja ostanejo prazna in nobene številke si ne izmislimo.`}
       </p>
 
       <div className={shellStyles.actions}>

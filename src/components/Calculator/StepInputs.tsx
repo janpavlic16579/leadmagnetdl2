@@ -47,8 +47,9 @@ export function StepInputs({
         <span>
           Izračun prilagojen za: <span className={styles.profileName}>{segment.displayName}</span>
         </span>
+        {/* Pove, kam gumb pelje: vprašalnik določa dejavnost, zato se popravlja tam. */}
         <button type="button" className={styles.profileChange} onClick={onChangeSegment}>
-          spremeni
+          spremeni dejavnost
         </button>
       </div>
 
@@ -67,8 +68,13 @@ export function StepInputs({
         </p>
       </div>
 
+      {/*
+        Vsota neposrednih izgub IN kapacitete: področji Plan in Delovni nalogi ne
+        prispevata nobene neposredne izgube, zato bi obiskovalec, ki izbere prav
+        ti dve, ves čas vnašanja gledal 0 EUR.
+      */}
       <div className={styles.pinnedTotal}>
-        <span className={styles.pinnedLabel}>Trenutna ocena neposrednih letnih izgub</span>
+        <span className={styles.pinnedLabel}>Trenutni letni strošek izbranih področij</span>
         <span className={styles.pinnedValue}>{formatEUR(liveTotalEUR)}</span>
       </div>
 
