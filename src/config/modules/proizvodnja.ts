@@ -1,163 +1,156 @@
-import { formatEUR } from '../../lib/format';
-import type { ModuleDefinition, ModuleField, RiskLevel } from './moduleTypes';
+import { addressableShareOf, mainCauseField, type CauseOption } from './addressableShare';
+import type { ModuleDefinition, RiskLevel } from './moduleTypes';
+import {
+  ASSURANCE_CHOICES,
+  MONTHS_PER_YEAR,
+  reducibleShareField,
+  reducibleShareOf,
+  riskLevelFromScore,
+} from './shared';
 
 /**
- * Stroškovni moduli za proizvodnjo.
+ * Pet medsebojno izključujočih se stroškovnih področij za proizvodnjo.
  *
- * Privzete vrednosti so umerjene na slovenskega proizvajalca z 10–249 zaposlenimi.
+ * Dve načeli, ki ju je treba ohraniti ob vsaki spremembi:
  *
- * KALIBRACIJA: vsi deleži izboljšave (improvableShare) so začetne ocene, ne empirika.
- * Po prvih 50 vnosih jih je treba preveriti na realnih podatkih — enako velja za
- * prag visoke izgube v segments.ts (spec pogl. 6).
+ * 1. compute() vrne DEJANSKI sedanji strošek — brez množenja z "deležem izboljšave".
+ *    Koliko od tega je realno mogoče nasloviti, izračuna motor iz naslovljivega
+ *    deleža (glavni vzrok) in pasu izboljšave (sedanji sistem podjetja). Prej sta
+ *    bila oba pojma zmešana v eno številko, ki ni pomenila ne enega ne drugega.
  *
- * Nikjer ne trdimo, da je izgubo mogoče odpraviti v celoti: vsak denarni izid se
- * pomnoži z realistično izboljšljivim deležem, izpeljanim iz diagnostičnega
- * izbirnega vprašanja (način planiranja, sprotnost poročanja, preglednost zalog).
+ * 2. Ista ura ali evro se ne sme pojaviti v dveh področjih. Meje so zapisane v
+ *    besedilih help, ne le v komentarjih — obiskovalec je edini, ki jih lahko
+ *    upošteva pri vnosu.
+ *
+ * Strošek proizvodne in administrativne ure prideta iz konteksta: sta lastnost
+ * podjetja, ne področja, in se vprašata enkrat v svojem koraku.
  */
 
-const OVERTIME_PREMIUM = 0.3;
+// --- 1. Plan, kapacitete in navodila ----------------------------------------
 
-const hourlyLaborCostField: ModuleField = {
-  key: 'hourlyLaborCostEUR',
-  label: 'Kolikšen je polni strošek delovne ure (EUR)?',
-  kind: 'slider',
-  min: 18,
-  max: 45,
-  step: 1,
-  unit: 'EUR/h',
-  default: 28,
-};
-
-// --- 1. Planiranje proizvodnje in zastoji -----------------------------------
-
-/** Izgubljen nastavitveni čas ob vsakem prestavljenem nalogu. */
-const HOURS_LOST_PER_RESCHEDULE = 0.5;
+const PLANIRANJE_CAUSES: CauseOption[] = [
+  { label: 'Plan in kapacitete niso ažurni', category: 'planning' },
+  { label: 'Podatki ali navodila niso enotni oziroma so zastareli', category: 'data' },
+  { label: 'Stanje nalogov ni vidno sproti', category: 'planning' },
+  { label: 'Pogoste spremembe kupcev', category: 'external' },
+  { label: 'Okvare strojev ali drugi tehnični razlogi', category: 'physical' },
+];
 
 export const planiranje: ModuleDefinition = {
   id: 'planiranje',
-  title: 'Planiranje proizvodnje in zastoji',
-  summary: 'Čakanje zaradi materiala, napačnih informacij, sprememb plana in neusklajenih kapacitet.',
+  title: 'Plan, kapacitete in navodila',
+  summary: 'Čakanje zaradi nejasnih prioritet, spremembe plana in čas, porabljen za ponovno usklajevanje.',
   triage: {
-    prompt: 'Kako pogosto proizvodnja stoji ali se plan spreminja?',
+    prompt:
+      'Kako pogosto se plan spreminja ali proizvodnja čaka zaradi nejasnih prioritet, navodil ali podatkov?',
     options: [
-      { value: 0, label: 'Skoraj nikoli' },
-      { value: 1, label: 'Nekajkrat na mesec' },
-      { value: 2, label: 'Tedensko' },
+      { value: 0, label: 'Plan je stabilen' },
+      { value: 1, label: 'Občasno' },
+      { value: 2, label: 'Redno, z vplivom' },
       { value: 3, label: 'Skoraj vsak dan' },
     ],
   },
   fields: [
     {
       key: 'planningMethod',
-      label: 'Kako trenutno planirate proizvodnjo?',
+      label: 'Kako danes planirate proizvodnjo?',
       kind: 'choice',
-      default: 0.45,
+      default: 2,
+      contextOnly: true,
       choices: [
-        { value: 0.15, label: 'ERP s planiranjem potreb (MRP)' },
-        { value: 0.3, label: 'ERP brez planiranja' },
-        { value: 0.45, label: 'Excel' },
-        { value: 0.6, label: 'Papir ali sproten dogovor' },
+        { value: 0, label: 'MRP oziroma ERP plan' },
+        { value: 1, label: 'ERP brez zanesljivega planiranja' },
+        { value: 2, label: 'Excel' },
+        { value: 3, label: 'Papir oziroma sprotni dogovor' },
       ],
     },
     {
-      key: 'productionHoursPerMonth',
-      label: 'Koliko proizvodnih ur imate mesečno?',
-      kind: 'number',
-      unit: 'h/mesec',
-      default: 2000,
-    },
-    {
       key: 'waitingHoursPerMonth',
-      label: 'Koliko ur proizvodnja čaka zaradi manjkajočega materiala, informacij ali neusklajenega plana?',
+      label:
+        'Koliko skupnih človek-ur mesečno proizvodnja čaka zaradi nejasnega plana, napačnih prioritet ali manjkajočih navodil?',
       kind: 'number',
       unit: 'h/mesec',
       default: 0,
-      help: 'Štejte samo zastoje, povezane s planiranjem, materialom ali informacijami — okvar strojev ne.',
+      help: 'Ne vključujte čakanja na material ali okvar strojev — čakanje na material sodi v področje Zaloge.',
     },
     {
       key: 'overtimeHoursPerMonth',
-      label: 'Koliko nadur mesečno povzroči spreminjanje plana?',
+      label: 'Koliko nadur mesečno povzroča predvsem spreminjanje plana?',
       kind: 'number',
       unit: 'h/mesec',
       default: 0,
     },
     {
-      key: 'reschedulesPerMonth',
-      label: 'Kolikokrat mesečno prestavite že razporejen delovni nalog?',
+      key: 'replanningHoursPerMonth',
+      label: 'Koliko ur mesečno porabite za ponovno planiranje, usklajevanje prioritet in iskanje informacij?',
       kind: 'number',
-      unit: 'krat/mesec',
+      unit: 'h/mesec',
       default: 0,
     },
-    {
-      key: 'productionHourCostEUR',
-      label: 'Kolikšen je strošek proizvodne ure (EUR)?',
-      kind: 'slider',
-      min: 25,
-      max: 120,
-      step: 5,
-      unit: 'EUR/h',
-      default: 45,
-    },
+    mainCauseField(PLANIRANJE_CAUSES),
   ],
-  compute: (input) => {
-    const share = input.planningMethod;
-    const cost = input.productionHourCostEUR;
-    // Varovalo pred tipkarsko napako: ur čakanja ne more biti več, kot je proizvodnih ur.
-    const waitingHours = Math.min(input.waitingHoursPerMonth, input.productionHoursPerMonth);
+  compute: (input, context) => {
+    const addressableShare = addressableShareOf(PLANIRANJE_CAUSES, input.mainCause);
+    const productionHours = input.waitingHoursPerMonth + input.overtimeHoursPerMonth;
 
     return [
       {
         bucket: 'capacity',
-        label: 'Zastoji proizvodnje',
-        valueEUR: waitingHours * cost * 12 * share,
-        hoursPerMonth: waitingHours * share,
+        label: 'Zastoji in nadure v proizvodnji',
+        valueEUR: productionHours * context.operationalHourCostEUR * MONTHS_PER_YEAR,
+        hoursPerMonth: productionHours,
+        addressableShare,
       },
       {
-        bucket: 'directLoss',
-        label: 'Nadure zaradi sprememb plana',
-        valueEUR: input.overtimeHoursPerMonth * cost * (1 + OVERTIME_PREMIUM) * 12 * share,
-      },
-      {
-        bucket: 'directLoss',
-        label: 'Dodatne menjave in prestavljanje nalogov',
-        valueEUR: input.reschedulesPerMonth * HOURS_LOST_PER_RESCHEDULE * cost * 12 * share,
+        bucket: 'capacity',
+        label: 'Ponovno planiranje in usklajevanje',
+        valueEUR: input.replanningHoursPerMonth * context.adminHourCostEUR * MONTHS_PER_YEAR,
+        hoursPerMonth: input.replanningHoursPerMonth,
+        addressableShare,
       },
     ];
   },
   pantheon: [
     'MRP in planiranje potreb po materialu',
-    'Sestavnice in normativi',
     'Delovni nalogi neposredno iz naročil',
     'Proizvodni terminali za sproten pregled nad zasedenostjo',
   ],
 };
 
-// --- 2. Material, izmet in dodelave -----------------------------------------
+// --- 2. Izmet, dodelave in kakovost -----------------------------------------
+
+const MATERIAL_CAUSES: CauseOption[] = [
+  { label: 'Zastarele ali napačne sestavnice oziroma normativi', category: 'data' },
+  { label: 'Napačna verzija dokumentacije ali navodil', category: 'data' },
+  { label: 'Poraba materiala ni evidentirana sproti', category: 'data' },
+  { label: 'Napake pri izvedbi oziroma pomanjkanje usposabljanja', category: 'people' },
+  { label: 'Kakovost materiala ali okvare strojev', category: 'physical' },
+];
 
 export const material: ModuleDefinition = {
   id: 'material',
-  title: 'Material, izmet in dodelave',
-  summary: 'Presežna poraba materiala, izmet, ponovna izdelava in odpravljanje napak.',
+  title: 'Izmet, dodelave in kakovost',
+  summary: 'Material, ki konča kot izmet, ure ponovne izdelave in stroški reklamacij.',
   triage: {
-    prompt: 'Kako pogosto se pojavijo izmet, dodelave ali reklamacije?',
+    prompt: 'Kako pogosto nastajajo izmet, dodelave ali reklamacije?',
     options: [
       { value: 0, label: 'Redko' },
       { value: 1, label: 'Mesečno' },
       { value: 2, label: 'Tedensko' },
-      { value: 3, label: 'Skoraj pri vsakem nalogu' },
+      { value: 3, label: 'Pri velikem deležu nalogov' },
     ],
   },
   fields: [
     {
-      key: 'annualMaterialValueEUR',
-      label: 'Kolikšna je letna vrednost porabljenega materiala (EUR)?',
+      key: 'annualMaterialSpendEUR',
+      label: 'Kolikšna je letna vrednost porabljenega materiala?',
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
     },
     {
-      key: 'scrapRatePercent',
-      label: 'Kolikšen delež materiala predstavlja izmet (%)?',
+      key: 'scrapSharePercent',
+      label: 'Kolikšen delež porabljenega materiala postane izmet, ki ga ni mogoče uporabiti ali prodati?',
       kind: 'percent',
       min: 0,
       max: 0.15,
@@ -166,52 +159,45 @@ export const material: ModuleDefinition = {
     },
     {
       key: 'reworkHoursPerMonth',
-      label: 'Koliko ur mesečno porabite za dodelave in ponovno izdelavo?',
+      label: 'Koliko skupnih človek-ur mesečno porabite za dodelave in ponovno izdelavo?',
       kind: 'number',
       unit: 'h/mesec',
       default: 0,
     },
     {
-      key: 'bomDeviation',
-      label: 'Kako pogosto dejanska poraba odstopa od sestavnice oziroma normativa?',
-      kind: 'choice',
-      default: 0.2,
-      choices: [
-        { value: 0.1, label: 'Skoraj nikoli' },
-        { value: 0.2, label: 'Redko' },
-        { value: 0.3, label: 'Pogosto' },
-        { value: 0.4, label: 'Stalno — normativom ne zaupamo' },
-      ],
-    },
-    {
       key: 'annualClaimsCostEUR',
-      label: 'Kolikšni so letni stroški reklamacij in vračil (EUR)?',
+      label: 'Kolikšni so letni dodatni stroški reklamacij?',
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      help: 'Vnesite samo stroške, ki še niso vključeni v izmet ali dodelave.',
     },
-    hourlyLaborCostField,
+    mainCauseField(MATERIAL_CAUSES),
   ],
-  compute: (input) => {
-    const share = input.bomDeviation;
+  compute: (input, context) => {
+    const addressableShare = addressableShareOf(MATERIAL_CAUSES, input.mainCause);
+
     return [
       {
         bucket: 'directLoss',
         label: 'Izmet materiala',
-        valueEUR: input.annualMaterialValueEUR * input.scrapRatePercent * share,
+        valueEUR: input.annualMaterialSpendEUR * input.scrapSharePercent,
+        addressableShare,
       },
       {
         bucket: 'directLoss',
         label: 'Reklamacije in vračila',
-        valueEUR: input.annualClaimsCostEUR * share,
+        valueEUR: input.annualClaimsCostEUR,
+        addressableShare,
       },
       {
-        // Ure dodelav so plačan čas ekipe — sproščene ure ne znižajo plačne mase,
-        // zato veljajo za kapaciteto in ne za neposredno izgubo (enako kot modul 4).
+        // Ure dodelav so že plačan čas ekipe — sproščene ure ne znižajo plačne mase,
+        // zato so kapaciteta in ne denar, ki odteka.
         bucket: 'capacity',
         label: 'Dodelave in ponovna izdelava',
-        valueEUR: input.reworkHoursPerMonth * input.hourlyLaborCostEUR * 12 * share,
-        hoursPerMonth: input.reworkHoursPerMonth * share,
+        valueEUR: input.reworkHoursPerMonth * context.operationalHourCostEUR * MONTHS_PER_YEAR,
+        hoursPerMonth: input.reworkHoursPerMonth,
+        addressableShare,
       },
     ];
   },
@@ -222,219 +208,193 @@ export const material: ModuleDefinition = {
   ],
 };
 
-// --- 3. Zaloge in pomanjkanje materiala -------------------------------------
+// --- 3. Zaloge in razpoložljivost materiala ---------------------------------
 
-/**
- * Boljša preglednost zalog prepreči del odpisov — več kot je preglednosti, več
- * odpisov je izogibljivih. Faktor pretvori delež znižanja zalog v delež odpisov.
- */
-const WRITE_OFF_FACTOR = 4;
-const MAX_WRITE_OFF_SHARE = 0.5;
-/** Nekurantne zaloge je realno mogoče unovčiti le deloma (razprodaja, odkup, predelava). */
-const OBSOLETE_RECOVERY_SHARE = 0.5;
+const ZALOGE_CAUSES: CauseOption[] = [
+  { label: 'Parametri zalog in plan niso ustrezni', category: 'planning' },
+  { label: 'Stanje zalog oziroma lokacij ni zanesljivo', category: 'data' },
+  { label: 'Nabava ni dovolj povezana s planom proizvodnje', category: 'planning' },
+  { label: 'Dobavitelji so nezanesljivi', category: 'external' },
+  { label: 'Zalogo zavestno držimo kot varovalko', category: 'people' },
+];
 
 export const zaloge: ModuleDefinition = {
   id: 'zaloge',
-  title: 'Zaloge in pomanjkanje materiala',
-  summary: 'Presežne zaloge, nekurantno blago, vezan kapital in ustavitve zaradi manjkajočega materiala.',
+  title: 'Zaloge in razpoložljivost materiala',
+  summary: 'Odpisi in razvrednotenja, čakanje na manjkajoč material in kapital, vezan v zalogah.',
   triage: {
-    prompt: 'Kako pogosto imate hkrati preveč zaloge in premalo pravega materiala?',
+    prompt: 'Kako pogosto imate preveč zaloge, hkrati pa manjka pravi material?',
     options: [
       { value: 0, label: 'Zaloge so pod nadzorom' },
-      { value: 1, label: 'Občasno se zatakne' },
+      { value: 1, label: 'Občasno' },
       { value: 2, label: 'Redno' },
-      { value: 3, label: 'Stalno — kupujemo na zalogo za vsak primer' },
+      { value: 3, label: 'Stalno' },
     ],
   },
   fields: [
     {
-      key: 'rawMaterialValueEUR',
-      label: 'Kolikšna je povprečna vrednost surovin (EUR)?',
+      key: 'inventoryValueEUR',
+      label: 'Kolikšna je povprečna skupna vrednost zalog?',
       kind: 'number',
       unit: 'EUR',
       default: 0,
-    },
-    {
-      key: 'wipValueEUR',
-      label: 'Kolikšna je povprečna vrednost nedokončane proizvodnje (EUR)?',
-      kind: 'number',
-      unit: 'EUR',
-      default: 0,
-    },
-    {
-      key: 'finishedGoodsValueEUR',
-      label: 'Kolikšna je povprečna vrednost končnih izdelkov (EUR)?',
-      kind: 'number',
-      unit: 'EUR',
-      default: 0,
-    },
-    {
-      key: 'obsoleteStockValueEUR',
-      label: 'Kolikšna je vrednost nekurantnih oziroma počasi obračajočih se zalog (EUR)?',
-      kind: 'number',
-      unit: 'EUR',
-      default: 0,
+      help: 'Vključite surovine, nedokončano proizvodnjo in končne izdelke.',
     },
     {
       key: 'annualWriteOffEUR',
-      label: 'Koliko zaloge ste odpisali v zadnjem letu (EUR)?',
+      label:
+        'Kolikšna je bila vrednost odpisov, razvrednotenj ali dodatnih popustov zaradi zastaranja zaloge v zadnjih 12 mesecih?',
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
     },
     {
-      key: 'stockoutsPerMonth',
-      label: 'Kolikokrat mesečno proizvodnja obstane zaradi manjkajočega materiala?',
+      key: 'materialWaitingHoursPerMonth',
+      label: 'Koliko skupnih človek-ur mesečno proizvodnja čaka samo zaradi manjkajočega materiala?',
       kind: 'number',
-      unit: 'krat/mesec',
+      unit: 'h/mesec',
       default: 0,
+      help: 'Zastoje zaradi nejasnega plana štejte v področju Plan, ne tukaj.',
     },
-    {
-      key: 'emergencyPurchasesPerMonth',
-      label: 'Koliko nujnih nabav izvedete mesečno?',
-      kind: 'number',
-      unit: 'krat/mesec',
-      default: 0,
-      help: 'Njihov strošek štejemo v modulu Zamude in nujni stroški — tu služi le oceni, koliko zaloge realno potrebujete.',
-    },
+    reducibleShareField(
+      'Kolikšen delež zalog bi po vaši oceni lahko zmanjšali brez večjega tveganja za oskrbo?',
+    ),
     {
       key: 'stockVisibility',
-      label: 'Ali imate sproten pregled nad zalogami po skladiščih in lokacijah?',
+      label: 'Kako dober je vaš pregled nad dejanskimi zalogami?',
       kind: 'choice',
-      default: 0.06,
+      default: 2,
+      contextOnly: true,
       choices: [
-        { value: 0.03, label: 'Da, sproten in po lokacijah' },
-        { value: 0.06, label: 'Delen — nekaj je v ERP, nekaj v Excelu' },
-        { value: 0.09, label: 'Le ob mesečni inventuri' },
-        { value: 0.12, label: 'Ne — zanašamo se na oceno' },
+        { value: 0, label: 'Sproten in po lokacijah' },
+        { value: 1, label: 'Večinoma zanesljiv' },
+        { value: 2, label: 'Deloma ERP, deloma Excel' },
+        { value: 3, label: 'Pogosto ugotovimo šele ob inventuri' },
       ],
     },
-    {
-      key: 'capitalCostPercent',
-      label: 'Kolikšen je strošek kapitala in skladiščenja letno (%)?',
-      kind: 'percent',
-      min: 0.05,
-      max: 0.2,
-      step: 0.01,
-      default: 0.1,
-    },
+    mainCauseField(ZALOGE_CAUSES),
   ],
-  compute: (input) => {
-    const inventoryValue = input.rawMaterialValueEUR + input.wipValueEUR + input.finishedGoodsValueEUR;
-    // Podjetje, ki pogosto ostane brez materiala, zalog ne more veliko rezati —
-    // pogostost zastojev zato zniža realno dosegljiv delež znižanja.
-    const stockoutPenalty = Math.max(0.5, 1 - input.stockoutsPerMonth / 20);
-    const reductionShare = input.stockVisibility * stockoutPenalty;
-    const writeOffShare = Math.min(MAX_WRITE_OFF_SHARE, reductionShare * WRITE_OFF_FACTOR);
-
-    const releasedCapitalEUR =
-      inventoryValue * reductionShare + input.obsoleteStockValueEUR * OBSOLETE_RECOVERY_SHARE;
+  compute: (input, context) => {
+    const addressableShare = addressableShareOf(ZALOGE_CAUSES, input.mainCause);
+    const reducibleShare = reducibleShareOf(input.reducibleShare);
 
     return [
       {
         bucket: 'directLoss',
-        label: 'Letni strošek presežnih zalog in odpisov',
-        valueEUR: releasedCapitalEUR * input.capitalCostPercent + input.annualWriteOffEUR * writeOffShare,
+        label: 'Odpisi in razvrednotenja zalog',
+        valueEUR: input.annualWriteOffEUR,
+        addressableShare,
       },
       {
+        bucket: 'capacity',
+        label: 'Čakanje na manjkajoč material',
+        valueEUR: input.materialWaitingHoursPerMonth * context.operationalHourCostEUR * MONTHS_PER_YEAR,
+        hoursPerMonth: input.materialWaitingHoursPerMonth,
+        addressableShare,
+      },
+      {
+        // Brez addressableShare: ta znesek JE potencial, ne sedanji strošek.
+        // Množenje s pasom izboljšave bi ga štelo dvakrat.
         bucket: 'oneTimeCapital',
-        label: 'Enkratno sprostljiv kapital v zalogah',
-        valueEUR: releasedCapitalEUR,
+        label: 'Sprostljiv obratni kapital v zalogah',
+        valueEUR: input.inventoryValueEUR * reducibleShare,
       },
     ];
   },
   pantheon: [
     'MRP z minimalnimi zalogami in točkami naročanja',
     'Skladišča, lokacije, serije in loti',
-    'Črtne kode za sproten odpis porabe',
     'Povezava nabave s proizvodnim planom',
   ],
 };
 
-// --- 4. Delovni nalogi in ročno poročanje -----------------------------------
+// --- 4. Delovni nalogi in podatki -------------------------------------------
+
+const NALOGI_CAUSES: CauseOption[] = [
+  { label: 'Podatke vodimo v več različnih orodjih', category: 'data' },
+  { label: 'Delovni nalogi so večinoma papirni', category: 'data' },
+  { label: 'Podatki se ne vnašajo sproti', category: 'data' },
+  { label: 'Odgovornosti niso jasne', category: 'people' },
+];
 
 export const nalogi: ModuleDefinition = {
   id: 'nalogi',
-  title: 'Delovni nalogi in ročno poročanje',
-  summary: 'Priprava nalogov, prepisovanje podatkov, Excel, papir in naknadno poročanje proizvodnje.',
+  title: 'Delovni nalogi in podatki',
+  summary: 'Priprava in zaključevanje nalogov, prepisovanje med orodji in popravljanje napačnih podatkov.',
   triage: {
-    prompt: 'Koliko dela je s pripravo nalogov in prepisovanjem podatkov?',
+    prompt: 'Koliko ročnega dela imate s pripravo nalogov, papirji in prepisovanjem?',
     options: [
-      { value: 0, label: 'Malo — večina teče samodejno' },
-      { value: 1, label: 'Nekaj ur na teden' },
-      { value: 2, label: 'Vsak dan nekdo prepisuje' },
-      { value: 3, label: 'To je zaposlitev za polni delovni čas' },
+      { value: 0, label: 'Večina poteka digitalno' },
+      { value: 1, label: 'Nekaj ur tedensko' },
+      { value: 2, label: 'Vsak dan' },
+      { value: 3, label: 'Za to je potreben skoraj cel človek' },
     ],
   },
   fields: [
     {
-      key: 'workOrdersPerMonth',
-      label: 'Koliko delovnih nalogov obdelate mesečno?',
+      key: 'orderAdminHoursPerMonth',
+      label: 'Koliko skupnih ur mesečno porabite za pripravo, tiskanje, zbiranje in zaključevanje delovnih nalogov?',
       kind: 'number',
-      unit: 'nalogov/mesec',
+      unit: 'h/mesec',
       default: 0,
     },
     {
-      key: 'minutesPerWorkOrder',
-      label: 'Koliko minut zahteva priprava, tiskanje in zaključevanje enega naloga?',
-      kind: 'slider',
-      min: 5,
-      max: 120,
-      step: 5,
-      unit: 'min',
-      default: 20,
-    },
-    {
-      key: 'rekeyingPeople',
-      label: 'Koliko ljudi prepisuje podatke med Excelom, papirjem in ERP-jem?',
+      key: 'retypingHoursPerMonth',
+      label: 'Koliko skupnih ur mesečno porabite samo za prepisovanje podatkov med ERP-jem, Excelom in papirjem?',
       kind: 'number',
-      unit: 'oseb',
-      default: 2,
-    },
-    {
-      key: 'rekeyingHoursPerPerson',
-      label: 'Koliko ur mesečno porabi vsak od njih za prepisovanje?',
-      kind: 'slider',
-      min: 0,
-      max: 60,
-      step: 2,
       unit: 'h/mesec',
-      default: 10,
+      default: 0,
+      help: 'Ne vključujte priprave in zaključevanja nalogov iz prvega vprašanja.',
     },
     {
-      key: 'realtimeReporting',
-      label: 'Ali zaposleni sproti poročajo porabo materiala in opravljeno delo?',
+      key: 'dataFixHoursPerMonth',
+      label: 'Koliko ur mesečno porabite za popravljanje napačnih, manjkajočih ali neusklajenih podatkov?',
+      kind: 'number',
+      unit: 'h/mesec',
+      default: 0,
+    },
+    {
+      key: 'reportingTiming',
+      label: 'Kdaj se dejanska poraba materiala in opravljeno delo evidentirata?',
       kind: 'choice',
-      default: 0.5,
+      default: 2,
+      contextOnly: true,
       choices: [
-        { value: 0.2, label: 'Da, sproti na terminalu' },
-        { value: 0.35, label: 'Isti dan' },
-        { value: 0.5, label: 'Naslednji dan' },
-        { value: 0.65, label: 'Šele ob zaključku naloga' },
+        { value: 0, label: 'Sproti na terminalu' },
+        { value: 1, label: 'Isti dan' },
+        { value: 2, label: 'Naslednji dan' },
+        { value: 3, label: 'Šele ob zaključku naloga' },
       ],
     },
-    {
-      key: 'reconciliationHoursPerMonth',
-      label: 'Koliko ur mesečno porabite za usklajevanje napačnih ali manjkajočih podatkov?',
-      kind: 'number',
-      unit: 'h/mesec',
-      default: 0,
-    },
-    hourlyLaborCostField,
+    mainCauseField(NALOGI_CAUSES),
   ],
-  compute: (input) => {
-    const share = input.realtimeReporting;
-    const hoursPerMonth =
-      (input.workOrdersPerMonth * input.minutesPerWorkOrder) / 60 +
-      input.rekeyingPeople * input.rekeyingHoursPerPerson +
-      input.reconciliationHoursPerMonth;
+  compute: (input, context) => {
+    const addressableShare = addressableShareOf(NALOGI_CAUSES, input.mainCause);
+    const rate = context.adminHourCostEUR;
 
+    // Tri ločene postavke namesto ene vsote: razčlenitev tako pokaže, kje ročno
+    // delo dejansko nastaja, in obiskovalec vidi, da vprašanja niso podvojena.
     return [
       {
         bucket: 'capacity',
-        label: 'Ročno delo z nalogi in poročanjem',
-        valueEUR: hoursPerMonth * input.hourlyLaborCostEUR * 12 * share,
-        hoursPerMonth: hoursPerMonth * share,
+        label: 'Priprava in zaključevanje nalogov',
+        valueEUR: input.orderAdminHoursPerMonth * rate * MONTHS_PER_YEAR,
+        hoursPerMonth: input.orderAdminHoursPerMonth,
+        addressableShare,
+      },
+      {
+        bucket: 'capacity',
+        label: 'Prepisovanje podatkov med orodji',
+        valueEUR: input.retypingHoursPerMonth * rate * MONTHS_PER_YEAR,
+        hoursPerMonth: input.retypingHoursPerMonth,
+        addressableShare,
+      },
+      {
+        bucket: 'capacity',
+        label: 'Popravljanje napačnih podatkov',
+        valueEUR: input.dataFixHoursPerMonth * rate * MONTHS_PER_YEAR,
+        hoursPerMonth: input.dataFixHoursPerMonth,
+        addressableShare,
       },
     ];
   },
@@ -445,92 +405,100 @@ export const nalogi: ModuleDefinition = {
   ],
 };
 
-// --- 5. Zamude in nujni stroški ---------------------------------------------
+// --- 5. Roki in nujni stroški -----------------------------------------------
 
-/**
- * Konservativna začetna ocena: tudi z odličnim planiranjem del zamud ostane
- * (zamude dobaviteljev, spremembe kupca). Za umeritev po prvih realnih vnosih.
- */
-const DELAY_IMPROVABLE_SHARE = 0.35;
+const ZAMUDE_CAUSES: CauseOption[] = [
+  { label: 'Plan in stanje proizvodnje nista pravočasno vidna', category: 'planning' },
+  { label: 'Material ali zaloge niso pravočasno na voljo', category: 'planning' },
+  { label: 'Prenos podatkov med prodajo, nabavo in proizvodnjo je ročen', category: 'data' },
+  { label: 'Zunanji dobavitelji ali kupci', category: 'external' },
+  { label: 'Zmogljivosti oziroma stroji', category: 'physical' },
+];
 
 export const zamude: ModuleDefinition = {
   id: 'zamude',
-  title: 'Zamude in nujni stroški',
-  summary: 'Nujne nabave, ekspresne dostave, nadure, pogodbene kazni in popusti zaradi zamud.',
+  title: 'Roki in nujni stroški',
+  summary: 'Ekspresne nabave, penali, izgubljena marža in čas, porabljen za pojasnjevanje zamud kupcem.',
   triage: {
-    prompt: 'Kako pogosto odpremljate z zamudo ali rešujete stvari nujno?',
+    prompt: 'Kako pogosto zamujate ali rešujete naročila nujno?',
     options: [
       { value: 0, label: 'Roke držimo' },
-      { value: 1, label: 'Nekaj naročil na mesec' },
-      { value: 2, label: 'Tedensko gasimo požare' },
-      { value: 3, label: 'Zamuda je pravilo, ne izjema' },
+      { value: 1, label: 'Nekajkrat mesečno' },
+      { value: 2, label: 'Tedensko' },
+      { value: 3, label: 'Zamude so pogoste' },
     ],
   },
   fields: [
     {
       key: 'lateOrdersPerMonth',
-      label: 'Koliko naročil mesečno odpremite z zamudo?',
+      label: 'Od koliko naročil mesečno jih povprečno odpremite z zamudo?',
       kind: 'number',
       unit: 'naročil/mesec',
       default: 0,
+      contextOnly: true,
       help: 'Podatek ne vstopa v izračun — služi za oceno obsega težave.',
     },
     {
-      key: 'annualExpeditingCostEUR',
-      label: 'Koliko letno porabite za ekspresne nabave in dostave (EUR)?',
+      key: 'expediteCostEUR',
+      label: 'Koliko ste v zadnjih 12 mesecih porabili za ekspresne nabave ali dostave?',
+      kind: 'number',
+      unit: 'EUR/leto',
+      default: 0,
+      help: 'Samo dodatni strošek nad običajno nabavo oziroma dostavo.',
+    },
+    {
+      key: 'penaltyCostEUR',
+      label: 'Kolikšni so bili letni popusti, penali ali drugi neposredni stroški zaradi zamud?',
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
     },
     {
-      key: 'deadlineOvertimeHoursPerMonth',
-      label: 'Koliko nadur mesečno je posledica lovljenja rokov?',
-      kind: 'number',
-      unit: 'h/mesec',
-      default: 0,
-      help: 'Ure zastojev ostanejo v modulu Planiranje — tu jih ne štejte znova.',
-    },
-    {
-      key: 'annualPenaltiesEUR',
-      label: 'Kolikšni so letni popusti, penali in odpovedana naročila zaradi zamud (EUR)?',
+      key: 'lostMarginEUR',
+      label: 'Kolikšno izgubljeno prispevno maržo ocenjujete zaradi odpovedanih naročil?',
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      help: 'Ne vpisujte celotne vrednosti izgubljenega naročila.',
     },
     {
-      key: 'replanningHoursPerMonth',
-      label: 'Koliko ur mesečno porabite za ponovno planiranje in obveščanje kupcev?',
+      key: 'customerCommsHoursPerMonth',
+      label: 'Koliko ur mesečno porabite za obveščanje kupcev in usklajevanje zaradi zamud?',
       kind: 'number',
       unit: 'h/mesec',
       default: 0,
+      help: 'Ne vključujte ponovnega planiranja proizvodnje iz področja Plan.',
     },
-    hourlyLaborCostField,
+    mainCauseField(ZAMUDE_CAUSES),
   ],
-  compute: (input) => {
-    const share = DELAY_IMPROVABLE_SHARE;
-    const hourly = input.hourlyLaborCostEUR;
+  compute: (input, context) => {
+    const addressableShare = addressableShareOf(ZAMUDE_CAUSES, input.mainCause);
 
     return [
       {
         bucket: 'directLoss',
         label: 'Ekspresne nabave in dostave',
-        valueEUR: input.annualExpeditingCostEUR * share,
+        valueEUR: input.expediteCostEUR,
+        addressableShare,
       },
       {
         bucket: 'directLoss',
-        label: 'Penali, popusti in odpovedana naročila',
-        valueEUR: input.annualPenaltiesEUR * share,
+        label: 'Penali in popusti zaradi zamud',
+        valueEUR: input.penaltyCostEUR,
+        addressableShare,
       },
       {
         bucket: 'directLoss',
-        label: 'Nadure zaradi lovljenja rokov',
-        valueEUR: input.deadlineOvertimeHoursPerMonth * hourly * (1 + OVERTIME_PREMIUM) * 12 * share,
+        label: 'Izgubljena prispevna marža',
+        valueEUR: input.lostMarginEUR,
+        addressableShare,
       },
       {
         bucket: 'capacity',
-        label: 'Ponovno planiranje in obveščanje kupcev',
-        valueEUR: input.replanningHoursPerMonth * hourly * 12 * share,
-        hoursPerMonth: input.replanningHoursPerMonth * share,
+        label: 'Obveščanje in usklajevanje s kupci',
+        valueEUR: input.customerCommsHoursPerMonth * context.adminHourCostEUR * MONTHS_PER_YEAR,
+        hoursPerMonth: input.customerCommsHoursPerMonth,
+        addressableShare,
       },
     ];
   },
@@ -541,159 +509,84 @@ export const zamude: ModuleDefinition = {
   ],
 };
 
-// --- Diagnostična modula ----------------------------------------------------
+// --- Kratka diagnostika -----------------------------------------------------
 
-/** Diagnostična modula nimata triaže — sta kratka in se prikažeta vedno. */
-
-const FREQUENCY_CHOICES = [
-  { value: 0, label: 'Da, zanesljivo' },
-  { value: 1, label: 'Večinoma' },
-  { value: 2, label: 'Le približno' },
-  { value: 3, label: 'Ne' },
-];
-
-function riskLevelFromScore(score: number, maxScore: number): RiskLevel {
-  const ratio = score / maxScore;
-  if (ratio <= 0.3) return 'low';
-  if (ratio <= 0.6) return 'medium';
-  return 'high';
-}
-
-/** Pas maržnega tveganja v deležu prihodkov — namerno pas, ne navidezno natančen znesek. */
-const MARGIN_RISK_BANDS: Record<RiskLevel, [number, number]> = {
-  low: [0.005, 0.01],
-  medium: [0.01, 0.03],
-  high: [0.03, 0.06],
+const DATA_RISK_NOTE: Record<RiskLevel, string> = {
+  low: 'Poraba in delo se evidentirata sproti, lastna cena naloga je znana. Odstopanje opazite, ko ga je še mogoče popraviti.',
+  medium:
+    'Podatki so delni. Odstopanje od kalkulacije praviloma opazite šele ob obračunu, ko naloga ni več mogoče popraviti.',
+  high: 'Dejanske porabe in lastne cene naloga ne poznate. Dokler tega ni, natančnega zneska izgubljene marže ni mogoče izračunati — in prav to je težava.',
 };
 
-export const marza: ModuleDefinition = {
-  id: 'marza',
-  title: 'Kalkulacije in pregled nad maržo',
-  summary: 'Ali poznate dejanski strošek izdelka in delovnega naloga ter kako hitro opazite odstopanje.',
+const PROCESS_RISK_NOTE: Record<RiskLevel, string> = {
+  low: 'Sledljivost je urejena in proizvodnja ni odvisna od posameznika.',
+  medium: 'Sledljivost je delna. Ob resnejši reklamaciji je obseg odpoklica težko omejiti.',
+  high: 'Sledljivosti praktično ni, znanje pa je v glavah posameznikov. Ena reklamacija ali odsotnost ključne osebe lahko ustavi več serij.',
+};
+
+/**
+ * Štiri vprašanja, ki se prikažejo vedno in NE prispevajo nobenega evra.
+ *
+ * Namenoma brez zneska: kjer podjetje nima kalkulacije ali sledljivosti, natančnega
+ * zneska ni mogoče izračunati, navidezno natančna številka pa bi prav to težavo
+ * skrila. Modul zato nima triaže in ne more biti "največja postavka".
+ */
+export const diagnostika: ModuleDefinition = {
+  id: 'diagnostika',
+  title: 'Kratka diagnostika',
+  summary: 'Štiri vprašanja o podatkih in odpornosti procesa. Ne prispevajo k finančnemu rezultatu.',
   fields: [
     {
-      key: 'knowsCostPerProduct',
-      label: 'Ali poznate dejanski strošek posameznega izdelka?',
+      key: 'realtimeRecording',
+      label: 'Ali sproti evidentirate dejansko porabo materiala in opravljeno delo?',
       kind: 'choice',
       default: 1,
-      choices: FREQUENCY_CHOICES,
+      choices: ASSURANCE_CHOICES,
     },
     {
-      key: 'knowsCostPerWorkOrder',
-      label: 'Ali poznate dejanski strošek posameznega delovnega naloga?',
+      key: 'knowsUnitCost',
+      label: 'Ali poznate dejanski strošek posameznega izdelka oziroma delovnega naloga?',
       kind: 'choice',
       default: 1,
-      choices: FREQUENCY_CHOICES,
+      choices: ASSURANCE_CHOICES,
     },
     {
-      key: 'deviationDetectionSpeed',
-      label: 'Kako hitro opazite odstopanje od kalkulacije?',
+      key: 'materialTraceability',
+      label: 'Ali lahko zanesljivo sledite materialu od dobave do končnega izdelka?',
       kind: 'choice',
       default: 2,
-      choices: [
-        { value: 0, label: 'Sproti, med izdelavo' },
-        { value: 1, label: 'V nekaj dneh' },
-        { value: 2, label: 'Ob mesečnem obračunu' },
-        { value: 3, label: 'Šele ob letnem zaključku' },
-      ],
+      choices: ASSURANCE_CHOICES,
     },
     {
-      key: 'annualRevenueEUR',
-      label: 'Kolikšni so vaši letni prihodki (EUR)?',
-      kind: 'number',
-      unit: 'EUR/leto',
-      default: 0,
+      key: 'keyPersonIndependence',
+      label: 'Ali proizvodnja deluje normalno tudi brez ključne osebe?',
+      kind: 'choice',
+      default: 1,
+      choices: ASSURANCE_CHOICES,
     },
   ],
   compute: (input) => {
-    const score = input.knowsCostPerProduct + input.knowsCostPerWorkOrder + input.deviationDetectionSpeed;
-    const riskLevel = riskLevelFromScore(score, 9);
-    const [low, high] = MARGIN_RISK_BANDS[riskLevel];
-    const revenue = input.annualRevenueEUR;
-
-    const note =
-      revenue > 0
-        ? `Marža pod tveganjem: ${formatEUR(revenue * low)} – ${formatEUR(revenue * high)} letno (${low * 100}–${high * 100} % prihodkov).`
-        : `Marža pod tveganjem: ${low * 100}–${high * 100} % prihodkov.`;
+    const dataLevel = riskLevelFromScore(input.realtimeRecording + input.knowsUnitCost, 6);
+    const processLevel = riskLevelFromScore(input.materialTraceability + input.keyPersonIndependence, 6);
 
     return [
       {
         bucket: 'risk',
-        label: 'Marža pod tveganjem',
-        riskLevel,
-        note: `${note} Ocena je pas, ne natančen znesek — dokler kalkulacije ni, natančnega zneska ni mogoče izračunati.`,
+        label: 'Zanesljivost podatkov',
+        riskLevel: dataLevel,
+        note: DATA_RISK_NOTE[dataLevel],
+      },
+      {
+        bucket: 'risk',
+        label: 'Procesna odpornost',
+        riskLevel: processLevel,
+        note: PROCESS_RISK_NOTE[processLevel],
       },
     ];
   },
   pantheon: [
     'Kalkulacije lastne cene po izdelku in delovnem nalogu',
-    'Primerjava načrtovane in dejanske porabe',
-    'Poročila o odstopanjih med izdelavo, ne po zaključku',
-  ],
-};
-
-export const sledljivost: ModuleDefinition = {
-  id: 'sledljivost',
-  title: 'Sledljivost in procesno tveganje',
-  summary: 'Serije, loti, poreklo materiala, odvisnost od posameznikov in čas do vzroka reklamacije.',
-  fields: [
-    {
-      key: 'batchLotTracking',
-      label: 'Ali sledite serijam in lotom skozi celotno proizvodnjo?',
-      kind: 'choice',
-      default: 2,
-      choices: FREQUENCY_CHOICES,
-    },
-    {
-      key: 'materialOrigin',
-      label: 'Ali za vsak izdelek veste, iz katere dobave materiala je nastal?',
-      kind: 'choice',
-      default: 2,
-      choices: FREQUENCY_CHOICES,
-    },
-    {
-      key: 'keyPersonDependency',
-      label: 'Ali proizvodnja teče normalno, tudi če ključna oseba ni na delu?',
-      kind: 'choice',
-      default: 1,
-      choices: FREQUENCY_CHOICES,
-    },
-    {
-      key: 'claimRootCauseTime',
-      label: 'Kako hitro najdete vzrok reklamacije?',
-      kind: 'choice',
-      default: 2,
-      choices: [
-        { value: 0, label: 'V nekaj minutah' },
-        { value: 1, label: 'V nekaj urah' },
-        { value: 2, label: 'V nekaj dneh' },
-        { value: 3, label: 'Pogosto sploh ne' },
-      ],
-    },
-  ],
-  compute: (input) => {
-    const score =
-      input.batchLotTracking + input.materialOrigin + input.keyPersonDependency + input.claimRootCauseTime;
-    const riskLevel = riskLevelFromScore(score, 12);
-
-    const note: Record<RiskLevel, string> = {
-      low: 'Sledljivost je urejena — vzrok reklamacije najdete hitro in niste odvisni od posameznika.',
-      medium: 'Sledljivost je delna. Ob resnejši reklamaciji je obseg odpoklica težko omejiti.',
-      high: 'Sledljivosti praktično ni. Ena reklamacija lahko pomeni zaustavitev več serij in odvisnost od spomina posameznika.',
-    };
-
-    return [
-      {
-        bucket: 'risk',
-        label: 'Procesno tveganje',
-        riskLevel,
-        note: note[riskLevel],
-      },
-    ];
-  },
-  pantheon: [
     'Serije in loti s popolno sledljivostjo',
-    'Poreklo materiala do dobave',
     'Dokumentiran proces namesto znanja v glavah',
   ],
 };
@@ -705,6 +598,5 @@ export const PROIZVODNJA_MODULES: ModuleDefinition[] = [
   zaloge,
   nalogi,
   zamude,
-  marza,
-  sledljivost,
+  diagnostika,
 ];

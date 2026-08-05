@@ -1,0 +1,55 @@
+/*
+ * Podvprašanje, ki se pokaže šele po izbiri "Drugo". Vizualno je enako
+ * kontekstnim izbiram (StepContext), a živi v svojem modulu, ker je vsak korak
+ * v tej mapi lastnik svojih slogov — deljen modul bi povezal komponenti, ki se
+ * sicer ne poznata.
+ */
+.subQuestion {
+  border: none;
+  padding: var(--space-4) 0 0;
+  margin: var(--space-4) 0 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.subLegend {
+  padding: 0;
+  margin-bottom: var(--space-2);
+  font-size: var(--font-size-md);
+  font-weight: 700;
+  color: var(--color-primary-text);
+}
+
+.subHelp {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.subOptions {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.subOption {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.subOptionActive {
+  border-color: var(--color-primary-text);
+  background: var(--color-accent);
+  font-weight: 600;
+}
+
+.subOption input {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}

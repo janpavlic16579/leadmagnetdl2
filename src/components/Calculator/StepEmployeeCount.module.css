@@ -1,0 +1,16 @@
+/* Eno samo število ne potrebuje celotne širine kartice — široko polje daje vtis,
+   da se pričakuje daljši vnos. Enaka širina kot pri urnih postavkah. */
+.numberInput {
+  width: 8rem;
+}
+
+.unit {
+  margin-left: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.inputRow {
+  display: flex;
+  align-items: center;
+}

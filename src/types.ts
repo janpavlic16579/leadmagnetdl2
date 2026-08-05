@@ -12,4 +12,16 @@ export interface BasicInfo {
  */
 export type ModuleInputsState = Record<string, Record<string, number>>;
 
-export type FlowStep = 'basicInfo' | 'triage' | 'inputs' | 'results' | 'emailGate' | 'changeSegment';
+export type FlowStep =
+  | 'industry'
+  /** Število zaposlenih — svoj korak, ker na izračun ne vpliva in ni del izbire dejavnosti. */
+  | 'employeeCount'
+  /** Kontekst dejavnosti — samo segmenti z vnosom v config/contexts/. */
+  | 'context'
+  | 'triage'
+  /** Skupni urni postavki — samo segmenti z vnosom v config/contexts/. */
+  | 'costBasis'
+  | 'inputs'
+  | 'results'
+  /** Edini korak zunaj stepOrder — zato tudi edini brez oznake "Korak N od M". */
+  | 'emailGate';

@@ -1,283 +1,275 @@
 import { describe, it, expect } from 'vitest';
-import { aggregateBuckets } from '../../lib/moduleEngine';
-import { marza, material, nalogi, planiranje, sledljivost, zaloge, zamude } from './proizvodnja';
-import type { BucketId, ModuleOutputDraft } from './moduleTypes';
+import { diagnostika, material, nalogi, planiranje, zaloge, zamude } from './proizvodnja';
+import { ADDRESSABLE_SHARE } from './addressableShare';
+import type { ComputeContext, ModuleDefinition, ModuleOutputDraft } from './moduleTypes';
+import { resolveInputs } from '../../lib/moduleEngine';
 
-/** Izid določenega koša in oznake — testi naj se ne opirajo na vrstni red v tabeli. */
-function pick(outputs: ModuleOutputDraft[], bucket: BucketId, label: string): ModuleOutputDraft {
-  const found = outputs.find((output) => output.bucket === bucket && output.label === label);
-  if (!found) throw new Error(`Manjka izid "${label}" v košu ${bucket}`);
+/**
+ * Testi držijo dve lastnosti, na katerih stoji verodostojnost izračuna:
+ * postavka je v natanko enem košu, in compute() vrne dejanski sedanji strošek —
+ * ne stroška, vnaprej pomnoženega z domnevnim deležem izboljšave.
+ */
+
+const CONTEXT: ComputeContext = { operationalHourCostEUR: 50, adminHourCostEUR: 35, chargeOutRateEUR: 75 };
+const MONTHS = 12;
+
+function run(definition: ModuleDefinition, overrides: Record<string, number> = {}): ModuleOutputDraft[] {
+  return definition.compute(resolveInputs(definition, overrides), CONTEXT);
+}
+
+/** Testi naj se ne opirajo na vrstni red izidov v tabeli. */
+function pick(outputs: ModuleOutputDraft[], label: string): ModuleOutputDraft {
+  const found = outputs.find((output) => output.label === label);
+  if (!found) throw new Error(`Ni izida z oznako "${label}"`);
   return found;
 }
 
-describe('Modul 1: planiranje proizvodnje in zastoji', () => {
-  const outputs = planiranje.compute({
-    planningMethod: 0.45, // Excel
-    productionHoursPerMonth: 2000,
+const COSTED_MODULES = [planiranje, material, zaloge, nalogi, zamude];
+
+describe('Plan, kapacitete in navodila', () => {
+  const outputs = run(planiranje, {
     waitingHoursPerMonth: 100,
-    overtimeHoursPerMonth: 40,
-    reschedulesPerMonth: 20,
-    productionHourCostEUR: 50,
+    overtimeHoursPerMonth: 20,
+    replanningHoursPerMonth: 40,
+    mainCause: 0, // Plan in kapacitete niso ažurni → planning
   });
 
-  it('zastoji gredo v kapaciteto, ne med neposredne izgube', () => {
-    // 100 h × 50 EUR × 12 × 0,45
-    const zastoji = pick(outputs, 'capacity', 'Zastoji proizvodnje');
-    expect(zastoji.valueEUR).toBeCloseTo(27000, 6);
-    expect(zastoji.hoursPerMonth).toBeCloseTo(45, 6);
+  it('zastoji in nadure so kapaciteta, ne neposredna izguba', () => {
+    const item = pick(outputs, 'Zastoji in nadure v proizvodnji');
+    expect(item.bucket).toBe('capacity');
+    expect(item.valueEUR).toBe(120 * CONTEXT.operationalHourCostEUR * MONTHS);
   });
 
-  it('nadure so neposredna izguba, s 30 % pribitkom', () => {
-    // 40 h × 50 EUR × 1,3 × 12 × 0,45
-    expect(pick(outputs, 'directLoss', 'Nadure zaradi sprememb plana').valueEUR).toBeCloseTo(14040, 6);
+  it('sproščene ure so surove mesečne ure, ne skrčene z deležem izboljšave', () => {
+    expect(pick(outputs, 'Zastoji in nadure v proizvodnji').hoursPerMonth).toBe(120);
   });
 
-  it('prestavljanje nalogov stane pol ure nastavitve na nalog', () => {
-    // 20 × 0,5 h × 50 EUR × 12 × 0,45
-    expect(
-      pick(outputs, 'directLoss', 'Dodatne menjave in prestavljanje nalogov').valueEUR,
-    ).toBeCloseTo(2700, 6);
-  });
-
-  it('ur čakanja ne more biti več, kot je proizvodnih ur', () => {
-    const capped = planiranje.compute({
-      planningMethod: 0.45,
-      productionHoursPerMonth: 2000,
-      waitingHoursPerMonth: 3000, // tipkarska napaka
-      overtimeHoursPerMonth: 0,
-      reschedulesPerMonth: 0,
-      productionHourCostEUR: 50,
-    });
-    // Omejeno na 2000 h: 2000 × 50 × 12 × 0,45
-    expect(pick(capped, 'capacity', 'Zastoji proizvodnje').valueEUR).toBeCloseTo(540000, 6);
-  });
-
-  it('boljše planiranje zniža izgubo pri enakih vnosih', () => {
-    const withMrp = planiranje.compute({
-      planningMethod: 0.15,
-      productionHoursPerMonth: 2000,
-      waitingHoursPerMonth: 100,
-      overtimeHoursPerMonth: 40,
-      reschedulesPerMonth: 20,
-      productionHourCostEUR: 50,
-    });
-    const totalMrp = aggregateBuckets(withMrp.map((o) => ({ ...o, moduleId: 'planiranje' })));
-    const totalExcel = aggregateBuckets(outputs.map((o) => ({ ...o, moduleId: 'planiranje' })));
-
-    expect(totalMrp.directLossEUR).toBeLessThan(totalExcel.directLossEUR);
-  });
-});
-
-describe('Modul 2: material, izmet in dodelave', () => {
-  const outputs = material.compute({
-    annualMaterialValueEUR: 2000000,
-    scrapRatePercent: 0.03,
-    reworkHoursPerMonth: 60,
-    bomDeviation: 0.2, // redko
-    annualClaimsCostEUR: 30000,
-    hourlyLaborCostEUR: 28,
-  });
-
-  it('izmet šteje samo realistično izboljšljiv delež, ne celote', () => {
-    // 2.000.000 × 3 % = 60.000 EUR izmeta, od tega izboljšljivih 20 %
-    expect(pick(outputs, 'directLoss', 'Izmet materiala').valueEUR).toBeCloseTo(12000, 6);
-  });
-
-  it('reklamacije so neposredna izguba', () => {
-    expect(pick(outputs, 'directLoss', 'Reklamacije in vračila').valueEUR).toBeCloseTo(6000, 6);
-  });
-
-  it('ure dodelav so kapaciteta, ne neposredna izguba', () => {
-    // 60 h × 28 EUR × 12 × 0,2
-    const dodelave = pick(outputs, 'capacity', 'Dodelave in ponovna izdelava');
-    expect(dodelave.valueEUR).toBeCloseTo(4032, 6);
-    expect(dodelave.hoursPerMonth).toBeCloseTo(12, 6);
-  });
-});
-
-describe('Modul 3: zaloge in pomanjkanje materiala', () => {
-  const outputs = zaloge.compute({
-    rawMaterialValueEUR: 300000,
-    wipValueEUR: 100000,
-    finishedGoodsValueEUR: 200000,
-    obsoleteStockValueEUR: 50000,
-    annualWriteOffEUR: 20000,
-    stockoutsPerMonth: 4,
-    emergencyPurchasesPerMonth: 6,
-    stockVisibility: 0.06, // delen pregled
-    capitalCostPercent: 0.1,
-  });
-
-  // kazen zaradi zastojev = max(0,5; 1 − 4/20) = 0,8 → delež znižanja 0,06 × 0,8 = 0,048
-  // sproščeno = 600.000 × 0,048 + 50.000 × 0,5 = 28.800 + 25.000 = 53.800
-  it('sproščen kapital združi znižanje zalog in unovčenje nekurantnih', () => {
-    expect(pick(outputs, 'oneTimeCapital', 'Enkratno sprostljiv kapital v zalogah').valueEUR).toBeCloseTo(
-      53800,
-      6,
+  it('ponovno planiranje se vrednoti po administrativni, ne proizvodni uri', () => {
+    expect(pick(outputs, 'Ponovno planiranje in usklajevanje').valueEUR).toBe(
+      40 * CONTEXT.adminHourCostEUR * MONTHS,
     );
   });
 
-  it('letni strošek je strošek kapitala plus izogibljivi odpisi', () => {
-    // 53.800 × 10 % + 20.000 × min(0,5; 0,048 × 4)
-    expect(pick(outputs, 'directLoss', 'Letni strošek presežnih zalog in odpisov').valueEUR).toBeCloseTo(
-      9220,
-      6,
-    );
-  });
-
-  it('pogosti zastoji znižajo delež, za katerega je zaloge realno mogoče zmanjšati', () => {
-    const manyStockouts = zaloge.compute({
-      rawMaterialValueEUR: 300000,
-      wipValueEUR: 100000,
-      finishedGoodsValueEUR: 200000,
-      obsoleteStockValueEUR: 0,
-      annualWriteOffEUR: 0,
-      stockoutsPerMonth: 20,
-      emergencyPurchasesPerMonth: 0,
-      stockVisibility: 0.06,
-      capitalCostPercent: 0.1,
-    });
-    // kazen doseže spodnjo mejo 0,5 → 600.000 × 0,03
-    expect(
-      pick(manyStockouts, 'oneTimeCapital', 'Enkratno sprostljiv kapital v zalogah').valueEUR,
-    ).toBeCloseTo(18000, 6);
-  });
-
-  it('nujne nabave se v tem modulu ne ovrednotijo (štejejo se v modulu Zamude)', () => {
-    const withEmergencies = zaloge.compute({
-      rawMaterialValueEUR: 300000,
-      wipValueEUR: 100000,
-      finishedGoodsValueEUR: 200000,
-      obsoleteStockValueEUR: 50000,
-      annualWriteOffEUR: 20000,
-      stockoutsPerMonth: 4,
-      emergencyPurchasesPerMonth: 99,
-      stockVisibility: 0.06,
-      capitalCostPercent: 0.1,
-    });
-    expect(pick(withEmergencies, 'directLoss', 'Letni strošek presežnih zalog in odpisov').valueEUR).toBe(
-      pick(outputs, 'directLoss', 'Letni strošek presežnih zalog in odpisov').valueEUR,
+  it('glavni vzrok določi naslovljiv delež', () => {
+    expect(pick(outputs, 'Zastoji in nadure v proizvodnji').addressableShare).toBe(
+      ADDRESSABLE_SHARE.planning,
     );
   });
 });
 
-describe('Modul 4: delovni nalogi in ročno poročanje', () => {
-  const outputs = nalogi.compute({
-    workOrdersPerMonth: 400,
-    minutesPerWorkOrder: 20,
-    rekeyingPeople: 2,
-    rekeyingHoursPerPerson: 10,
-    realtimeReporting: 0.5, // naslednji dan
-    reconciliationHoursPerMonth: 15,
-    hourlyLaborCostEUR: 28,
+describe('Izmet, dodelave in kakovost', () => {
+  const outputs = run(material, {
+    annualMaterialSpendEUR: 1_000_000,
+    scrapSharePercent: 0.03,
+    reworkHoursPerMonth: 50,
+    annualClaimsCostEUR: 20_000,
+    mainCause: 0, // Zastarele sestavnice → data
   });
 
-  it('sešteje pripravo nalogov, prepisovanje in usklajevanje v kapaciteto', () => {
-    // 400 × 20 min = 133,33 h + 2 × 10 h + 15 h = 168,33 h; × 28 EUR × 12 × 0,5
-    const izid = pick(outputs, 'capacity', 'Ročno delo z nalogi in poročanjem');
-    expect(izid.valueEUR).toBeCloseTo(28280, 6);
-    expect(izid.hoursPerMonth).toBeCloseTo(84.16667, 4);
+  it('izmet in reklamacije sta neposredni izgubi', () => {
+    expect(pick(outputs, 'Izmet materiala').bucket).toBe('directLoss');
+    expect(pick(outputs, 'Izmet materiala').valueEUR).toBe(30_000);
+    expect(pick(outputs, 'Reklamacije in vračila').valueEUR).toBe(20_000);
   });
 
-  it('ne prispeva nič k neposrednim izgubam', () => {
+  it('ure dodelav so kapaciteta — plačna masa se z njimi ne zniža', () => {
+    const item = pick(outputs, 'Dodelave in ponovna izdelava');
+    expect(item.bucket).toBe('capacity');
+    expect(item.valueEUR).toBe(50 * CONTEXT.operationalHourCostEUR * MONTHS);
+  });
+
+  it('vzrok v podatkih da najvišji naslovljiv delež', () => {
+    expect(pick(outputs, 'Izmet materiala').addressableShare).toBe(ADDRESSABLE_SHARE.data);
+  });
+});
+
+describe('Zaloge in razpoložljivost materiala', () => {
+  const outputs = run(zaloge, {
+    inventoryValueEUR: 800_000,
+    annualWriteOffEUR: 25_000,
+    materialWaitingHoursPerMonth: 60,
+    reducibleShare: 2, // 11–20 % → 0.15
+    mainCause: 1, // Stanje zalog ni zanesljivo → data
+  });
+
+  it('odpisi so neposredna izguba, čakanje na material pa kapaciteta', () => {
+    expect(pick(outputs, 'Odpisi in razvrednotenja zalog').bucket).toBe('directLoss');
+    expect(pick(outputs, 'Odpisi in razvrednotenja zalog').valueEUR).toBe(25_000);
+    expect(pick(outputs, 'Čakanje na manjkajoč material').bucket).toBe('capacity');
+    expect(pick(outputs, 'Čakanje na manjkajoč material').valueEUR).toBe(
+      60 * CONTEXT.operationalHourCostEUR * MONTHS,
+    );
+  });
+
+  it('sprostljiv kapital je enkraten in se ne meša med letne zneske', () => {
+    const item = pick(outputs, 'Sprostljiv obratni kapital v zalogah');
+    expect(item.bucket).toBe('oneTimeCapital');
+    expect(item.valueEUR).toBe(800_000 * 0.15);
+  });
+
+  it('sprostljiv kapital nima naslovljivega deleža — ta znesek JE potencial', () => {
+    expect(pick(outputs, 'Sprostljiv obratni kapital v zalogah').addressableShare).toBeUndefined();
+  });
+
+  it('"Ne vem" pade na najkonservativnejši delež znižanja', () => {
+    const unknown = run(zaloge, { inventoryValueEUR: 800_000, reducibleShare: 4 });
+    const lowest = run(zaloge, { inventoryValueEUR: 800_000, reducibleShare: 0 });
+    expect(pick(unknown, 'Sprostljiv obratni kapital v zalogah').valueEUR).toBe(
+      pick(lowest, 'Sprostljiv obratni kapital v zalogah').valueEUR,
+    );
+  });
+});
+
+describe('Delovni nalogi in podatki', () => {
+  const outputs = run(nalogi, {
+    orderAdminHoursPerMonth: 30,
+    retypingHoursPerMonth: 25,
+    dataFixHoursPerMonth: 15,
+    mainCause: 0,
+  });
+
+  it('vse tri postavke so kapaciteta in ločene, da je vidno, kje delo nastaja', () => {
+    expect(outputs).toHaveLength(3);
     expect(outputs.every((output) => output.bucket === 'capacity')).toBe(true);
   });
-});
 
-describe('Modul 5: zamude in nujni stroški', () => {
-  const outputs = zamude.compute({
-    lateOrdersPerMonth: 12,
-    annualExpeditingCostEUR: 40000,
-    deadlineOvertimeHoursPerMonth: 30,
-    annualPenaltiesEUR: 25000,
-    replanningHoursPerMonth: 20,
-    hourlyLaborCostEUR: 28,
-  });
-
-  it('ekspresne nabave in penali so neposredna izguba', () => {
-    expect(pick(outputs, 'directLoss', 'Ekspresne nabave in dostave').valueEUR).toBeCloseTo(14000, 6);
-    expect(pick(outputs, 'directLoss', 'Penali, popusti in odpovedana naročila').valueEUR).toBeCloseTo(
-      8750,
-      6,
+  it('ure se vrednotijo po administrativni uri', () => {
+    expect(pick(outputs, 'Prepisovanje podatkov med orodji').valueEUR).toBe(
+      25 * CONTEXT.adminHourCostEUR * MONTHS,
     );
   });
+});
 
-  it('nadure zaradi rokov nosijo 30 % pribitek', () => {
-    // 30 h × 28 EUR × 1,3 × 12 × 0,35
-    expect(pick(outputs, 'directLoss', 'Nadure zaradi lovljenja rokov').valueEUR).toBeCloseTo(4586.4, 4);
+describe('Roki in nujni stroški', () => {
+  const outputs = run(zamude, {
+    expediteCostEUR: 15_000,
+    penaltyCostEUR: 8_000,
+    lostMarginEUR: 12_000,
+    customerCommsHoursPerMonth: 20,
+    mainCause: 3, // Zunanji dobavitelji ali kupci → external
   });
 
-  it('ponovno planiranje je kapaciteta', () => {
-    const izid = pick(outputs, 'capacity', 'Ponovno planiranje in obveščanje kupcev');
-    expect(izid.valueEUR).toBeCloseTo(2352, 6);
-    expect(izid.hoursPerMonth).toBeCloseTo(7, 6);
+  it('denarni stroški so neposredne izgube', () => {
+    const directLoss = outputs.filter((output) => output.bucket === 'directLoss');
+    expect(directLoss).toHaveLength(3);
+    expect(directLoss.reduce((sum, output) => sum + (output.valueEUR ?? 0), 0)).toBe(35_000);
   });
 
-  it('število zamujenih naročil ne vstopa v izračun', () => {
-    const more = zamude.compute({
-      lateOrdersPerMonth: 500,
-      annualExpeditingCostEUR: 40000,
-      deadlineOvertimeHoursPerMonth: 30,
-      annualPenaltiesEUR: 25000,
-      replanningHoursPerMonth: 20,
-      hourlyLaborCostEUR: 28,
-    });
-    expect(more).toEqual(outputs);
+  it('obveščanje kupcev je kapaciteta', () => {
+    const item = pick(outputs, 'Obveščanje in usklajevanje s kupci');
+    expect(item.bucket).toBe('capacity');
+    expect(item.valueEUR).toBe(20 * CONTEXT.adminHourCostEUR * MONTHS);
+  });
+
+  it('zunanji vzrok močno zniža naslovljiv delež', () => {
+    expect(pick(outputs, 'Ekspresne nabave in dostave').addressableShare).toBe(
+      ADDRESSABLE_SHARE.external,
+    );
   });
 });
 
-describe('Diagnostična modula', () => {
-  it('marža vrne pas in nikoli zneska v košu z evri', () => {
-    const outputs = marza.compute({
-      knowsCostPerProduct: 3,
-      knowsCostPerWorkOrder: 3,
-      deviationDetectionSpeed: 3,
-      annualRevenueEUR: 5000000,
-    });
-
-    expect(outputs).toHaveLength(1);
-    expect(outputs[0].bucket).toBe('risk');
-    expect(outputs[0].valueEUR).toBeUndefined();
-    expect(outputs[0].riskLevel).toBe('high');
-    expect(outputs[0].note).toContain('3–6 % prihodkov');
+describe('Kratka diagnostika', () => {
+  it('vrne dve oceni tveganja brez evrov', () => {
+    const outputs = run(diagnostika);
+    expect(outputs).toHaveLength(2);
+    for (const output of outputs) {
+      expect(output.bucket).toBe('risk');
+      expect(output.valueEUR).toBeUndefined();
+    }
   });
 
-  it('marža ob urejenih kalkulacijah pade na nizko tveganje', () => {
-    const outputs = marza.compute({
-      knowsCostPerProduct: 0,
-      knowsCostPerWorkOrder: 0,
-      deviationDetectionSpeed: 0,
-      annualRevenueEUR: 5000000,
+  it('najboljši odgovori dajo nizko, najslabši visoko tveganje', () => {
+    const best = run(diagnostika, {
+      realtimeRecording: 0,
+      knowsUnitCost: 0,
+      materialTraceability: 0,
+      keyPersonIndependence: 0,
     });
-    expect(outputs[0].riskLevel).toBe('low');
+    const worst = run(diagnostika, {
+      realtimeRecording: 3,
+      knowsUnitCost: 3,
+      materialTraceability: 3,
+      keyPersonIndependence: 3,
+    });
+
+    expect(best.every((output) => output.riskLevel === 'low')).toBe(true);
+    expect(worst.every((output) => output.riskLevel === 'high')).toBe(true);
   });
 
-  it('marža brez podatka o prihodkih navede samo odstotke', () => {
-    const outputs = marza.compute({
-      knowsCostPerProduct: 3,
-      knowsCostPerWorkOrder: 3,
-      deviationDetectionSpeed: 3,
-      annualRevenueEUR: 0,
-    });
-    expect(outputs[0].note).not.toContain('EUR');
+  it('ni v triaži — vprašanja se prikažejo vedno', () => {
+    expect(diagnostika.triage).toBeUndefined();
+  });
+});
+
+describe('Skupne lastnosti stroškovnih modulov', () => {
+  it('vsak modul ima 5–6 polj, da vprašalnik ostane kratek', () => {
+    for (const definition of COSTED_MODULES) {
+      expect(definition.fields.length, definition.id).toBeGreaterThanOrEqual(5);
+      expect(definition.fields.length, definition.id).toBeLessThanOrEqual(6);
+    }
   });
 
-  it('sledljivost vrne oceno tveganja brez evrov', () => {
-    const high = sledljivost.compute({
-      batchLotTracking: 3,
-      materialOrigin: 3,
-      keyPersonDependency: 3,
-      claimRootCauseTime: 3,
-    });
-    expect(high[0].riskLevel).toBe('high');
-    expect(high[0].valueEUR).toBeUndefined();
+  it('privzeti glavni vzrok je "Ne vemo" in da konservativen delež', () => {
+    for (const definition of COSTED_MODULES) {
+      const outputs = run(definition).filter((output) => output.addressableShare !== undefined);
+      expect(outputs.length, definition.id).toBeGreaterThan(0);
+      for (const output of outputs) {
+        expect(output.addressableShare, `${definition.id}: ${output.label}`).toBe(
+          ADDRESSABLE_SHARE.unknown,
+        );
+      }
+    }
+  });
 
-    const low = sledljivost.compute({
-      batchLotTracking: 0,
-      materialOrigin: 0,
-      keyPersonDependency: 0,
-      claimRootCauseTime: 0,
-    });
-    expect(low[0].riskLevel).toBe('low');
+  it('polja s contextOnly ne premaknejo nobene številke', () => {
+    const scenarios: {
+      definition: ModuleDefinition;
+      base: Record<string, number>;
+      twist: Record<string, number>;
+    }[] = [
+      {
+        definition: planiranje,
+        base: { waitingHoursPerMonth: 100, replanningHoursPerMonth: 40, planningMethod: 0 },
+        twist: { waitingHoursPerMonth: 100, replanningHoursPerMonth: 40, planningMethod: 3 },
+      },
+      {
+        definition: zaloge,
+        base: { inventoryValueEUR: 500_000, annualWriteOffEUR: 9_000, stockVisibility: 0 },
+        twist: { inventoryValueEUR: 500_000, annualWriteOffEUR: 9_000, stockVisibility: 3 },
+      },
+      {
+        definition: nalogi,
+        base: { orderAdminHoursPerMonth: 30, reportingTiming: 0 },
+        twist: { orderAdminHoursPerMonth: 30, reportingTiming: 3 },
+      },
+      {
+        definition: zamude,
+        base: { expediteCostEUR: 15_000, lateOrdersPerMonth: 0 },
+        twist: { expediteCostEUR: 15_000, lateOrdersPerMonth: 90 },
+      },
+    ];
+
+    for (const { definition, base, twist } of scenarios) {
+      expect(run(definition, twist), definition.id).toEqual(run(definition, base));
+    }
+  });
+
+  it('ista oznaka postavke nikoli ne pristane v dveh koših', () => {
+    const bucketByLabel = new Map<string, string>();
+    for (const definition of COSTED_MODULES) {
+      for (const output of run(definition)) {
+        const previous = bucketByLabel.get(output.label);
+        expect(previous === undefined || previous === output.bucket, output.label).toBe(true);
+        bucketByLabel.set(output.label, output.bucket);
+      }
+    }
+  });
+
+  it('ure se ne štejejo dvakrat: zastoj zaradi plana in zaradi materiala sta ločena izida', () => {
+    const planOutputs = run(planiranje, { waitingHoursPerMonth: 100 });
+    const stockOutputs = run(zaloge, { materialWaitingHoursPerMonth: 60 });
+
+    expect(pick(planOutputs, 'Zastoji in nadure v proizvodnji').hoursPerMonth).toBe(100);
+    expect(pick(stockOutputs, 'Čakanje na manjkajoč material').hoursPerMonth).toBe(60);
   });
 });

@@ -1,7 +1,10 @@
+import type { BusinessProfile } from '../config/contexts';
 import type { ModuleOutput } from '../config/modules/moduleTypes';
 import type { SegmentId } from '../config/segmentTypes';
+import { triggerDownload } from './download';
 import type { FollowUpSequence } from './followUp';
 import type { TriageScores } from './moduleEngine';
+import type { ConfidenceLevel } from './potential';
 
 // Ni CRM API — ta modul nadomešča pravo integracijo z ročnim izvozom (spec pogl. 8, MVP tabela).
 // Prenese CSV + JSON datoteko neposredno v brskalniku, brez omrežnega klica.
@@ -28,22 +31,18 @@ export interface LeadExportRecord {
     capacityEUR: number;
     capacityHoursPerMonth: number;
     oneTimeCapitalEUR: number;
+    /** Odsotna pri segmentih, ki pasu izboljšave ne poznajo. */
+    potentialMinEUR?: number;
+    potentialMaxEUR?: number;
   };
+  /** Koliko od izračuna je podatek in koliko privzeta vrednost — za presojo leada. */
+  confidence?: ConfidenceLevel;
+  /** Kontekst podjetja; samo segmenti, ki ga vprašajo. */
+  profile?: BusinessProfile;
   followUpSequence: FollowUpSequence;
   utmSource: string | null;
 }
 
-function triggerDownload(filename: string, content: string, mimeType: string): void {
-  const blob = new Blob([content], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
-}
 
 export function downloadAsJson(record: LeadExportRecord): void {
   const filename = `datalab-lead-${record.segment}-${record.timestampISO.slice(0, 10)}.json`;
@@ -57,6 +56,9 @@ export function downloadAsJson(record: LeadExportRecord): void {
  * drugačno glavo za vsak segment — kar podre vsako CRM preslikavo. Stabilni
  * stolpci nosijo tisto, po čemer prodaja filtrira; celoten vnos po modulih gre
  * v en JSON stolpec, kjer ostane na voljo za analizo.
+ *
+ * Novi stolpci se dodajajo NA KONEC. Vsaka obstoječa preslikava je pozicijska,
+ * zato bi vrivanje na sredino tiho premaknilo vse za njim.
  */
 const CSV_COLUMNS = [
   'timestampISO',
@@ -79,7 +81,24 @@ const CSV_COLUMNS = [
   'moduleInputsJson',
   'followUpSequence',
   'utmSource',
+  'potentialMinEUR',
+  'potentialMaxEUR',
+  'confidence',
+  // Stolpci so odgovori na kontekstna vprašanja dejavnosti: "businessType" je v
+  // proizvodnji način proizvodnje, v logistiki pa vrsta storitve. Poimenovanje po
+  // eni dejavnosti bi v CRM-ju trdilo nekaj, česar lead ni odgovoril.
+  'businessType',
+  'currentSystem',
+  'role',
+  'operationalHourCostEUR',
+  'adminHourCostEUR',
+  'hourCostsEstimated',
 ] as const;
+
+/** Prazna celica namesto "0" — segment brez te vrednosti je ni izračunal, ni je izmeril kot nič. */
+function optionalRounded(value: number | undefined): string {
+  return value === undefined ? '' : String(Math.round(value));
+}
 
 function csvEscape(value: string): string {
   if (/[",\n]/.test(value)) {
@@ -114,6 +133,16 @@ export function downloadAsCsv(record: LeadExportRecord): void {
     JSON.stringify(record.moduleInputs),
     record.followUpSequence,
     record.utmSource ?? '',
+    optionalRounded(record.totals.potentialMinEUR),
+    optionalRounded(record.totals.potentialMaxEUR),
+    record.confidence ?? '',
+    record.profile?.businessType ?? '',
+    record.profile?.currentSystem ?? '',
+    record.profile?.role ?? '',
+    optionalRounded(record.profile?.operationalHour.valueEUR),
+    optionalRounded(record.profile?.adminHour.valueEUR),
+    // Prodaja mora vedeti, ali sta urni postavki podatek ali le izbran razpon.
+    record.profile ? String(record.profile.operationalHour.estimated || record.profile.adminHour.estimated) : '',
   ].map((value) => csvEscape(value));
 
   const csv = `${CSV_COLUMNS.join(',')}\n${row.join(',')}`;

@@ -1,5 +1,11 @@
 import { LEGACY_MODULES } from './legacy';
+import { LOGISTIKA_MODULES } from './logistika';
+import { MALOPRODAJA_MODULES } from './maloprodaja';
 import { PROIZVODNJA_MODULES } from './proizvodnja';
+import { RACUNOVODSTVO_MODULES } from './racunovodstvo';
+import { SPLOSNO_MODULES } from './splosno';
+import { STORITVE_MODULES } from './storitve';
+import { TRGOVINA_MODULES } from './trgovina';
 import type { ModuleDefinition } from './moduleTypes';
 
 /**
@@ -7,8 +13,21 @@ import type { ModuleDefinition } from './moduleTypes';
  *
  * Dodajanje nove dejavnosti: nova datoteka z definicijami, uvoz sem in vpis
  * moduleIds v ustrezen segment (config/segments.ts). Nič drugega.
+ *
+ * Id-ji morajo biti unikatni čez VSE dejavnosti: register je ena preslikava, zato
+ * bi podvojen id tiho povozil prejšnji modul in kalkulator bi vprašal napačna
+ * vprašanja. Enakost velikosti registra in seznama varuje test v moduleEngine.test.ts.
  */
-const ALL_MODULES: ModuleDefinition[] = [...LEGACY_MODULES, ...PROIZVODNJA_MODULES];
+export const ALL_MODULES: ModuleDefinition[] = [
+  ...LEGACY_MODULES,
+  ...PROIZVODNJA_MODULES,
+  ...LOGISTIKA_MODULES,
+  ...TRGOVINA_MODULES,
+  ...MALOPRODAJA_MODULES,
+  ...STORITVE_MODULES,
+  ...RACUNOVODSTVO_MODULES,
+  ...SPLOSNO_MODULES,
+];
 
 export const MODULE_REGISTRY: Record<string, ModuleDefinition> = Object.fromEntries(
   ALL_MODULES.map((definition) => [definition.id, definition]),

@@ -33,9 +33,45 @@ export type BucketId =
 export type FieldKind = 'number' | 'slider' | 'percent' | 'choice' | 'checkbox';
 
 export interface FieldChoice {
-  /** Vrednost, s katero modul računa (npr. delež izboljšave ali ocena 0–3). */
+  /**
+   * Vrednost, s katero modul računa (npr. ocena 0–3).
+   *
+   * POZOR: ModuleInput ključi radie po tej vrednosti in preverja `value === choice.value`.
+   * Kadar več možnosti vodi do istega izida (npr. dva vzroka z istim naslovljivim
+   * deležem), morajo biti vrednosti ZAPOREDNI INDEKSI, izid pa se poišče v tabeli —
+   * sicer bi bila označena dva radia hkrati, React pa bi javil podvojen ključ.
+   */
   value: number;
   label: string;
+  /**
+   * "Ne vem" — vrednost je konservativna privzeta ocena, ne uporabnikov podatek.
+   * Znižuje oznako zanesljivosti rezultata.
+   */
+  unknown?: true;
+}
+
+/**
+ * Skupni stroškovni predpostavki. Vprašani sta enkrat (korak pred moduli), ker je
+ * strošek ure lastnost podjetja, ne posameznega stroškovnega področja — doslej ga
+ * je vsak modul spraševal znova.
+ *
+ * "Operativna" in ne "proizvodna" ura: isti pojem je v proizvodnji ura operaterja,
+ * v logistiki pa ura voznika ali skladiščnika. Ime, vezano na eno dejavnost, bi v
+ * drugi zavajalo prav tam, kjer se odloča o velikosti zneska.
+ */
+export interface ComputeContext {
+  operationalHourCostEUR: number;
+  adminHourCostEUR: number;
+  /**
+   * Povprečna ZARAČUNANA urna postavka — cena, ne strošek. Po njej se vrednoti
+   * opravljeno, a nezaračunano delo: tam gre za izgubljen prihodek in ne za
+   * vrednost porabljenega časa.
+   *
+   * Obvezna, čeprav jo vpraša samo storitvena dejavnost. Neobvezno polje bi
+   * pomenilo `context.chargeOutRateEUR ?? 75` v vsakem modulu in eno mesto, kjer
+   * se to pozabi — `undefined × ure × 12` je NaN, ki se izriše kot veljaven znesek.
+   */
+  chargeOutRateEUR: number;
 }
 
 export interface ModuleField {
@@ -56,6 +92,12 @@ export interface ModuleField {
   choices?: FieldChoice[];
   /** Pojasnilo pod poljem, npr. opozorilo, česa naj uporabnik ne šteje. */
   help?: string;
+  /**
+   * Polje se vpraša zaradi konteksta in NE vstopa v formulo. Ocena zanesljivosti
+   * ga zato ne šteje med manjkajoče podatke. Doslej je bilo to zapisano samo v
+   * besedilu help in ga koda ni mogla razlikovati.
+   */
+  contextOnly?: true;
 }
 
 export type RiskLevel = 'low' | 'medium' | 'high';
@@ -71,6 +113,18 @@ export interface ModuleOutputDraft {
   riskLevel?: RiskLevel;
   /** Npr. "marža pod tveganjem: 3–6 % prihodkov" — namerno pas, ne točen znesek. */
   note?: string;
+  /**
+   * Delež te postavke, ki ga je z boljšimi procesi sploh mogoče nasloviti (0–1),
+   * izpeljan iz modulovega odgovora o glavnem vzroku.
+   *
+   * compute() vrne DEJANSKI sedanji strošek; realistični potencial izračuna motor
+   * iz tega deleža in pasu izboljšave, ki je lastnost podjetja (sedanji sistem).
+   * Modul torej ne more več sam vračunati "deleža izboljšave" v znesek in s tem
+   * zabrisati razlike med tem, kar podjetje izgublja, in tem, kar lahko pridobi.
+   *
+   * Odsoten = postavka v potencial ne vstopa.
+   */
+  addressableShare?: number;
 }
 
 export interface ModuleOutput extends ModuleOutputDraft {
@@ -90,12 +144,18 @@ export interface ModuleDefinition {
   title: string;
   summary: string;
   /**
-   * Diagnostični moduli (marža, sledljivost) in E niso v triaži — so kratki in se
-   * prikažejo vedno. Modul brez triaže se torej nikoli ne izloči.
+   * Diagnostični modul in E nista v triaži — sta kratka in se prikažeta vedno.
+   * Modul brez triaže se torej nikoli ne izloči.
    */
   triage?: TriageQuestion;
   fields: ModuleField[];
-  compute: (input: Record<string, number>) => ModuleOutputDraft[];
+  /**
+   * Drugi parameter je neobvezen s stališča modula: TypeScript dovoli, da funkcija
+   * z manj parametri zadosti tipu z več, zato moduli, ki skupnih predpostavk ne
+   * potrebujejo, ostanejo `(input) => …`. Ob vklopljenem noUnusedParameters je to
+   * celo edina oblika, ki se prevede, če konteksta ne uporabijo.
+   */
+  compute: (input: Record<string, number>, context: ComputeContext) => ModuleOutputDraft[];
   /** Funkcionalnosti PANTHEON, ki naslavljajo ta modul — prikaz na rezultatih in v PDF. */
   pantheon?: string[];
 }

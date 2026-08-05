@@ -5,16 +5,54 @@ import styles from './EmailGate.module.css';
 interface EmailGateProps {
   submitted: boolean;
   followUpSequenceDebug?: string;
-  onSubmit: (params: { companyName: string; email: string }) => void | Promise<void>;
+  /** Privolitev potuje naprej: izvozni zapis jo hrani kot dokazilo, ne kot okras. */
+  onSubmit: (params: {
+    companyName: string;
+    email: string;
+    gdprConsent: boolean;
+  }) => void | Promise<void>;
+  /**
+   * Ponovni prenos priprave za svetovalca.
+   *
+   * Brskalniki blokirajo več zaporednih prenosov iz enega klika, zato se samodejni
+   * prenos ne sme šteti za zanesljivega. Vsak gumb tu je svoja uporabnikova gesta,
+   * ki je ne blokira nič — in hkrati zavestna odločitev, da datoteko posreduje naprej.
+   */
+  onDownloadSalesPdf?: () => void | Promise<void>;
+  onDownloadSalesHtml?: () => void | Promise<void>;
   onBack: () => void;
 }
 
-export function EmailGate({ submitted, followUpSequenceDebug, onSubmit, onBack }: EmailGateProps) {
+export function EmailGate({
+  submitted,
+  followUpSequenceDebug,
+  onSubmit,
+  onDownloadSalesPdf,
+  onDownloadSalesHtml,
+  onBack,
+}: EmailGateProps) {
   const [companyName, setCompanyName] = useState('');
   const [email, setEmail] = useState('');
   const [gdprConsent, setGdprConsent] = useState(false);
+  /** Generiranje PDF-jev traja; brez tega dvoklik ustvari dva kompleta datotek. */
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   const canSubmit = companyName.trim().length > 0 && /\S+@\S+\.\S+/.test(email) && gdprConsent;
+
+  async function handleSubmit() {
+    setBusy(true);
+    setFailed(false);
+    try {
+      await onSubmit({ companyName, email, gdprConsent });
+    } catch {
+      // Prej je napaka pustila obiskovalca na obrazcu brez pojasnila: zahvalni
+      // zaslon se ni prikazal, gumb pa je izgledal, kot da ni bil pritisnjen.
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   if (submitted) {
     return (
@@ -22,8 +60,29 @@ export function EmailGate({ submitted, followUpSequenceDebug, onSubmit, onBack }
         <div className={styles.thanks}>
           <h1 className={styles.thanksTitle}>Hvala!</h1>
           <p className={styles.subtitle}>
-            PDF poročilo in CSV/JSON zapis sta se prenesla v vaš prenosni mapi brskalnika.
+            Vaše poročilo se je preneslo v mapo za prenose.
           </p>
+          {onDownloadSalesPdf || onDownloadSalesHtml ? (
+            <>
+              <p className={styles.subtitle}>
+                Poleg njega smo pripravili še povzetek za svetovalca — vaši odgovori na enem mestu.
+                Če nam ga posredujete pred sestankom, vas ne bo spraševal po številkah, ki ste jih
+                pravkar vnesli. Če ga brskalnik ni prenesel skupaj s poročilom, ga dobite tu:
+              </p>
+              <div className={styles.actions}>
+                {onDownloadSalesPdf ? (
+                  <button type="button" className={buttonStyles.secondaryButton} onClick={onDownloadSalesPdf}>
+                    Povzetek v PDF
+                  </button>
+                ) : null}
+                {onDownloadSalesHtml ? (
+                  <button type="button" className={buttonStyles.secondaryButton} onClick={onDownloadSalesHtml}>
+                    Povzetek v HTML
+                  </button>
+                ) : null}
+              </div>
+            </>
+          ) : null}
           {import.meta.env.DEV && followUpSequenceDebug ? (
             <p className={styles.consentText}>[dev] follow-up sekvenca: {followUpSequenceDebug}</p>
           ) : null}
@@ -72,17 +131,22 @@ export function EmailGate({ submitted, followUpSequenceDebug, onSubmit, onBack }
           </span>
         </label>
       </div>
+      {failed ? (
+        <p className={styles.consentText} role="alert">
+          Priprave datotek ni bilo mogoče dokončati. Poskusite znova — vneseni podatki ostanejo.
+        </p>
+      ) : null}
       <div className={styles.actions}>
-        <button type="button" className={buttonStyles.secondaryButton} onClick={onBack}>
+        <button type="button" className={buttonStyles.secondaryButton} onClick={onBack} disabled={busy}>
           Nazaj
         </button>
         <button
           type="button"
           className={buttonStyles.primaryButton}
-          disabled={!canSubmit}
-          onClick={() => onSubmit({ companyName, email })}
+          disabled={!canSubmit || busy}
+          onClick={handleSubmit}
         >
-          Prenesi PDF
+          {busy ? 'Pripravljam …' : 'Prenesi poročilo'}
         </button>
       </div>
     </div>

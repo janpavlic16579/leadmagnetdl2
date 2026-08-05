@@ -1,4 +1,15 @@
-import type { ModuleDefinition, ModuleOutput } from '../config/modules/moduleTypes';
+import type { ComputeContext, ModuleDefinition, ModuleOutput } from '../config/modules/moduleTypes';
+
+/**
+ * Zasilne predpostavke za module, ki jih uporabljajo, kadar jih klicatelj ne poda
+ * (starejši segmenti in testi). Namenoma nista 0 — ničla bi tiho vrnila 0 EUR
+ * in izgledala kot veljaven izračun.
+ */
+export const DEFAULT_COST_CONTEXT: ComputeContext = {
+  operationalHourCostEUR: 45,
+  adminHourCostEUR: 35,
+  chargeOutRateEUR: 75,
+};
 
 /**
  * Motor registra modulov. Vse funkcije so čiste — vsa logika (seštevanje po koših,
@@ -54,11 +65,12 @@ export function aggregateBuckets(outputs: ModuleOutput[]): BucketTotals {
 export function computeModules(
   definitions: ModuleDefinition[],
   inputsByModule: Record<string, Record<string, number>>,
+  context: ComputeContext = DEFAULT_COST_CONTEXT,
 ): ModuleOutput[] {
   const outputs: ModuleOutput[] = [];
   for (const definition of definitions) {
     const input = resolveInputs(definition, inputsByModule[definition.id]);
-    for (const draft of definition.compute(input)) {
+    for (const draft of definition.compute(input, context)) {
       outputs.push({ ...draft, moduleId: definition.id });
     }
   }
@@ -118,24 +130,62 @@ export function findHighestModule(outputs: ModuleOutput[], moduleOrder: string[]
 export type TriageScores = Record<string, number>;
 
 /**
- * Izbere modula z najvišjo triažno oceno za podrobna vprašanja.
+ * Izbere module z najvišjo triažno oceno za podrobna vprašanja.
  *
- * `triageable` mora biti v prioritetnem vrstnem redu segmenta — ta odloči ob
- * izenačenju in hkrati poskrbi, da uporabnik brez odgovorov (vse ocene 0) dobi
- * prve module po prioriteti, ne naključnih.
+ * `triageable` je vrstni red PRIKAZA (moduleIds segmenta); v njem se izid tudi vrne,
+ * da je vprašalnik predvidljiv.
+ *
+ * `preferred` je vrstni red PREDNOSTI — področja, ki stranke te dejavnosti najbolj
+ * mučijo. Odloči ob izenačenih ocenah in s tem določi privzeto izbiro obiskovalca,
+ * ki še ni odgovoril ničesar (vse ocene 0). Pojma sta ločena namenoma: vrstni red
+ * prikaza razrešuje tudi "največjo postavko" in vrstni red v PDF-ju, zato ga ni
+ * mogoče premakniti samo zato, da bi popravili privzeto izbiro.
+ *
+ * Brez `preferred` je razvrstitev identična prejšnji — prednost je kar vrstni red prikaza.
+ * Neznan id v `preferred` (napačna konfiguracija) se tiho preskoči: ne ujame se z
+ * ničimer, mesto pa zapolni naslednji po vrstnem redu prikaza. Skladnost varuje test.
  */
 export function selectTopModules(
   triageable: string[],
   scores: TriageScores,
-  detailCount: number,
+  count: number,
+  preferred: string[] = [],
 ): string[] {
+  const rankOf = (id: string) => {
+    const index = preferred.indexOf(id);
+    return index === -1 ? preferred.length + triageable.indexOf(id) : index;
+  };
+
   return triageable
-    .map((id, index) => ({ id, score: scores[id] ?? 0, index }))
-    .sort((a, b) => (b.score - a.score) || (a.index - b.index))
-    .slice(0, detailCount)
+    .map((id) => ({ id, score: scores[id] ?? 0, rank: rankOf(id) }))
+    .sort((a, b) => (b.score - a.score) || (a.rank - b.rank))
+    .slice(0, count)
     .map((entry) => entry.id)
-    // Vrni jih spet v prioritetnem vrstnem redu, da je vprašalnik predvidljiv.
+    // Vrni jih spet v vrstnem redu prikaza, da je vprašalnik predvidljiv.
     .sort((a, b) => triageable.indexOf(a) - triageable.indexOf(b));
+}
+
+/**
+ * Je obiskovalec to področje sploh izpolnil?
+ *
+ * Nedotaknjeno področje prispeva natanko 0 EUR — vsak neničelni privzetek je delež
+ * ali postavka, ki se vedno množi s količino s privzetkom 0. Ker izbira področja
+ * torej sama po sebi ne doda nobenega evra, se sme neizpolnjeno področje šteti kot
+ * neizmerjeno: ne pri oceni zanesljivosti in ne v razdelku "Česa nismo izmerili".
+ *
+ * Polja contextOnly se ne štejejo (ne vstopajo v formulo), polja checkbox pa tudi ne:
+ * njihov privzetek 0 pomeni "ni odkljukano" in ne "ni odgovorjeno".
+ */
+export function isModuleAnswered(
+  definition: ModuleDefinition,
+  values: Record<string, number> | undefined,
+): boolean {
+  if (!values) return false;
+  return definition.fields.some((field) => {
+    if (field.contextOnly || field.kind === 'checkbox') return false;
+    const value = values[field.key];
+    return value !== undefined && value !== field.default;
+  });
 }
 
 /**
