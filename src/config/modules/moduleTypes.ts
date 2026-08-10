@@ -17,12 +17,43 @@
 export type BucketId =
   /** Neposredne letne izgube — trdi denar, ki odteka. Edino to gre v hero znesek. */
   | 'directLoss'
+  /**
+   * Marža, ki je podjetje ni zaslužilo, čeprav bi jo lahko: prazna polica,
+   * odpovedano naročilo, prodaja po napačni ceni.
+   *
+   * Ločeno od directLoss namenoma. Odpis je denar, ki je odtekel in ga je mogoče
+   * pokazati na kontu; izgubljena marža je denar, ki ni nikoli prišel, in stoji na
+   * predpostavki, kaj bi kupec storil. Trditvi imata različno težo dokaza, zato ju
+   * mora poročilo prikazati ločeno — sicer prvi ugovor ("tega nakupa ne bi bilo")
+   * podre tudi tisti del zneska, ki je dokazljiv (raziskava maloprodaje §5.2).
+   */
+  | 'lostMargin'
   /** Vrednost sproščene delovne in proizvodne kapacitete — ni prihranek pri plačah. */
   | 'capacity'
   /** Enkratno sprostljiv kapital (zaloge) — nikoli se ne sešteva z letnimi zneski. */
   | 'oneTimeCapital'
   /** Kvalitativna ocena tveganja — brez EUR, ker bi bil znesek navidezno natančen. */
   | 'risk';
+
+/**
+ * Odgovor "ne vem" pri številčnem polju.
+ *
+ * Ni 0 in ni prazno polje. Raziskava maloprodaje to zahteva izrecno (§16.3, §24):
+ * neznan podatek se ne sme sešteti kot potrjena ničla, sicer vsak neodgovor tiho
+ * zniža skupni znesek, rezultat pa izpade natančnejši, kot v resnici je.
+ *
+ * Negativna sentinela in ne union tip: nobeno polje ne sprejema negativnih zneskov,
+ * vnos pa ostane Record<string, number> — sicer bi moral vsak modul, motor, izvoz
+ * in test poznati dvojni tip vrednosti.
+ *
+ * Do compute() sentinela nikoli ne pride: motor jo pretvori v 0 (glej moduleEngine).
+ * Modulu torej ni treba ničesar preverjati, pozabiti pa je tudi ne more.
+ */
+export const UNKNOWN_ANSWER = -1;
+
+export function isUnknownAnswer(value: number | undefined): boolean {
+  return value === UNKNOWN_ANSWER;
+}
 
 /**
  * 'percent' polja so ulomek povsod — v default, min, max, step in v compute().
@@ -63,6 +94,21 @@ export interface ComputeContext {
   operationalHourCostEUR: number;
   adminHourCostEUR: number;
   /**
+   * Letni prihodek in prispevna marža — osnova za vsak odstotkovni izračun.
+   *
+   * V kontekstu in ne v modulu, ker sta lastnost podjetja: doslej je prihodek živel
+   * v enem stroškovnem področju, nabavna vrednost pa v drugem. Kdor teh dveh področij
+   * v triaži ni izbral (izbere jih tri od enajstih), je ostal brez vsake osnove —
+   * odstotkovni izračuni so tiho padli na nič, marže pa ni vprašal nihče.
+   *
+   * Prihodek sme biti 0: prometa si ne izmišljamo. Pravilo "nikoli 0" velja za urne
+   * postavke, ki množijo uporabnikove ure; tu je razmerje obrnjeno — vrednost množi
+   * uporabnikov odstotek, zato bi izmišljen prihodek ustvaril izmišljen znesek.
+   */
+  annualRevenueEUR: number;
+  /** Delež (0–1). Nikoli 0 — brez marže bi bila vsaka izgubljena prodaja vredna nič. */
+  contributionMarginRate: number;
+  /**
    * Povprečna ZARAČUNANA urna postavka — cena, ne strošek. Po njej se vrednoti
    * opravljeno, a nezaračunano delo: tam gre za izgubljen prihodek in ne za
    * vrednost porabljenega časa.
@@ -92,6 +138,15 @@ export interface ModuleField {
   choices?: FieldChoice[];
   /** Pojasnilo pod poljem, npr. opozorilo, česa naj uporabnik ne šteje. */
   help?: string;
+  /**
+   * Polje sme dobiti odgovor "ne vem" (glej UNKNOWN_ANSWER). Smiselno pri zneskih,
+   * ki jih podjetje bodisi vodi bodisi ne — odpis, manko, neizterjani rabati.
+   *
+   * Ni privzeto za vsa polja: pri urah in številu blagajn je "ne vem" izgovor, pri
+   * vrednosti zadnje inventure pa dejstvo. Ponujena možnost "ne vem" tam, kjer je
+   * odgovor mogoče oceniti, zniža kakovost vnosa namesto da bi jo zvišala.
+   */
+  allowUnknown?: true;
   /**
    * Polje se vpraša zaradi konteksta in NE vstopa v formulo. Ocena zanesljivosti
    * ga zato ne šteje med manjkajoče podatke. Doslej je bilo to zapisano samo v

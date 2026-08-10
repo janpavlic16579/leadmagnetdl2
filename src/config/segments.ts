@@ -68,7 +68,22 @@ export const SEGMENTS: Record<SegmentId, SegmentConfig> = {
     id: 'proizvodnja',
     displayName: 'Proizvodnja 10–249 zaposlenih',
     // Denarni tok (modul D) je za proizvodnjo prestavljen med splošne module.
-    moduleIds: ['planiranje', 'material', 'zaloge', 'nalogi', 'zamude', 'diagnostika', 'E'],
+    // Horizontale za panožnimi: prikaz, triažni tie-break in "največja postavka"
+    // ob izenačenju favorizirajo panožno bolečino (velja za vse segmente).
+    moduleIds: [
+      'planiranje',
+      'material',
+      'zaloge',
+      'nalogi',
+      'zamude',
+      'analitikaHz',
+      'financeHz',
+      'kadriHz',
+      'dokumentiHz',
+      'servisHz',
+      'diagnostika',
+      'E',
+    ],
     headlineStory: 'Koliko vas stane sedanji način dela v proizvodnji?',
     // Privzeta tri = prva tri po vrstnem redu, zato defaultIds ni potreben:
     // izmet in zaloge nosita največ evrov, plan pa ima vsak proizvajalec.
@@ -80,7 +95,22 @@ export const SEGMENTS: Record<SegmentId, SegmentConfig> = {
   logistika: {
     id: 'logistika',
     displayName: 'Logistika in transport 10–249 zaposlenih',
-    moduleIds: ['odprema', 'napake', 'skladisce', 'dokumentacija', 'roki', 'diagnostika_logistika', 'E'],
+    // Brez dokumentiHz: prevozna dokumentacija (modul 'dokumentacija') meri iste
+    // ure — vprašanje bi se bralo skoraj enako in ure bi se štele dvakrat.
+    // Brez servisHz: modul 'napake' že meri ure reševanja reklamacij in stroške
+    // napačnih dostav, prevoznik pa garancijskega servisa praviloma nima.
+    moduleIds: [
+      'odprema',
+      'napake',
+      'skladisce',
+      'dokumentacija',
+      'roki',
+      'analitikaHz',
+      'financeHz',
+      'kadriHz',
+      'diagnostika_logistika',
+      'E',
+    ],
     headlineStory: 'Koliko vas stane sedanji način dela v logistiki?',
     // Skladišča nima vsak prevoznik, stojnine in nujni prevozi pa so univerzalni —
     // zato namesto tretjega po vrstnem redu (skladisce) privzeto merimo roke.
@@ -103,6 +133,11 @@ export const SEGMENTS: Record<SegmentId, SegmentConfig> = {
       'zaloge_trgovina',
       'odprema_trgovina',
       'terjatve_trgovina',
+      'analitikaHz',
+      'financeHz',
+      'kadriHz',
+      'dokumentiHz',
+      'servisHz',
       'diagnostika_trgovina',
       'E',
     ],
@@ -118,11 +153,32 @@ export const SEGMENTS: Record<SegmentId, SegmentConfig> = {
   maloprodaja: {
     id: 'maloprodaja',
     displayName: 'Maloprodaja',
-    moduleIds: ['zalogeMp', 'marzeMp', 'mankoMp', 'prevzemMp', 'kanaliMp', 'diagnostikaMp', 'E'],
+    // Šest panožnih področij namesto petih: prazna polica in presežna zaloga sta
+    // nasprotna problema z nasprotnima vzrokoma, zato ju en modul ni mogel meriti
+    // hkrati (glej config/modules/maloprodaja.ts).
+    moduleIds: [
+      'razpolozljivostMp',
+      'zalogeMp',
+      'marzeMp',
+      'blagajnaMp',
+      'prevzemMp',
+      'kanaliMp',
+      'analitikaHz',
+      'financeHz',
+      'kadriHz',
+      'dokumentiHz',
+      'servisHz',
+      'diagnostikaMp',
+      'E',
+    ],
     headlineStory: 'Koliko vas stane sedanji način dela v trgovini?',
-    // Zaloga, marža in manko so standardna trojica maloprodaje — prva tri po
-    // vrstnem redu, zato defaultIds ni potreben.
-    triage: { recommendedCount: 3 },
+    // Police, zaloga in blagajna: trojica, ki jo ima vsak trgovec ne glede na
+    // panogo. Cene in splet sta bolečini ožjega kroga, prevzem pa je odvisen od
+    // števila dobav — zato niso privzeti, čeprav sta cene po vrstnem redu tretje.
+    triage: {
+      recommendedCount: 3,
+      defaultIds: ['razpolozljivostMp', 'zalogeMp', 'blagajnaMp'],
+    },
     // Maloprodajalec je pri isti velikosti podjetja manjši od veleprodajalca —
     // izguba se nabira po centih na artikel, ne po pošiljkah. KALIBRACIJA: začetna
     // ocena, preveriti po prvih ~50 vnosih.
@@ -137,6 +193,13 @@ export const SEGMENTS: Record<SegmentId, SegmentConfig> = {
       'obseg_storitve',
       'administracija_storitve',
       'terjatve_storitve',
+      // dokumentiHz meri potrjevanje in e-izmenjavo, administracija_storitve pa
+      // projektno administracijo — razmejitev drži, zato sta oba vključena.
+      'analitikaHz',
+      'financeHz',
+      'kadriHz',
+      'dokumentiHz',
+      'servisHz',
       'diagnostika_storitve',
       'E',
     ],
@@ -157,7 +220,21 @@ export const SEGMENTS: Record<SegmentId, SegmentConfig> = {
   racunovodstvo: {
     id: 'racunovodstvo',
     displayName: 'Računovodski servis',
-    moduleIds: ['zajemRs', 'strankeRs', 'obracuniRs', 'popravkiRs', 'donosnostRs', 'diagnostikaRs', 'E'],
+    // Brez financeHz (knjiženje in obračuni SO njihov produkt — merijo ga zajemRs,
+    // obracuniRs, popravkiRs), brez dokumentiHz (zajem listin meri zajemRs) in
+    // brez servisHz (popravki po lastni napaki so v popravkiRs, servisa ni).
+    // kadriHz meri njihove LASTNE kadre in plače, ne obračunov za stranke.
+    moduleIds: [
+      'zajemRs',
+      'strankeRs',
+      'obracuniRs',
+      'popravkiRs',
+      'donosnostRs',
+      'analitikaHz',
+      'kadriHz',
+      'diagnostikaRs',
+      'E',
+    ],
     headlineStory: 'Koliko novih strank bi lahko sprejeli z isto ekipo?',
     // Ročni vnos, lovljenje listin in konice ob rokih so dnevna bolečina servisa —
     // prva tri po vrstnem redu, zato defaultIds ni potreben.
@@ -175,7 +252,22 @@ export const SEGMENTS: Record<SegmentId, SegmentConfig> = {
   splosno: {
     id: 'splosno',
     displayName: 'Direktor / CFO — splošno',
-    moduleIds: ['podatkiSp', 'usklajevanjeSp', 'napakeSp', 'denarSp', 'zalogeSp', 'diagnostikaSp', 'E'],
+    // Brez analitikaHz: podatkiSp že meri ure ročne priprave poročil
+    // (reportingHoursPerMonth) — iste ure bi se štele dvakrat.
+    // Brez servisHz: napakeSp že meri ure ponovnega dela in stroške reklamacij,
+    // segment pa je namenoma brez predpostavke, da podjetje sploh kaj servisira.
+    moduleIds: [
+      'podatkiSp',
+      'usklajevanjeSp',
+      'napakeSp',
+      'denarSp',
+      'zalogeSp',
+      'financeHz',
+      'kadriHz',
+      'dokumentiHz',
+      'diagnostikaSp',
+      'E',
+    ],
     // Prejšnji naslov ("Koliko vas stane počasen denar?") je opisoval en sam modul.
     // Segment zdaj meri pet področij, denar je le eno od njih.
     headlineStory: 'Koliko vas stane sedanji način dela?',

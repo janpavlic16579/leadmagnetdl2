@@ -1,6 +1,12 @@
 import { slugify, type DownloadFile } from './download';
 import { formatEUR, formatHours, formatPercent } from './format';
-import { hourAssumptionSource, type MeasuredArea, type SalesReport } from './salesReport';
+import {
+  contactPerson,
+  hourAssumptionSource,
+  taxNumberCell,
+  type MeasuredArea,
+  type SalesReport,
+} from './salesReport';
 
 /**
  * Prodajna priprava kot samostojna HTML datoteka.
@@ -38,13 +44,11 @@ export function buildSalesReportHtml(report: SalesReport): string {
 </header>
 
 <main>
+${sectionScore(report)}
 ${sectionQualification(report)}
-${sectionSummary(report)}
-${sectionSoftness(report)}
-${sectionTriage(report)}
-${sectionAreas(report)}
-${sectionRisks(report)}
-${sectionActions(report)}
+${sectionResults(report)}
+${sectionRecommendation(report)}
+${sectionIcp(report)}
 </main>
 
 <footer>
@@ -64,40 +68,49 @@ export function buildSalesHtmlFile(report: SalesReport): DownloadFile {
   };
 }
 
-// --- Razdelki ----------------------------------------------------------------
+// --- 1. Ocena — kvalifikacija stranke ----------------------------------------
 
-function sectionQualification(report: SalesReport): string {
-  const q = report.qualification;
-  const band = `${formatPercent(q.improvementBand.min)} – ${formatPercent(q.improvementBand.max)}`;
+/**
+ * Sodba na vrh, utemeljitev na dno.
+ *
+ * Prodajnik mora v treh sekundah vedeti, ali je to A ali C; razčlenitev po
+ * dimenzijah ga takrat ne zanima in je zato v zadnjem razdelku.
+ */
+function sectionScore(report: SalesReport): string {
+  const { icp } = report;
+  const deal = report.playbook.dealSizing;
 
-  const rows: [string, string][] = [
-    ['Dejavnost', q.industryLabel],
-    ['Vprašalnik', q.segmentName],
-    ['Velikost', `${q.sizeClass} zaposlenih (vneseno: ${q.employeeCount})`],
-    ['Vlogo navaja kot', q.roleLabel ?? '—'],
-    ['Pretežno dela', q.businessTypeLabel ?? '—'],
-    ['Sedanji sistem', q.currentSystemLabel ?? '—'],
-    ['Obstoječi uporabnik PANTHEON', q.isPantheonCustomer ? 'Da' : 'Ne'],
-    ['Pas realistične izboljšave', band],
-    ['E-naslov', report.meta.email || '—'],
-    ['Vir obiska', report.meta.utmSource ?? 'neposredno'],
-    ['Privolitev za obdelavo (GDPR)', report.meta.gdprConsent ? 'Da' : 'Ne'],
-  ];
-
-  const note = q.isPantheonCustomer
-    ? ''
-    : `<p class="note">Stranka ni obstoječi uporabnik PANTHEON, zato ji tehnična opozorila o rokih
-       (SQL Server, Windows Server, ZIERDED) niso bila prikazana. Njihova odsotnost tu torej ni
-       podatek o podjetju.</p>`;
-
-  return `<section>
-  <h2>Kdo je stranka</h2>
-  ${keyValueTable(rows)}
-  ${note}
+  return `<section class="icp">
+  <h2>Ocena — kvalifikacija stranke</h2>
+  <div class="icp-head">
+    <span class="icp-total">${icp.total} / 100</span>
+    <span class="icp-band icp-band-${icp.band}">pas ${icp.band}</span>
+    <span class="note">${esc(icp.bandNote)}</span>
+  </div>
+  ${keyValueTable([
+    ['Velikost posla', `${deal.sizeLabel} (${report.qualification.sizeClass} zaposlenih)`],
+    ['Izmerjena letna bolečina', formatEUR(deal.measuredLossEUR)],
+    ['Nujnost', `${deal.urgency} — ${deal.urgencyReason}`],
+    ['Priporočena licenca', report.playbook.recommendedPantheon.licence.name],
+  ])}
 </section>`;
 }
 
-function sectionSummary(report: SalesReport): string {
+// --- 3. Rezultati vprašalnika ------------------------------------------------
+
+/**
+ * Dva podnaslova znotraj enega razdelka: kaj so vnesli in kaj jih najbolj boli.
+ * Zgradba ostane petdelna, zato sta 3a in 3b `<h3>` in ne `<h2>`.
+ */
+function sectionResults(report: SalesReport): string {
+  return `<section>
+  <h2>Rezultati vprašalnika</h2>
+  ${subsectionTheirInfo(report)}
+  ${subsectionPainPoints(report)}
+</section>`;
+}
+
+function subsectionTheirInfo(report: SalesReport): string {
   const s = report.summary;
   const cards: string[] = [
     card('Neposredne letne izgube', formatEUR(s.directLossEUR), 'Denar, ki odteka'),
@@ -109,11 +122,7 @@ function sectionSummary(report: SalesReport): string {
   ];
   if (s.oneTimeCapitalEUR > 0) {
     cards.push(
-      card(
-        'Sprostljiv kapital',
-        formatEUR(s.oneTimeCapitalEUR),
-        'Enkraten učinek, se z letnimi zneski ne sešteva',
-      ),
+      card('Sprostljiv kapital', formatEUR(s.oneTimeCapitalEUR), 'Enkraten učinek, se ne sešteva'),
     );
   }
   if (s.potentialMinEUR !== undefined && s.potentialMaxEUR !== undefined) {
@@ -121,96 +130,186 @@ function sectionSummary(report: SalesReport): string {
       card(
         'Realistični potencial',
         `${formatEUR(s.potentialMinEUR)} – ${formatEUR(s.potentialMaxEUR)}`,
-        'Letno, konservativno — ni obljuba prihranka',
+        'Letno, konservativno — ni obljuba',
       ),
     );
   }
 
-  return `<section>
-  <h2>Kaj je izračun pokazal</h2>
+  const hours = report.softness.hourAssumptions;
+
+  return `<h3>Njihove info</h3>
   <div class="cards">${cards.join('')}</div>
-</section>`;
+  <p class="note">${esc(s.confidenceReason)}</p>
+  ${
+    hours.length > 0
+      ? table(
+          ['Urna postavka', 'Vrednost', 'Vir'],
+          hours.map((row) => [
+            row.label,
+            formatEUR(row.valueEUR),
+            raw(
+              `<span class="${row.estimated ? 'soft' : 'firm'}">${esc(hourAssumptionSource(row))}</span>`,
+            ),
+          ]),
+        )
+      : ''
+  }
+  ${report.measured.map(areaBlock).join('\n')}`;
 }
 
-function sectionSoftness(report: SalesReport): string {
-  const { hourAssumptions, unknownAnswers, untouchedFields } = report.softness;
-  const blocks: string[] = [];
-
-  if (hourAssumptions.length > 0) {
-    blocks.push(
-      table(
-        ['Urna postavka', 'Vrednost', 'Vir'],
-        hourAssumptions.map((row) => [
-          row.label,
-          formatEUR(row.valueEUR),
-          raw(`<span class="${row.estimated ? 'soft' : 'firm'}">${esc(hourAssumptionSource(row))}</span>`),
-        ]),
-      ),
-    );
-  }
-  if (unknownAnswers.length > 0) {
-    blocks.push(
-      `<h3>Odgovor „Ne vem" (${unknownAnswers.length})</h3>`,
-      table(
-        ['Vprašanje', 'Področje'],
-        unknownAnswers.map((row) => [row.question, row.moduleTitle]),
-      ),
-    );
-  }
-  if (untouchedFields.length > 0) {
-    blocks.push(
-      `<h3>Ostalo na privzeti vrednosti (${untouchedFields.length})</h3>`,
-      table(
-        ['Vprašanje', 'Področje'],
-        untouchedFields.map((row) => [row.question, row.moduleTitle]),
-      ),
-      `<p class="note">Ta polja v izračun vstopajo z ničlo ali privzetkom. Vsaka številka, ki jo
-       stranka na sestanku doda, znesek zviša — nikoli zniža.</p>`,
-    );
-  }
-  if (blocks.length === 0) {
-    blocks.push('<p class="note">Stranka je odgovorila na vsa vprašanja.</p>');
-  }
-
-  return `<section class="highlight">
-  <h2>Kje so številke trdne in kje ne</h2>
-  <p class="lead">${esc(report.summary.confidenceReason)}</p>
-  ${blocks.join('\n')}
-</section>`;
-}
-
-function sectionTriage(report: SalesReport): string {
-  if (report.triage.length === 0) return '';
-
+function subsectionPainPoints(report: SalesReport): string {
   const painful = report.triage.filter((row) => !row.measured && row.score >= 2);
-  const note =
+  const questions = report.playbook.openingQuestions;
+  const objections = report.playbook.objections;
+
+  const triageTable =
+    report.triage.length > 0
+      ? table(
+          ['Področje', 'Ocena stranke', 'Izmerjeno'],
+          report.triage.map((row) => [
+            row.title,
+            row.scoreLabel ? `${row.scoreLabel} (${row.score}/3)` : String(row.score),
+            row.measured ? 'da' : raw('<span class="soft">ne</span>'),
+          ]),
+        )
+      : '';
+
+  const painfulNote =
     painful.length > 0
       ? `<p class="note"><strong>Neizmerjeno, a ocenjeno kot boleče:</strong>
          ${esc(painful.map((row) => row.title).join(', '))}. Za ta področja v poročilu ni nobenega
          zneska — vprašanje zanje je najbolj naravno izhodišče pogovora.</p>`
       : '';
 
+  const questionsBlock =
+    questions.length > 0
+      ? `<h4>Kaj vprašati</h4>
+         <ol class="questions">${questions
+           .map(
+             (item) =>
+               `<li><strong>${esc(item.question)}</strong><span class="note">${esc(item.why)}</span></li>`,
+           )
+           .join('')}</ol>`
+      : '';
+
+  const objectionsBlock =
+    objections.length > 0
+      ? `<h4>Kaj boste slišali in kaj odgovoriti</h4>
+         ${objections
+           .map(
+             (item) => `<article>
+      <h3>${esc(item.objection)}</h3>
+      <p class="note">Sproženo: ${esc(item.trigger)}</p>
+      <p>${esc(item.answer)}</p>
+    </article>`,
+           )
+           .join('')}`
+      : '';
+
+  return `<h3>Njihovi največji painpointi</h3>
+  ${triageTable}
+  ${painfulNote}
+  ${risksBlock(report)}
+  ${questionsBlock}
+  ${objectionsBlock}`;
+}
+
+
+// --- 4. Priporočilo licenc ---------------------------------------------------
+
+function sectionRecommendation(report: SalesReport): string {
+  const fit = report.playbook.recommendedPantheon;
   return `<section>
-  <h2>Kaj stranko tišči</h2>
+  <h2>Priporočilo licenc glede na kriterije</h2>
+  ${keyValueTable([
+    ['Licenca', fit.licence.name],
+    ['Dejavnost', report.qualification.industryLabel],
+    ['Sedanji sistem', report.qualification.currentSystemLabel ?? '—'],
+    ['Velikost', `${report.qualification.sizeClass} zaposlenih`],
+  ])}
+  ${fit.licence.note ? `<p class="note"><strong>Pozor:</strong> ${esc(fit.licence.note)}</p>` : ''}
+  <p class="lead"><strong>${esc(fit.headline)}</strong></p>
+  <p>${esc(fit.why)}</p>
+  ${
+    fit.addresses.length > 0
+      ? `<p class="pantheon"><strong>Naslavlja:</strong> ${esc(fit.addresses.join(' · '))}</p>`
+      : ''
+  }
+  <p class="note">${esc(fit.confirm)}</p>
+  ${actionsBlock(report)}
+</section>`;
+}
+
+// --- 5. Kvalifikacija stranke — podrobnejša razlaga --------------------------
+
+
+/**
+ * Ocena je na dnu in vedno z razčlenitvijo: skupno število brez utemeljitev je pri
+ * pogovoru neuporabno in pozneje neuravnavljivo.
+ */
+function sectionIcp(report: SalesReport): string {
+  const { icp } = report;
+  return `<section class="icp">
+  <h2>Kvalifikacija stranke — podrobnejša razlaga</h2>
+  <p class="note">Skupna ocena <strong>${icp.total} / 100</strong> (pas ${icp.band}) je vsota spodnjih
+  sedmih dimenzij. Vsaka pove, kaj je izmerila in koliko točk je prispevala.</p>
   ${table(
-    ['Področje', 'Ocena stranke', 'Izmerjeno'],
-    report.triage.map((row) => [
-      row.title,
-      row.scoreLabel ? `${row.scoreLabel} (${row.score}/3)` : String(row.score),
-      row.measured ? 'da' : raw('<span class="soft">ne</span>'),
+    ['Dimenzija', 'Točke', 'Iz česa'],
+    icp.dimensions.map((dimension) => [
+      dimension.label,
+      `${Math.round(dimension.points)} / ${Math.round(dimension.weight * 100)}`,
+      dimension.note,
     ]),
   )}
+  <p class="note">Merila so začetne ocene brez empirije in se uravnavajo v
+  <code>src/config/icp.ts</code>. Ocena pove ustreznost profilu, ne kakovosti podjetja.</p>
+</section>`;
+}
+
+// --- Razdelki ----------------------------------------------------------------
+
+function sectionQualification(report: SalesReport): string {
+  const q = report.qualification;
+  const band = `${formatPercent(q.improvementBand.min)} – ${formatPercent(q.improvementBand.max)}`;
+
+  const rows: [string, string][] = [
+    // Kontakt gre na vrh: svetovalec najprej potrebuje, koga pokliče.
+    ['Kontaktna oseba', contactPerson(report) || '—'],
+    ['E-naslov', report.meta.email || '—'],
+    ['Telefon', report.meta.phone || '—'],
+    ['Davčna številka', taxNumberCell(report)],
+    ['Dejavnost', q.industryLabel],
+    ['Vprašalnik', q.segmentName],
+    ['Velikost', `${q.sizeClass} zaposlenih (vneseno: ${q.employeeCount})`],
+    ['Vlogo navaja kot', q.roleLabel ?? '—'],
+    ['Pretežno dela', q.businessTypeLabel ?? '—'],
+    ['Sedanji sistem', q.currentSystemLabel ?? '—'],
+    ['Obstoječi uporabnik PANTHEON', q.isPantheonCustomer ? 'Da' : 'Ne'],
+    ['Pas realistične izboljšave', band],
+    ['Vir obiska', report.meta.utmSource ?? 'neposredno'],
+    // Tri ločene vrstice in ne ena združena: revizijsko vprašanje je "ali je
+    // privolil v trženje?", na kar skupna celica ne odgovori.
+    ['Privolitev — obdelava osebnih podatkov', report.meta.consentProcessing ? 'Da' : 'Ne'],
+    ['Privolitev — ponudbe PANTHEON', report.meta.consentOffers ? 'Da' : 'Ne'],
+    ['Privolitev — vsebine in dogodki', report.meta.consentContent ? 'Da' : 'Ne'],
+  ];
+
+  const note = q.isPantheonCustomer
+    ? ''
+    : `<p class="note">Stranka ni obstoječi uporabnik PANTHEON, zato ji tehnična opozorila o rokih
+       (SQL Server, Windows Server, ZIERDED) niso bila prikazana. Njihova odsotnost tu torej ni
+       podatek o podjetju.</p>`;
+
+  return `<section>
+  <h2>Osnovni podatki</h2>
+  ${keyValueTable(rows)}
   ${note}
 </section>`;
 }
 
-function sectionAreas(report: SalesReport): string {
-  if (report.measured.length === 0) return '';
-  return `<section>
-  <h2>Po področjih</h2>
-  ${report.measured.map(areaBlock).join('\n')}
-</section>`;
-}
+
+
+
 
 function areaBlock(area: MeasuredArea): string {
   const intro: string[] = [`Skupaj <strong>${esc(formatEUR(area.totalEUR))}</strong> letno.`];
@@ -246,7 +345,8 @@ function areaBlock(area: MeasuredArea): string {
       area.answers.map((row) => [
         row.contextOnly ? raw(`${esc(row.question)} <em>(kontekst)</em>`) : row.question,
         row.answer,
-        row.answered ? 'vneseno' : raw('<span class="soft">privzeto</span>'),
+        // Trdnost stoji OB številki. Prej je bila v svojem razdelku dvajset vrstic niže.
+        row.answered ? raw(`<span class="firm">${esc(row.source)}</span>`) : raw(`<span class="soft">${esc(row.source)}</span>`),
       ]),
     )}
   </details>
@@ -265,10 +365,10 @@ function areaBlock(area: MeasuredArea): string {
 </article>`;
 }
 
-function sectionRisks(report: SalesReport): string {
+/** Tveganja so del painpointov, ne svoj razdelek — zato blok in ne <section>. */
+function risksBlock(report: SalesReport): string {
   if (report.risks.length === 0) return '';
-  return `<section>
-  <h2>Podatki, procesna tveganja in roki</h2>
+  return `<h4>Podatki, procesna tveganja in roki</h4>
   ${report.risks
     .map(
       (risk) => `<div class="risk risk-${risk.riskLevel ?? 'low'}">
@@ -278,17 +378,15 @@ function sectionRisks(report: SalesReport): string {
       ${risk.note ? `<p>${esc(risk.note)}</p>` : ''}
     </div>`,
     )
-    .join('\n')}
-</section>`;
+    .join('\n')}`;
 }
 
-function sectionActions(report: SalesReport): string {
+/** "3 ukrepi" so del priporočila: ukrep brez ponudbe je nasvet, ki ga stranka že ima. */
+function actionsBlock(report: SalesReport): string {
   if (!report.actionPlan) return '';
-  return `<section>
-  <h2>${esc(report.actionPlan.headline)}</h2>
+  return `<h3>${esc(report.actionPlan.headline)}</h3>
   <p class="note">Isti trije ukrepi so v strankinem poročilu — na sestanku so izhodišče, ne novica.</p>
-  <ol>${report.actionPlan.actions.map((action) => `<li>${esc(action)}</li>`).join('')}</ol>
-</section>`;
+  <ol>${report.actionPlan.actions.map((action) => `<li>${esc(action)}</li>`).join('')}</ol>`;
 }
 
 // --- Gradniki ----------------------------------------------------------------
@@ -302,16 +400,21 @@ const LEVEL_LABEL: Record<string, string> = {
 /**
  * Ubeži HTML posebne znake.
  *
- * Ime podjetja vnese obiskovalec; brez tega bi `<script>` v imenu pristal v
- * datoteki, ki jo prodajnik odpre v brskalniku. Celice, ki vsebujejo namerno
- * oznako (npr. `<span class="soft">`), se sestavijo posebej in ne gredo skozi tu.
+ * Obiskovalec vnese ŠEST nizov, ki pristanejo v tej datoteki — ime, priimek, ime
+ * podjetja, e-naslov, telefon in davčno. Brez tega bi `<script>` v katerem koli od
+ * njih pristal v datoteki, ki jo svetovalec odpre v brskalniku. Celice, ki vsebujejo
+ * namerno oznako (npr. `<span class="soft">`), se sestavijo posebej in ne gredo skozi tu.
+ *
+ * Apostrof je ubežen, čeprav danes noben izpis ne pristane v atributu: enojno
+ * narekovani atribut je en refaktor stran, polj obiskovalca pa je šest namesto enega.
  */
 function esc(value: string): string {
   return value
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function keyValueTable(rows: [string, string][]): string {
@@ -390,6 +493,17 @@ td:last-child{white-space:normal}
 .risk-high .risk-head strong{color:var(--warn-text)}
 .risk-head{display:flex;justify-content:space-between;gap:12px;margin:0 0 4px}
 .risk-head span{color:var(--muted);font-size:.82rem;white-space:nowrap}
+.questions{padding-left:20px;margin:8px 0}
+.questions li{margin:10px 0}
+.questions li strong{display:block}
+.questions li .note{display:block;margin-top:2px}
+.icp{border:1px solid var(--border);border-radius:8px;padding:16px;background:#faf9f6}
+.icp-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.icp-total{font-size:1.9rem;font-weight:700;color:var(--amber)}
+.icp-band{padding:2px 10px;border-radius:999px;font-weight:600;font-size:.82rem;
+background:var(--cream);color:var(--dark)}
+.icp-band-A{background:var(--yellow);color:var(--dark)}
+.icp-band-C{background:var(--warn-bg);color:var(--warn-text)}
 details{margin:8px 0}
 summary{cursor:pointer;font-size:.88rem;color:var(--amber);font-weight:600}
 code{background:var(--cream);padding:2px 5px;border-radius:4px;font-size:.82rem}

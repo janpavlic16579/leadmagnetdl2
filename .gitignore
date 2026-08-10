@@ -1,3 +1,7 @@
 node_modules
 dist
 .DS_Store
+
+# Karta vprašalnika — nastane iz konfiguracije (tools/karta-vprasalnika),
+# v objavo jo zgradi CI. V git ne gre: pol megabajta strojno generirane datoteke.
+public/karta/

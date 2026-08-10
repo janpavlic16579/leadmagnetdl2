@@ -62,6 +62,37 @@ export interface CostQuestion {
 }
 
 /**
+ * Velikostna predpostavka, ki ni urna postavka: letni prihodek in prispevna marža.
+ *
+ * Ločen tip in ne CostQuestion z drugačno enoto: marža je delež in ne evro, zato bi
+ * `valueEUR: 0.25` bralca zavedlo prav pri številki, ki množi vse ostale. Sredina
+ * pasu je tudi tu vrednost, ki obvelja, kadar obiskovalec točnega podatka nima.
+ */
+export interface ScaleBand {
+  id: string;
+  label: string;
+  /** Sredina razpona; pri deležih ulomek (0,235), ne odstotek. */
+  midpoint: number;
+}
+
+export interface ScaleQuestion {
+  label: string;
+  help: string;
+  bands: ScaleBand[];
+  /**
+   * Vrednost ob praznem vnosu.
+   *
+   * Pri prihodku je 0 pravilna in edina poštena: prihodek množi uporabnikov odstotek,
+   * zato bi izmišljena vrednost ustvarila izmišljen znesek. Pri marži je 0 prepovedana —
+   * vsaka izgubljena prodaja bi bila vredna nič.
+   */
+  fallback: number;
+  unit: string;
+  /** Vrednost je ulomek, prikaže pa se kot odstotek. */
+  asPercent?: true;
+}
+
+/**
  * Kontekst ene dejavnosti: tri vprašanja brez številk in dve urni postavki.
  *
  * Nobeden od teh odgovorov ne vstopa v formulo posameznega modula. Določajo dvoje:
@@ -84,6 +115,16 @@ export interface SegmentContext {
   operationalHour: CostQuestion;
   adminHour: CostQuestion;
   /**
+   * Letni prihodek in prispevna marža — skupna osnova za odstotkovne izračune.
+   *
+   * Vprašata ju dejavnosti, kjer se izguba meri kot delež prometa (maloprodaja).
+   * Doslej je prihodek živel v enem stroškovnem področju in nabavna vrednost v
+   * drugem: kdor teh dveh področij v triaži ni izbral, je ostal brez osnove, marže
+   * pa ni vprašal nihče — čeprav sta obe številki lastnost podjetja in ne področja.
+   */
+  annualRevenue?: ScaleQuestion;
+  contributionMargin?: ScaleQuestion;
+  /**
    * Povprečna ZARAČUNANA urna postavka — koliko podjetje za uro dela zaračuna
    * naročniku. Vpraša jo samo dejavnost, ki prodaja ure (storitve in projekti).
    *
@@ -104,6 +145,12 @@ export interface CostAssumption {
   estimated: boolean;
 }
 
+/** Isto za velikostne predpostavke; `value` je EUR ali delež, odvisno od vprašanja. */
+export interface ScaleAssumption {
+  value: number;
+  estimated: boolean;
+}
+
 /**
  * Odgovori obiskovalca na kontekstna vprašanja. Id-ji so nizi, ker jih določi
  * konfiguracija dejavnosti — pomen posameznega id-ja je zapisan v njej.
@@ -120,6 +167,12 @@ export interface BusinessProfile {
    * ki se v rezultatih izriše kot veljaven izračun.
    */
   chargeOutRate: CostAssumption;
+  /**
+   * Prisotna tudi pri dejavnostih, ki ju ne vprašata — iz istega razloga kot
+   * chargeOutRate: neobvezno polje bi pomenilo `?? nekaj` v vsakem modulu.
+   */
+  annualRevenue: ScaleAssumption;
+  contributionMargin: ScaleAssumption;
 }
 
 /** Brez odgovora vzamemo srednji pas — nikoli najugodnejšega. */
@@ -138,5 +191,9 @@ export function emptyProfileFor(context: SegmentContext | undefined): BusinessPr
     operationalHour: { valueEUR: context?.operationalHour.fallbackEUR ?? 45, estimated: true },
     adminHour: { valueEUR: context?.adminHour.fallbackEUR ?? 35, estimated: true },
     chargeOutRate: { valueEUR: context?.chargeOutRate?.fallbackEUR ?? 75, estimated: true },
+    // Prihodek brez odgovora ostane 0: odstotkovna polja tedaj ne dajo nobenega
+    // evra. To je namen — izmišljen promet bi ustvaril izmišljeno izgubo.
+    annualRevenue: { value: context?.annualRevenue?.fallback ?? 0, estimated: true },
+    contributionMargin: { value: context?.contributionMargin?.fallback ?? 0.25, estimated: true },
   };
 }

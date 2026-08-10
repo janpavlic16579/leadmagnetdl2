@@ -24,7 +24,13 @@ import { aggregateResults, assessConfidence, buildComputeContext } from '../../l
 import { selectFollowUpSequence } from '../../lib/followUp';
 import type { DownloadFile } from '../../lib/download';
 import type { SalesReport } from '../../lib/salesReport';
-import type { BasicInfo, FlowStep, ModuleInputsState } from '../../types';
+import type {
+  BasicInfo,
+  FlowStep,
+  LeadConsents,
+  LeadContact,
+  ModuleInputsState,
+} from '../../types';
 import { StepIndustry } from './StepIndustry';
 import { StepEmployeeCount } from './StepEmployeeCount';
 import { StepContext } from './StepContext';
@@ -155,7 +161,13 @@ export function CalculatorFlow({
         // Potencial pozna le segment, ki vpraša za sedanji sistem; drugod kartica odpade.
         band: context ? improvementBandFor(context, profile.currentSystem) : undefined,
         confidence: context
-          ? assessConfidence({ profile, context, modules: activeModules, values: resolvedValues })
+          ? assessConfidence({
+              profile,
+              context,
+              modules: activeModules,
+              values: resolvedValues,
+              outputs,
+            })
           : undefined,
       }),
     [outputs, context, profile, activeModules, resolvedValues],
@@ -204,13 +216,11 @@ export function CalculatorFlow({
   );
 
   async function handleEmailSubmit({
-    companyName,
-    email,
-    gdprConsent,
+    contact,
+    consents,
   }: {
-    companyName: string;
-    email: string;
-    gdprConsent: boolean;
+    contact: LeadContact;
+    consents: LeadConsents;
   }) {
     // jsPDF je težka knjižnica in je potrebna šele tu — naloži se ob oddaji, ne ob
     // prvem prikazu strani. Prodajna dela gresta v isti blok, da ostaneta izven
@@ -228,7 +238,9 @@ export function CalculatorFlow({
     // mora priti vedno, in napaka v prodajnem delu je ne sme odnesti s seboj.
     const customerFile = await buildResultsPdfFile({
       segment,
-      companyName,
+      // Samo ime podjetja: poročilo gre upravi stranke, ki ve, kdo ga je izpolnil,
+      // in se posreduje interno — osebni podatki v njem so odveč.
+      companyName: contact.companyName,
       outputs,
       totals,
       highestModule,
@@ -242,9 +254,8 @@ export function CalculatorFlow({
     try {
       const report = buildSalesReport({
         generatedAtISO: new Date().toISOString(),
-        companyName,
-        email,
-        gdprConsent,
+        contact,
+        consents,
         utmSource,
         industry: basicInfo.industry,
         employeeCount: basicInfo.employeeCount,

@@ -52,6 +52,42 @@ Ob spremembi dejavnosti se odgovori zavržejo samo, kadar se spremeni tudi **seg
 dejavnost → zaposleni → [kontekst] → [triaža] → [stroškovni predpostavki] → vnosi → rezultat → e-naslov
 ```
 
+```mermaid
+flowchart TD
+    A["Dejavnost in velikost<br/>sedem panog ali drugo"] --> B["Segment<br/>eden od sedmih"]
+    B --> N
+
+    subgraph N["Nabor področij"]
+        direction LR
+        N1["Panožna<br/>pet, po dejavnosti"]
+        N2["Horizontalna<br/>pet, za vse panoge"]
+        N3["Diagnostika in E<br/>brez ocene v triaži"]
+    end
+
+    N --> T["Triaža<br/>vsako področje oceniš 0–3"]
+    T --> S["Tri področja z najvišjo oceno<br/>samo ta dobijo vprašanja"]
+    S --> V["Vnos številk<br/>vprašanja in urne postavke"]
+    V --> K
+
+    subgraph K["Štirje koši — ista postavka le v enem"]
+        direction LR
+        K1["Izguba<br/>denar odteka"]
+        K2["Kapaciteta<br/>izgubljene ure"]
+        K3["Kapital<br/>vezan denar"]
+        K4["Tveganje<br/>brez zneska"]
+    end
+
+    K --> R["Rezultati<br/>zneski, potencial, tveganja"]
+    R --> M["Oddaja e-naslova<br/>kontakt in soglasja"]
+    M --> P1["PDF za stranko<br/>rezultati in akcijski načrt"]
+    M --> P2["Prodajni paket<br/>kvalifikacija, ocena, playbook"]
+```
+
+Dve zakonitosti, ki ju diagram pokaže, iz kode pa nista očitni. Prva: **panoga ni os razvejanja —
+segment je.** Dejavnost se enkrat preslika v segment, vse naprej se ravna po njem. Druga: **triaža je
+razlog, da vprašalnik ni daljši**, čeprav ponudi 7–10 področij — poglobljena vprašanja dobijo le tri z
+najvišjo oceno, torej tista, ki obiskovalca dejansko bolijo.
+
 Dejavnost in število zaposlenih sta ločena koraka: iz dejavnosti se izpelje segment in s tem celoten
 nadaljnji vprašalnik, število zaposlenih pa v nobeno formulo ne vstopi — uporabi se samo za velikostni
 razred v poročilu.
@@ -69,6 +105,10 @@ postavk — voznikova ura ni operaterjeva.
 
 Moduli so **podatki**, ne koda: vsak modul v `src/config/modules/` sam pove, kaj vpraša, kako računa in v
 kateri koš gre izid. Dodajanje dejavnosti = nova datoteka z definicijami + vpis v register.
+
+Vsak segment ponudi **pet panožnih področij** (spodaj po dejavnostih) in poleg njih **dve do pet
+horizontalnih**, ki jih ima vsako podjetje ne glede na panogo — glej **Horizontalna področja** za
+seznam in matriko vključitve.
 
 ### Proizvodnja — pet izključujočih se stroškovnih področij
 
@@ -241,6 +281,59 @@ privzeto obkljukani `podatkiSp` in `usklajevanjeSp`, edini dve, ki ju ima res vs
 Cena univerzalnosti ni skrita v izračunu, ampak v **pasovih izboljšave**: ti so za ta segment ožji
 (8–18 % do 20–35 % namesto 25–40 %), ker univerzalna vprašanja strošek zajamejo manj natančno.
 
+### Horizontalna področja — ista definicija v več segmentih
+
+Panožni moduli merijo samo bolečino osnovne dejavnosti. Proizvodno podjetje pa poročila sestavlja,
+plače obračunava in dokumente potrjuje enako kot vsako drugo — in prav to so področja, ki jih
+PANTHEON pokriva, vprašalnik pa jih prej ni znal zaznati. Zato so definirana **enkrat** v
+`src/config/modules/horizontal.ts` in vključena v več segmentov hkrati (isti vzorec kot skupni
+modul `E`).
+
+| Modul | Meri |
+|---|---|
+| `analitikaHz` | Analitika in poročanje (priprava poročil, izredne analize, združevanje podatkov) |
+| `financeHz` | Računovodstvo in finance (knjiženje, usklajevanje, obračuni, globe in obresti) |
+| `kadriHz` | Kadri in plače (evidence ur, priprava obračuna, kadrovska administracija) |
+| `dokumentiHz` | Dokumentacija in e-poslovanje (potrjevanje, iskanje, tiskanje in ročno pošiljanje) |
+| `servisHz` | Reklamacije in poprodajni servis (garancijska popravila, vodenje postopka in RMA, nadomestni deli) |
+
+Obravnava je enaka panožni: triažno vprašanje, pet vprašanj, izračun v evrih, lastne alineje
+„PANTHEON naslavlja". Horizontala je torej lahko tudi **največja postavka** in s tem izhodišče
+akcijskega načrta.
+
+| Segment | `analitikaHz` | `financeHz` | `kadriHz` | `dokumentiHz` | `servisHz` | Triažnih vprašanj |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| Proizvodnja | ✓ | ✓ | ✓ | ✓ | ✓ | 10 |
+| Veleprodaja in distribucija | ✓ | ✓ | ✓ | ✓ | ✓ | 10 |
+| Maloprodaja | ✓ | ✓ | ✓ | ✓ | ✓ | 10 |
+| Storitve in projekti | ✓ | ✓ | ✓ | ✓ | ✓ | 10 |
+| Logistika in transport | ✓ | ✓ | ✓ | — | — | 8 |
+| Računovodski servis | ✓ | — | ✓ | — | — | 7 |
+| Splošno | — | ✓ | ✓ | ✓ | — | 8 |
+
+Izključitve niso okus, ampak **zaščita pred dvojnim štetjem ur**: računovodski servis nima
+`financeHz`, ker so knjiženje in obračuni njegov produkt (merijo jih `zajemRs`, `obracuniRs`,
+`popravkiRs`), in nima `dokumentiHz`, ker zajem listin meri `zajemRs`; logistika nima `dokumentiHz`,
+ker isto merijo prevozne listine v `dokumentacija`; splošni segment nima `analitikaHz`, ker ure
+poročanja že šteje `podatkiSp`. Kjer se področji le dotikata, razmejitev opravi napotek pod
+vprašanjem („Ure, ki ste jih že vpisali v drugem področju, tu ne ponavljajte.").
+
+`servisHz` je poseben primer iste logike. Stroške reklamacij v evrih (dobropisi, vračila, poškodovano
+blago) in ure njihovega reševanja **že merijo panožni moduli v šestih od sedmih segmentov**, zato
+modul meri izrecno le tisto, česar ne meri nihče: servis in garancije **po predaji**, vodenje
+reklamacijskega postopka ter nadomestne dele in zunanji servis. Zato ga ni v logistiki (`napake` že
+meri reklamacijske ure in stroške napačnih dostav), v računovodskem servisu (lastne napake meri
+`popravkiRs`) niti v splošnem segmentu (`napakeSp` že meri ponovno delo in reklamacije). Je tudi
+edina horizontala z **dvema urnima postavkama**: servisni poseg opravi izvajalec, zato gre po
+neposredni uri, vodenje postopka pa je pisarniško delo po administrativni.
+
+`kadriHz` je pri računovodskem servisu vključen namenoma: meri **njegove lastne** kadre in plače, ne
+obračunov, ki jih dela za stranke.
+
+V `moduleIds` so horizontale vedno **za panožnimi in pred diagnostiko**. Vrstni red odloča ob
+izenačenju — prikaz v razčlenitvi, izbor v triaži in „največja postavka" tako favorizirajo panožno
+bolečino. Umestitev varuje test v `src/config/modules/horizontal.test.ts`.
+
 ### Kategorija „drugo"
 
 „Drugo" v spustnem seznamu ni odgovor, ampak vrata do podvprašanja o **poslovnem modelu**
@@ -294,7 +387,8 @@ navidezno natančnega zneska.
 | Kaj | Datoteka |
 |---|---|
 | Vprašanja, privzete vrednosti in formule modulov | `src/config/modules/` |
-| Kateri moduli so v segmentu, prag visoke izgube | `src/config/segments.ts` |
+| Horizontalna področja (analitika, finance, kadri, dokumenti, servis) | `src/config/modules/horizontal.ts` |
+| Kateri moduli so v segmentu (tudi katere horizontale), prag visoke izgube | `src/config/segments.ts` |
 | Dejavnost → segment (spustni seznam) | `src/config/industries.ts` |
 | Naslovljivi deleži po vzroku | `src/config/modules/addressableShare.ts` |
 | Kontekstna vprašanja, pasovi izboljšave, razponi urnih postavk, vidnost modula E | `src/config/contexts/` |
@@ -307,9 +401,39 @@ navidezno natančnega zneska.
 Ves izračun teče v brskalniku. Nič poslovnih podatkov ne zapusti naprave, dokler uporabnik sam ne odda
 obrazca — to je na strani tudi izrecno napisano.
 
+## Obrazec za prevzem poročila
+
+`src/components/Results/EmailGate.tsx` zbere kontakt in privolitve. Obvezni so **ime, priimek, ime
+podjetja, e-naslov** in **prva privolitev**; telefon in davčna sta neobvezna in označena z
+"(neobvezno)".
+
+Tri odločitve, ki jih je vredno poznati pred urejanjem:
+
+- **Napačen telefon ali davčna oddaje NE blokirata.** Polji sta označeni kot neobvezni, zato bi bil
+  mrtev gumb za obiskovalca napaka — in nevidna, ker onemogočen gumb ne pove, katero polje ga
+  ustavlja. Namig se pokaže ob `blur`, dvom pa potuje naprej: `meta.taxNumberLooksValid` v poročilu
+  izpiše "12345678 (ni videti veljavna)", kjer ga vidi svetovalec, ki lahko ukrepa.
+- **Privolitve so tri in ločene** (`LeadConsents` v `src/types.ts`): obvezna obdelava osebnih
+  podatkov ter neobvezni obveščanje o ponudbah in o vsebinah/dogodkih. Ena skupna zastavica ne bi
+  mogla odgovoriti na revizijsko vprašanje "ali je privolil v trženje?". Neobvezni sta privzeto
+  neoznačeni — vnaprej odkljukana privolitev ni veljavna privolitev.
+- **Obrazec je pravi `<form>` z `preventDefault()`.** Brez tega bi Enter v besedilnem polju sprožil
+  privzeto oddajo, ta pa bi brez zaledja in usmerjevalnika ponovno naložila SPA in uničila vse
+  module, triažne ocene in odgovore. "Nazaj" zato ostane `type="button"`: sicer bi postal privzeti
+  gumb obrazca in Enter bi navigiral nazaj.
+
+Pravila preverjanja so v čisti `src/lib/validation.ts` (testljiva v okolju `node`, kjer komponent ni
+mogoče testirati). Davčna se preverja s kontrolno vsoto mod-11 in **normalizira natanko enkrat, ob
+oddaji** — normalizacija med tipkanjem premakne kazalec na konec polja.
+
+Povezava na pravilnik o zasebnosti v obvezni privolitvi še ni znana: konstanta `PRIVACY_POLICY_URL`
+je prazna, zato se stavek izriše brez povezave. Ko URL prispe, mora biti **absoluten** — aplikacija
+teče na podpoti `/leadmagnetdl/`.
+
 ## Kaj se prenese ob oddaji obrazca
 
-Datalab (še) nima znanega CRM API-ja, zato oddaja obrazca **ne kliče strežnika**. Nastanejo tri datoteke:
+Datalab (še) nima znanega CRM API-ja, zato oddaja obrazca **ne kliče strežnika**. Zbrani kontaktni
+podatki torej ne gredo nikamor razen v spodnji datoteki za svetovalca. Nastanejo tri datoteke:
 
 | Datoteka | Za koga | Kaj vsebuje |
 |---|---|---|
@@ -340,14 +464,72 @@ Vsebino sestavi **`buildSalesReport()`** (`src/lib/salesReport.ts`) — čista f
 dostopa do datuma (časovni žig je parameter), zato je testljiva v okolju `node` in neodvisna od tega,
 kako se poročilo dostavi. Prehod na webhook je zato zamenjava zadnjega koraka, ne ponovno pisanje.
 
-Razdelki: kdo je stranka · kaj je izračun pokazal · **kje so številke trdne in kje ne** · kaj stranko
-tišči (triaža **vseh** področij, tudi neizmerjenih) · po področjih z vsemi odgovori · tveganja · 3 ukrepi.
+**To je interni dokument, strogo ločen od poročila, ki ga dobi stranka.** Ima **natanko pet
+razdelkov** z logiko sodba → dejstva → ukrep → utemeljitev sodbe:
 
-Dvoje je vgrajeno namenoma:
+```
+1. Ocena — kvalifikacija stranke        (ICP pas A/B/C, velikost posla, nujnost, licenca)
+2. Osnovni podatki                      (kontakt, dejavnost, sedanji sistem, privolitve)
+3. Rezultati vprašalnika
+     3a. Njihove info                   (zneski, urne postavke, VSI odgovori s stolpcem "vir")
+     3b. Njihovi največji painpointi    (triaža, tveganja, kaj vprašati, kaj boste slišali)
+4. Priporočilo licenc glede na kriterije
+5. Kvalifikacija stranke — podrobnejša razlaga
+```
 
-- **Datoteka pristane pri stranki**, zato v njej ni ničesar, česar ji svetovalec ne bi mogel povedati v
-  obraz — nobenega točkovanja leada, nobenih scenarijev. Vsebina so dejstva: kaj je odgovorila, katere
-  številke so trdne, kaj se splača preveriti.
+Poročilo je prej naraščalo s prištevanjem in doseglo dvanajst naslovov. Vse ostalo je zdaj podnaslov
+znotraj teh petih — **nič vsebine ni izpadlo**. Zgradbo v obeh oblikah varuje test: prodajni HTML mora
+imeti natanko teh pet `<h2>`, v tem vrstnem redu.
+
+Dve posledici te zgradbe:
+
+- **„Kje so številke trdne in kje ne" ni več svoj razdelek.** Bil je tabela istih polj, naštetih
+  drugič — trdnost številke je bila dvajset vrstic stran od nje same. Odslej ima vsak odgovor stolpec
+  `vir`: `vneseno` · `privzeto` · `„Ne vem"`. Izpeljan je enkrat (`answerSource` v `answerLabels.ts`),
+  da PDF in HTML ne moreta razhajati.
+- **Ocena je na vrhu in na dnu.** Zgoraj sodba (prodajnik mora v treh sekundah vedeti, ali je A ali C),
+  spodaj razčlenitev po sedmih dimenzijah kot utemeljitev.
+
+Navodilne dele sestavi `src/lib/salesPlaybook.ts`, vse iz podatkov, ki jih vprašalnik že zbere —
+nobenega novega vprašanja:
+
+- **Iztočnice** so razvrščene od najmočnejše: najprej področja z visoko triažno oceno, ki jih stranka
+  **ni** izmerila (zanje v poročilu ni nobenega zneska), nato odgovori „Ne vem", nato nedotaknjena
+  polja. Če je odgovorila na vse, iztočnica izhaja iz `contextOnly` polj o načinu dela.
+- **Ugovori se sprožijo iz podatkov, ne iz seznama.** Nizka zanesljivost → „številka je pretirana";
+  zunanji glavni vzrok → „to ni odvisno od nas"; obstoječi PANTHEON → „to že imamo". Odgovor vsakič
+  izhaja iz `content/methodology.ts` — iz načina računanja in ne iz prodajne fraze. Besedila so v
+  `content/sales/objections.ts`, preslikava sistem → priporočen modul v `content/sales/pantheonFit.ts`.
+- **Licenca se imenuje, moduli pa opišejo.** `content/sales/licences.ts` preslika segment v znamko
+  (Manufacture / Retail / Accounting / Enterprise) — prepisano iz `src/config/pantheonLogos.ts`, ki je
+  edini zapisani vir znamk, zato ju varuje test. Dve opozorili sta del vsebine in ne opomba:
+  **logistika nima svoje licence** (pokrivata jo SE in ME z moduloma LT in LT3; namenskega WMS ali TMS
+  PANTHEON ne ponuja) in **storitve nimajo svoje znamke** (Enterprise je označen kot ZAČASNO). Cen ni
+  nikjer — točen obseg potrdi svetovalec po veljavnem ceniku.
+
+### ICP ocena
+
+`src/config/icp.ts` je **edino mesto za uravnavanje**: sedem dimenzij z utežmi (velikost, priložnost
+v sedanjem sistemu, izmerjena bolečina, bližina odločevalcu, nujnost zaradi rokov, resnost vnosa,
+dosegljivost), pasovi A/B/C in razredi velikosti posla. Vse vrednosti so **začetne ocene brez
+empirije** — natančna merila idealnega profila še niso določena.
+
+Dve pravili, ki naj preživita vsako uravnavanje:
+
+- **Vsaka dimenzija vrne utemeljitev, ne le število.** Ocena brez razlage se ne da umerjati — čez tri
+  mesece nihče ne ve, zakaj je stranka dobila 62. Test to zahteva.
+- **Ocena je ustreznost, ne sodba o podjetju.** „Velikost: pod ciljnim razredom" in ne „premajhen".
+  Datoteka se fizično prenese na strankino napravo, zato mora vsak stavek zdržati, da ga prebere tisti,
+  o katerem govori.
+
+Dimenzija „priložnost v sedanjem sistemu" meri **velikost vrzeli**, status uporabnika PANTHEON pa je
+izpisan kot ločeno dejstvo in ne kot kazen: ali je boljši lead podjetje na Excelu (nova licenca) ali
+obstoječi uporabnik brez modula (nadgradnja), je poslovna odločitev, ki še ni sprejeta. Ob njej se
+spremeni ena funkcija, ne cel model. Nujnost uporablja `warningDate` iz `MODULE_E_ITEMS`, ki doslej
+ni bil uporabljen nikjer — prikazovalo se je le besedilo opozorila.
+
+Ostalo je vgrajeno namenoma:
+
 - **Razlikovanje med "vneseno", "izbran razpon" in "ni odgovora".** `CostAssumption` hrani le
   `{ valueEUR, estimated }` in nedotaknjenega polja od izbire ne loči, pri nekaterih dejavnostih pa se
   privzetek slučajno ujema s sredino razpona (veleprodaja: 24 EUR je oboje). `costBandLabel()` zato

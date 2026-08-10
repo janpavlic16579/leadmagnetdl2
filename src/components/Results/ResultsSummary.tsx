@@ -53,6 +53,20 @@ export function ResultsSummary({ totals, directLossNote }: ResultsSummaryProps) 
           note={directLossNote ?? DEFAULT_DIRECT_LOSS_NOTE}
         />
 
+        {/*
+          Ločeno od neposrednih stroškov namenoma: to ni denar, ki je odtekel, ampak
+          denar, ki ni prišel. Trditev stoji na predpostavki o kupčevem vedenju, zato
+          mora prenesti ugovor "tega nakupa morda sploh ne bi bilo", ne da bi s seboj
+          odnesla tudi dokazljivi del zneska.
+        */}
+        {totals.lostMarginEUR > 0 ? (
+          <Figure
+            title="Nezaslužena letna marža"
+            value={amount(totals.lostMarginEUR)}
+            note="Marža, ki je niste zaslužili — prazna polica, odpovedano naročilo, prodaja po napačni ceni. Ni odtekel denar, zato je prikazana ločeno."
+          />
+        ) : null}
+
         {totals.capacityEUR > 0 ? (
           <Figure
             title="Vrednost izgubljene kapacitete"

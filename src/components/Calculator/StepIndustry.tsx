@@ -48,9 +48,16 @@ export function StepIndustry({ value, onChange, onNext }: StepIndustryProps) {
   return (
     <div className={shellStyles.wrap}>
       <h1 className={shellStyles.introTitle}>Koliko vas stane sedanji način dela?</h1>
+      {/*
+       * Ocena trajanja mora držati. Prej je pisalo "v dveh minutah": že sam korak
+       * triaže traja dlje, obiskovalec pa takrat še ni pri nobeni številki. Obljuba,
+       * ki se podre na koraku 6, stane več kot poštena — takrat je vloženih že
+       * osem minut in opustitev je najdražja možna.
+       */}
       <p className={shellStyles.introSubtitle}>
-        Odgovorite na nekaj vprašanj o svojem poslovanju in v dveh minutah dobite razčlenjen izračun letnih
-        skritih stroškov — brez vnosa e-naslova.
+        Odgovorite na nekaj vprašanj o svojem poslovanju in dobite razčlenjen izračun letnih skritih
+        stroškov — brez vnosa e-naslova. Sami izberete, katera področja vas najbolj tiščijo; za
+        priporočena tri vzame okoli deset minut.
       </p>
 
       <div className={shellStyles.card}>

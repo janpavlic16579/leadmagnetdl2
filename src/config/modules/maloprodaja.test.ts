@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { diagnostikaMp, kanaliMp, mankoMp, marzeMp, prevzemMp, zalogeMp } from './maloprodaja';
+import {
+  blagajnaMp,
+  diagnostikaMp,
+  kanaliMp,
+  marzeMp,
+  prevzemMp,
+  razpolozljivostMp,
+  zalogeMp,
+} from './maloprodaja';
 import { ADDRESSABLE_SHARE } from './addressableShare';
 import type { ComputeContext, ModuleDefinition, ModuleOutputDraft } from './moduleTypes';
 import { resolveInputs } from '../../lib/moduleEngine';
@@ -11,7 +19,16 @@ import { resolveInputs } from '../../lib/moduleEngine';
  * v dveh področjih.
  */
 
-const CONTEXT: ComputeContext = { operationalHourCostEUR: 24, adminHourCostEUR: 32, chargeOutRateEUR: 75 };
+// Maloprodajni moduli prihodek in maržo BERETE iz konteksta (prazne police, napačne
+// cene, preklicana spletna naročila), zato tu ne smeta biti 0 — sicer bi testi
+// preverjali množenje z nič in ne izračuna.
+const CONTEXT: ComputeContext = {
+  operationalHourCostEUR: 24,
+  adminHourCostEUR: 32,
+  chargeOutRateEUR: 75,
+  annualRevenueEUR: 3_000_000,
+  contributionMarginRate: 0.25,
+};
 const MONTHS = 12;
 
 function run(definition: ModuleDefinition, overrides: Record<string, number> = {}): ModuleOutputDraft[] {
@@ -25,22 +42,36 @@ function pick(outputs: ModuleOutputDraft[], label: string): ModuleOutputDraft {
   return found;
 }
 
-const COSTED_MODULES = [zalogeMp, marzeMp, mankoMp, prevzemMp, kanaliMp];
+const COSTED_MODULES = [razpolozljivostMp, zalogeMp, marzeMp, blagajnaMp, prevzemMp, kanaliMp];
 
-describe('Zaloge, police in odpisi', () => {
+describe('Presežna zaloga, odpisi in znižanja', () => {
   const outputs = run(zalogeMp, {
     inventoryValueEUR: 800_000,
     annualWriteOffEUR: 26_000,
-    stockoutLostMarginEUR: 40_000,
+    forcedMarkdownMarginEUR: 40_000,
     reducibleShare: 2, // 11–20 % → 0.15
     mainCause: 1, // Stanje zalog v sistemu ni zanesljivo → data
   });
 
-  it('odpisi in izgubljena marža sta neposredni izgubi', () => {
-    expect(pick(outputs, 'Odpisi in prisilna znižanja').bucket).toBe('directLoss');
-    expect(pick(outputs, 'Odpisi in prisilna znižanja').valueEUR).toBe(26_000);
-    expect(pick(outputs, 'Izgubljena marža zaradi praznih polic').bucket).toBe('directLoss');
-    expect(pick(outputs, 'Izgubljena marža zaradi praznih polic').valueEUR).toBe(40_000);
+  it('odpisano blago je izguba denarja, prisilno znižanje pa nezaslužena marža', () => {
+    // Ločena koša namenoma: odpis je denar, ki je odtekel, znižanje pa marža, ki
+    // ni bila zaslužena. V enem znesku bi se razlika izgubila.
+    expect(pick(outputs, 'Odpisi ter poteklo in poškodovano blago').bucket).toBe('directLoss');
+    expect(pick(outputs, 'Odpisi ter poteklo in poškodovano blago').valueEUR).toBe(26_000);
+    expect(pick(outputs, 'Marža, izgubljena s prisilnimi znižanji').bucket).toBe('lostMargin');
+    expect(pick(outputs, 'Marža, izgubljena s prisilnimi znižanji').valueEUR).toBe(40_000);
+  });
+
+  it('strošek financiranja in sprostljivi kapital se ne podvojita', () => {
+    // Kapital je enkraten denarni učinek, financiranje pa cena, ki se plačuje vsako
+    // leto, dokler zaloga leži. Isti znesek v dveh vlogah, zato ločena izida.
+    const sprostljivo = 800_000 * 0.15;
+    expect(pick(outputs, 'Strošek financiranja presežne zaloge').bucket).toBe('directLoss');
+    expect(pick(outputs, 'Strošek financiranja presežne zaloge').valueEUR).toBeCloseTo(
+      sprostljivo * 0.06,
+      6,
+    );
+    expect(pick(outputs, 'Sprostljiv obratni kapital v zalogah').valueEUR).toBe(sprostljivo);
   });
 
   it('sprostljiv kapital je enkraten in nima naslovljivega deleža — ta znesek JE potencial', () => {
@@ -59,23 +90,52 @@ describe('Zaloge, police in odpisi', () => {
   });
 
   it('vzrok v podatkih da najvišji naslovljiv delež', () => {
-    expect(pick(outputs, 'Odpisi in prisilna znižanja').addressableShare).toBe(ADDRESSABLE_SHARE.data);
+    expect(pick(outputs, 'Odpisi ter poteklo in poškodovano blago').addressableShare).toBe(
+      ADDRESSABLE_SHARE.data,
+    );
   });
 });
 
-describe('Nabavne cene, akcije in marža', () => {
+describe('Prazne police in nedobavljivi artikli', () => {
+  const outputs = run(razpolozljivostMp, {
+    lostSalesSharePercent: 0.02,
+    substitutionShare: 0,
+    expressDeliveryCostEUR: 15_000,
+    stockCheckHoursPerMonth: 30,
+    mainCause: 1,
+  });
+
+  it('nezaslužena marža praznih polic ima svoj koš, ločen od odtekanja denarja', () => {
+    expect(pick(outputs, 'Nezaslužena marža zaradi praznih polic').bucket).toBe('lostMargin');
+  });
+
+  it('ekspresne dobave so denar, ki odteče, iskanje zaloge pa porabljen čas', () => {
+    expect(pick(outputs, 'Ekspresne dobave in nujni prevozi').bucket).toBe('directLoss');
+    expect(pick(outputs, 'Ekspresne dobave in nujni prevozi').valueEUR).toBe(15_000);
+    const iskanje = pick(outputs, 'Iskanje in preverjanje zaloge po enotah');
+    expect(iskanje.bucket).toBe('capacity');
+    expect(iskanje.valueEUR).toBe(30 * CONTEXT.operationalHourCostEUR * MONTHS);
+  });
+});
+
+describe('Cene, akcije in marža', () => {
   const outputs = run(marzeMp, {
-    annualPurchaseSpendEUR: 2_000_000,
-    priceErrorSharePercent: 0.015,
+    wrongPriceSalesSharePercent: 0.015,
+    marginGapPercent: 0.2,
     unclaimedRebatesEUR: 18_000,
     priceMaintenanceHoursPerMonth: 45,
     mainCause: 0, // Cenike in akcije vzdržujemo ročno → data
   });
 
-  it('izgubljena marža in neuveljavljeni rabati sta neposredni izgubi', () => {
-    expect(pick(outputs, 'Izgubljena marža zaradi napačnih cen in akcij').valueEUR).toBe(
-      2_000_000 * 0.015,
+  it('napačna cena vzame maržo, neuveljavljen rabat pa denar', () => {
+    // Marža se računa iz prihodka v kontekstu, ne iz nabavne vrednosti v modulu —
+    // prihodek je lastnost podjetja in ne enega stroškovnega področja.
+    expect(pick(outputs, 'Marža, izgubljena pri prodaji po napačni ceni').bucket).toBe('lostMargin');
+    expect(pick(outputs, 'Marža, izgubljena pri prodaji po napačni ceni').valueEUR).toBeCloseTo(
+      CONTEXT.annualRevenueEUR * 0.015 * 0.2,
+      6,
     );
+    expect(pick(outputs, 'Neizkoriščeni dobaviteljski rabati in bonusi').bucket).toBe('directLoss');
     expect(pick(outputs, 'Neizkoriščeni dobaviteljski rabati in bonusi').valueEUR).toBe(18_000);
   });
 
@@ -87,24 +147,36 @@ describe('Nabavne cene, akcije in marža', () => {
   });
 });
 
-describe('Blagajna, manko in vračila', () => {
-  const outputs = run(mankoMp, {
-    annualRetailRevenueEUR: 3_000_000,
-    shrinkageSharePercent: 0.012,
-    annualReturnsCostEUR: 9_000,
-    cashDeskFixHoursPerMonth: 20,
+describe('Blagajna, zaključki in manko', () => {
+  const outputs = run(blagajnaMp, {
+    tillCount: 8,
+    closingMinutesPerTillPerDay: 15,
+    shrinkageEUR: 36_000,
+    stocktakeHoursPerYear: 480,
     mainCause: 3, // Kraja kupcev ali zunanjih oseb → external
   });
 
-  it('manko se izračuna iz prihodka, ne iz zaloge', () => {
+  it('manko se vzame, kot je vpisan — ne izpelje se iz prihodka', () => {
+    // Prej se je manko računal kot odstotek prihodka. Zdaj ga trgovec odčita z
+    // inventure in vpiše v evrih: ocena iz prometa je bila videti natančna, čeprav
+    // je bila ugibanje.
     expect(pick(outputs, 'Inventurni manko').bucket).toBe('directLoss');
-    expect(pick(outputs, 'Inventurni manko').valueEUR).toBe(3_000_000 * 0.012);
+    expect(pick(outputs, 'Inventurni manko').valueEUR).toBe(36_000);
   });
 
-  it('razčiščevanje razlik je kapaciteta po administrativni uri', () => {
-    const item = pick(outputs, 'Razčiščevanje razlik in vračil');
+  it('zaključki blagajn se merijo po eni blagajni in pomnožijo z odprtimi dnevi', () => {
+    const item = pick(outputs, 'Dnevni zaključki blagajn');
+    const urNaLeto = (8 * 15 * 305) / 60;
     expect(item.bucket).toBe('capacity');
-    expect(item.valueEUR).toBe(20 * CONTEXT.adminHourCostEUR * MONTHS);
+    expect(item.valueEUR).toBe(urNaLeto * CONTEXT.operationalHourCostEUR);
+    expect(item.hoursPerMonth).toBe(urNaLeto / MONTHS);
+  });
+
+  it('inventura je kapaciteta in ločena od manka, ki ga odkrije', () => {
+    const item = pick(outputs, 'Izvedba inventur');
+    expect(item.bucket).toBe('capacity');
+    expect(item.valueEUR).toBe(480 * CONTEXT.operationalHourCostEUR);
+    expect(item.hoursPerMonth).toBe(480 / MONTHS);
   });
 
   it('zunanji vzrok močno zniža naslovljiv delež', () => {
@@ -139,20 +211,35 @@ describe('Prevzem blaga, dokumenti in prenosi', () => {
   });
 });
 
-describe('Spletna prodaja in usklajenost kanalov', () => {
+describe('Spletna prodaja, vračila in usklajenost kanalov', () => {
   const outputs = run(kanaliMp, {
-    cancelledOrderMarginEUR: 12_000,
+    cancelledOrderSalesEUR: 48_000,
+    returnsPerMonth: 120,
+    costPerReturnEUR: 9,
     catalogSyncHoursPerMonth: 18,
     orderProcessingHoursPerMonth: 40,
     mainCause: 0, // Artikle in cene vzdržujemo ločeno za vsak kanal → data
   });
 
-  it('odpovedana spletna naročila so neposredna izguba, obdelava pa kapaciteta', () => {
-    expect(pick(outputs, 'Izgubljena marža odpovedanih spletnih naročil').bucket).toBe('directLoss');
-    expect(pick(outputs, 'Izgubljena marža odpovedanih spletnih naročil').valueEUR).toBe(12_000);
+  it('odpoved vzame maržo, vračilo pa stane denar — vsak v svojem košu', () => {
+    // Vprašana je PRODAJNA vrednost odpovedanih naročil, maržo iz nje izpelje
+    // kontekst; prej je moral trgovec sam vpisati maržo, ki je običajno ne pozna.
+    expect(pick(outputs, 'Nezaslužena marža odpovedanih spletnih naročil').bucket).toBe('lostMargin');
+    expect(pick(outputs, 'Nezaslužena marža odpovedanih spletnih naročil').valueEUR).toBeCloseTo(
+      48_000 * CONTEXT.contributionMarginRate,
+      6,
+    );
+    expect(pick(outputs, 'Neposredni stroški vračil').bucket).toBe('directLoss');
+    expect(pick(outputs, 'Neposredni stroški vračil').valueEUR).toBe(120 * 9 * MONTHS);
+  });
+
+  it('obdelava naročil in usklajevanje kanalov sta ločeni kapaciteti', () => {
     expect(pick(outputs, 'Ročna obdelava spletnih naročil').bucket).toBe('capacity');
     expect(pick(outputs, 'Ročna obdelava spletnih naročil').valueEUR).toBe(
       40 * CONTEXT.operationalHourCostEUR * MONTHS,
+    );
+    expect(pick(outputs, 'Usklajevanje artiklov, cen in zalog med kanali').valueEUR).toBe(
+      18 * CONTEXT.adminHourCostEUR * MONTHS,
     );
   });
 
@@ -226,29 +313,31 @@ describe('Skupne lastnosti stroškovnih modulov', () => {
     }[] = [
       {
         definition: zalogeMp,
-        base: { annualWriteOffEUR: 26_000, inventoryValueEUR: 800_000, replenishmentMethod: 0 },
-        twist: { annualWriteOffEUR: 26_000, inventoryValueEUR: 800_000, replenishmentMethod: 3 },
+        base: { annualWriteOffEUR: 26_000, inventoryValueEUR: 800_000, staleStockShare: 0 },
+        twist: { annualWriteOffEUR: 26_000, inventoryValueEUR: 800_000, staleStockShare: 3 },
       },
       {
         definition: marzeMp,
-        base: { unclaimedRebatesEUR: 18_000, marginVisibility: 0 },
-        twist: { unclaimedRebatesEUR: 18_000, marginVisibility: 3 },
+        base: { unclaimedRebatesEUR: 18_000, previousPriceProof: 0 },
+        twist: { unclaimedRebatesEUR: 18_000, previousPriceProof: 3 },
       },
       {
-        definition: mankoMp,
-        base: { annualReturnsCostEUR: 9_000, stocktakeMethod: 0 },
-        twist: { annualReturnsCostEUR: 9_000, stocktakeMethod: 3 },
+        definition: blagajnaMp,
+        base: { shrinkageEUR: 36_000, stocktakeMethod: 0 },
+        twist: { shrinkageEUR: 36_000, stocktakeMethod: 3 },
+      },
+      {
+        definition: razpolozljivostMp,
+        base: { expressDeliveryCostEUR: 15_000, replenishmentMethod: 0 },
+        twist: { expressDeliveryCostEUR: 15_000, replenishmentMethod: 3 },
       },
       {
         definition: prevzemMp,
         base: { goodsReceiptHoursPerMonth: 60, receiptMethod: 0 },
         twist: { goodsReceiptHoursPerMonth: 60, receiptMethod: 3 },
       },
-      {
-        definition: kanaliMp,
-        base: { catalogSyncHoursPerMonth: 18, onlineOrdersPerMonth: 0 },
-        twist: { catalogSyncHoursPerMonth: 18, onlineOrdersPerMonth: 900 },
-      },
+      // kanaliMp nima polja contextOnly, zato ga tu ni: scenarij s poljem, ki ne
+      // obstaja, bi primerjal dva enaka izračuna in tiho ne preverjal ničesar.
     ];
 
     for (const { definition, base, twist } of scenarios) {
@@ -271,9 +360,9 @@ describe('Skupne lastnosti stroškovnih modulov', () => {
     // Odpisano, poteklo in znižano blago VEMO; inventurni manko je tisto, česar ne
     // vemo. V enem znesku bi se razlika izgubila, z njo pa vsak ukrep, ki iz nje sledi.
     const znano = run(zalogeMp, { annualWriteOffEUR: 26_000 });
-    const neznano = run(mankoMp, { annualRetailRevenueEUR: 3_000_000, shrinkageSharePercent: 0.012 });
+    const neznano = run(blagajnaMp, { shrinkageEUR: 36_000 });
 
-    expect(pick(znano, 'Odpisi in prisilna znižanja').valueEUR).toBe(26_000);
+    expect(pick(znano, 'Odpisi ter poteklo in poškodovano blago').valueEUR).toBe(26_000);
     expect(pick(neznano, 'Inventurni manko').valueEUR).toBe(36_000);
   });
 

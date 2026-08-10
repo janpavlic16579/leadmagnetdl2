@@ -1,14 +1,25 @@
-import type { ComputeContext, ModuleDefinition, ModuleOutput } from '../config/modules/moduleTypes';
+import {
+  isUnknownAnswer,
+  type ComputeContext,
+  type ModuleDefinition,
+  type ModuleOutput,
+} from '../config/modules/moduleTypes';
 
 /**
  * Zasilne predpostavke za module, ki jih uporabljajo, kadar jih klicatelj ne poda
- * (starejši segmenti in testi). Namenoma nista 0 — ničla bi tiho vrnila 0 EUR
- * in izgledala kot veljaven izračun.
+ * (starejši segmenti in testi). Urne postavke namenoma niso 0 — ničla bi tiho
+ * vrnila 0 EUR in izgledala kot veljaven izračun.
+ *
+ * Prihodek je izjema in je 0: je edina predpostavka, ki jo uporabnikov odstotek
+ * množi in ne obratno, zato bi privzeta vrednost ustvarila znesek, ki ga ni vnesel
+ * nihče (glej ComputeContext.annualRevenueEUR).
  */
 export const DEFAULT_COST_CONTEXT: ComputeContext = {
   operationalHourCostEUR: 45,
   adminHourCostEUR: 35,
   chargeOutRateEUR: 75,
+  annualRevenueEUR: 0,
+  contributionMarginRate: 0.25,
 };
 
 /**
@@ -20,6 +31,8 @@ export const DEFAULT_COST_CONTEXT: ComputeContext = {
 export interface BucketTotals {
   /** Hero znesek: samo trdi denar. */
   directLossEUR: number;
+  /** Marža, ki ni bila zaslužena — letna, a druge vrste dokaz kot directLoss. */
+  lostMarginEUR: number;
   capacityEUR: number;
   capacityHoursPerMonth: number;
   /** Enkraten znesek — nikoli se ne prišteje k directLossEUR. */
@@ -30,6 +43,7 @@ export interface BucketTotals {
 export function aggregateBuckets(outputs: ModuleOutput[]): BucketTotals {
   const totals: BucketTotals = {
     directLossEUR: 0,
+    lostMarginEUR: 0,
     capacityEUR: 0,
     capacityHoursPerMonth: 0,
     oneTimeCapitalEUR: 0,
@@ -40,6 +54,9 @@ export function aggregateBuckets(outputs: ModuleOutput[]): BucketTotals {
     switch (output.bucket) {
       case 'directLoss':
         totals.directLossEUR += output.valueEUR ?? 0;
+        break;
+      case 'lostMargin':
+        totals.lostMarginEUR += output.valueEUR ?? 0;
         break;
       case 'capacity':
         totals.capacityEUR += output.valueEUR ?? 0;
@@ -69,12 +86,28 @@ export function computeModules(
 ): ModuleOutput[] {
   const outputs: ModuleOutput[] = [];
   for (const definition of definitions) {
-    const input = resolveInputs(definition, inputsByModule[definition.id]);
+    const input = withoutUnknowns(resolveInputs(definition, inputsByModule[definition.id]));
     for (const draft of definition.compute(input, context)) {
       outputs.push({ ...draft, moduleId: definition.id });
     }
   }
   return outputs;
+}
+
+/**
+ * "Ne vem" pretvori v 0 tik pred compute().
+ *
+ * Na enem mestu in ne v vsakem modulu: sentinela je negativna, zato bi pozabljena
+ * pretvorba dala negativen znesek, ki bi se v vsoti tiho odštel od resničnih izgub.
+ * Razlika med "ne vem" in "nič" ostane vidna v neobdelanih vrednostih, ki jih dobi
+ * ocena zanesljivosti in izvozni zapis — izračun je edini, ki je ne sme videti.
+ */
+function withoutUnknowns(values: Record<string, number>): Record<string, number> {
+  const clean: Record<string, number> = {};
+  for (const [key, value] of Object.entries(values)) {
+    clean[key] = isUnknownAnswer(value) ? 0 : value;
+  }
+  return clean;
 }
 
 /** Privzete vrednosti modula, prekrite z uporabnikovim vnosom. Nikoli delno polje. */
@@ -99,16 +132,23 @@ export function groupByModule(outputs: ModuleOutput[]): Record<string, ModuleOut
   return grouped;
 }
 
+/** Koši, ki merijo LETNO bolečino. Enkratni kapital ni med njimi. */
+export const ANNUAL_BUCKETS = ['directLoss', 'lostMargin', 'capacity'] as const;
+
+function isAnnualBucket(output: ModuleOutput): boolean {
+  return (ANNUAL_BUCKETS as readonly string[]).includes(output.bucket);
+}
+
 /**
  * Modul z največjo denarno postavko — določa akcijski načrt.
- * Šteje se directLoss + capacity; enkratni kapital ne, ker bi ena velika zaloga
- * povozila vse ostalo, akcijski načrt pa mora naslavljati ponavljajočo se izgubo.
+ * Štejejo se letni koši; enkratni kapital ne, ker bi ena velika zaloga povozila vse
+ * ostalo, akcijski načrt pa mora naslavljati ponavljajočo se izgubo.
  * Ob izenačenju zmaga modul, ki je prej v podanem vrstnem redu (prioriteta segmenta).
  */
 export function findHighestModule(outputs: ModuleOutput[], moduleOrder: string[]): string | null {
   const sums = new Map<string, number>();
   for (const output of outputs) {
-    if (output.bucket !== 'directLoss' && output.bucket !== 'capacity') continue;
+    if (!isAnnualBucket(output)) continue;
     sums.set(output.moduleId, (sums.get(output.moduleId) ?? 0) + (output.valueEUR ?? 0));
   }
 
@@ -175,6 +215,10 @@ export function selectTopModules(
  *
  * Polja contextOnly se ne štejejo (ne vstopajo v formulo), polja checkbox pa tudi ne:
  * njihov privzetek 0 pomeni "ni odkljukano" in ne "ni odgovorjeno".
+ *
+ * "Ne vem" prav tako ne šteje kot izmerjeno. Je poštena izjava in ne izmikanje,
+ * vendar prispeva natanko 0 EUR — če bi štela, bi področje, kjer obiskovalec ne ve
+ * ničesar, izpadlo izmerjeno in ne bi pristalo v razdelku "Česa nismo izmerili".
  */
 export function isModuleAnswered(
   definition: ModuleDefinition,
@@ -184,6 +228,7 @@ export function isModuleAnswered(
   return definition.fields.some((field) => {
     if (field.contextOnly || field.kind === 'checkbox') return false;
     const value = values[field.key];
+    if (isUnknownAnswer(value)) return false;
     return value !== undefined && value !== field.default;
   });
 }

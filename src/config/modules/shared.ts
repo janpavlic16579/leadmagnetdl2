@@ -24,6 +24,16 @@ export const MONTHS_PER_YEAR = 12;
  */
 export const RECEIVABLES_CAPITAL_COST = 0.06;
 
+/**
+ * Isti letni strošek kapitala za denar, vezan v zalogah.
+ *
+ * Sklic in ne nova konstanta: denar v zalogi ni nič cenejši od denarja v terjatvah,
+ * dve številki pa bi se ob prvi kalibraciji razšli. Sprostljiva zaloga je enkraten
+ * denarni učinek, ta strošek pa letni — zato sta v poročilu ločena (raziskava
+ * maloprodaje, F02 in F03).
+ */
+export const INVENTORY_CAPITAL_COST = RECEIVABLES_CAPITAL_COST;
+
 /** Enotne stopnje za diagnostična vprašanja — višja ocena pomeni večje tveganje. */
 export const ASSURANCE_CHOICES: FieldChoice[] = [
   { value: 0, label: 'Da, zanesljivo' },

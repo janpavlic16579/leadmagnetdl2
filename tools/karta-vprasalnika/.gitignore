@@ -1,0 +1,5 @@
+# Generirana izhoda — nastaneta ob poganjanju skript in se ne verzionirata.
+# Vsaka sprememba vprašalnika bi sicer pomenila pol megabajta strojno
+# generirane razlike v zgodovini.
+questionnaire.json
+*.html

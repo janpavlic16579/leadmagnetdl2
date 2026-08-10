@@ -6,6 +6,7 @@ export interface BreakdownChartDatum {
   /** Naslov modula — ena skupina stolpcev na modul, ne na posamezno postavko. */
   name: string;
   directLossEUR: number;
+  lostMarginEUR: number;
   capacityEUR: number;
 }
 
@@ -15,11 +16,13 @@ interface BreakdownChartProps {
 
 const DIRECT_LOSS_COLOR = 'var(--color-primary)';
 const CAPACITY_COLOR = 'var(--color-primary-text)';
+const LOST_MARGIN_COLOR = 'var(--color-warning-border)';
 
 export function BreakdownChart({ data }: BreakdownChartProps) {
   if (data.length === 0) return null;
 
   const hasCapacity = data.some((datum) => datum.capacityEUR > 0);
+  const hasLostMargin = data.some((datum) => datum.lostMarginEUR > 0);
 
   return (
     <div>
@@ -30,6 +33,12 @@ export function BreakdownChart({ data }: BreakdownChartProps) {
           <span className={styles.swatch} style={{ background: DIRECT_LOSS_COLOR }} />
           Neposredna izguba
         </span>
+        {hasLostMargin ? (
+          <span className={styles.legendItem}>
+            <span className={styles.swatch} style={{ background: LOST_MARGIN_COLOR }} />
+            Nezaslužena marža
+          </span>
+        ) : null}
         {hasCapacity ? (
           <span className={styles.legendItem}>
             <span className={styles.swatch} style={{ background: CAPACITY_COLOR }} />
@@ -81,6 +90,14 @@ export function BreakdownChart({ data }: BreakdownChartProps) {
               fill={DIRECT_LOSS_COLOR}
               radius={[2, 2, 0, 0]}
             />
+            {hasLostMargin ? (
+              <Bar
+                dataKey="lostMarginEUR"
+                name="Nezaslužena marža"
+                fill={LOST_MARGIN_COLOR}
+                radius={[2, 2, 0, 0]}
+              />
+            ) : null}
             {hasCapacity ? (
               <Bar
                 dataKey="capacityEUR"

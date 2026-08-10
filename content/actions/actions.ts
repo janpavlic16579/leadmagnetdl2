@@ -185,12 +185,20 @@ export const ACTION_PLANS: Record<string, ActionPlanEntry> = {
       'Po vsaki akciji preverite, ali so se cene na blagajni vrnile na redne — pozabljena akcija je tiha izguba, ki traja mesece.',
     ],
   },
-  mankoMp: {
-    headline: 'Največji strošek: blagajna, manko in vračila',
+  razpolozljivostMp: {
+    headline: 'Največji strošek: prazne police in nedobavljivi artikli',
+    actions: [
+      'En mesec beležite vprašanja "imate to?", na katera je odgovor ne — brez tega je delež izgubljene prodaje ugibanje, in prav on nosi največji del zneska.',
+      'Za dvajset artiklov z največ prometa preverite, ali sistem sam predlaga naročilo; ročno naročanje po izkušnjah odpove prav ob konicah, ko je polica najdražja.',
+      'Preglejte, koliko ekspresnih dobav ste plačali zadnje četrtletje in za katere artikle — ponavljajoči se artikli niso logistična, ampak nabavna težava.',
+    ],
+  },
+  blagajnaMp: {
+    headline: 'Največji strošek: blagajna, zaključki in manko',
     actions: [
       'Namesto ene letne inventure uvedite sprotno štetje po skupinah — razliko boste videli, ko je vzrok še mogoče ugotoviti.',
       'Za mesec dni ločeno beležite znane odpise (poškodbe, potek) od neznanih razlik; razmerje med njima pove, ali gre za proces ali za krajo.',
-      'Preglejte stornirane račune po blagajniku in po uri — ponavljajoč vzorec je hitreje viden kot skupna številka.',
+      'Z uro izmerite zaključek ene blagajne — pomnožen z odprtimi dnevi in številom blagajn je to običajno večji znesek, kot se pričakuje.',
     ],
   },
   prevzemMp: {
@@ -333,6 +341,49 @@ export const ACTION_PLANS: Record<string, ActionPlanEntry> = {
       'Popišite artikle brez prometa v zadnjih 12 mesecih in določite datum za razprodajo ali odpis.',
       'Za 20 najbolj kritičnih artiklov določite minimalno zalogo in točko naročanja.',
       'Primerjajte knjigovodsko stanje z dejanskim na vzorcu — razlika pove, ali je težava v zalogi ali v podatku o njej.',
+    ],
+  },
+
+  // --- Horizontalna področja (v več segmentih) -------------------------------
+  analitikaHz: {
+    headline: 'Največji strošek: ročna priprava poročil in analiz',
+    actions: [
+      'Za eno redno poročilo izmerite, koliko časa gre za zbiranje podatkov in koliko za razmislek; prvo je odpravljivo, drugo ne.',
+      'Popišite, iz koliko virov se podatki za poročila ročno združujejo — vsak vir več je mesto, kjer se številke razhajajo.',
+      'Določite, kateri sistem je za vsako ključno številko edini vir resnice — dokler sta dva, bo vsak oddelek imel svojo.',
+    ],
+  },
+  financeHz: {
+    headline: 'Največji strošek: ročno delo v računovodstvu in financah',
+    actions: [
+      'Preštejte, kolikokrat se isti dokument na poti do knjižbe prime v roke — vsak prijem nad enim je kandidat za avtomatizacijo.',
+      'Za zadnje usklajevanje zabeležite, katere razlike so se pojavile in kje so nastale; večina jih izvira iz ročnega prenosa podatkov.',
+      'Preverite, katere podatke zunanji servis ali banka že lahko izmenjuje elektronsko namesto prek izpisov in preglednic.',
+    ],
+  },
+  kadriHz: {
+    headline: 'Največji strošek: evidence delovnega časa in obračun plač',
+    actions: [
+      'En mesec beležite vsak popravek po obračunu plač z vzrokom — večina jih izvira iz evidenc ur, ne iz samega obračuna.',
+      'Preverite, koliko virov podatkov se ročno združuje za en obračun (prisotnost, dopusti, potni nalogi, dodatki).',
+      'Za najpogostejša kadrovska opravila (potrdila, dopusti) določite en sam kanal namesto e-pošte, papirja in ustnih dogovorov.',
+    ],
+  },
+  dokumentiHz: {
+    headline: 'Največji strošek: potrjevanje in iskanje dokumentov',
+    actions: [
+      'Za deset zadnjih računov izmerite čas od prejema do potrditve — zamik pove, koliko skontov in rokov vas stane potrjevanje.',
+      'Popišite, kje vse ležijo dokumenti enega posla (e-pošta, mape, papir) — vsako mesto več je mesto iskanja.',
+      'Za tri največje partnerje preverite, ali je izmenjavo dokumentov mogoče prevzeti elektronsko namesto s tiskanjem in skeniranjem.',
+    ],
+  },
+
+  servisHz: {
+    headline: 'Največji strošek: reklamacije in poprodajni servis',
+    actions: [
+      'Mesec dni beležite vsak servisni primer z vzrokom in porabljenim časom — večina ur praviloma odpade na nekaj ponavljajočih se tipov napak.',
+      'Vsakemu odprtemu primeru določite status, nosilca in rok; primeri, ki živijo samo v e-pošti, se rešujejo najdlje.',
+      'Preverite, koliko garancijskih zahtevkov proti dobaviteljem dejansko uveljavite — neuveljavljen zahtevek je strošek, ki bi ga moral nositi dobavitelj.',
     ],
   },
 

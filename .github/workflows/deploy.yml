@@ -24,6 +24,14 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # Karta vprašalnika nastane iz konfiguracije ob vsaki objavi, zato ne more zastarati
+      # in je ni v gitu. Mora biti zgrajena PRED `npm run build`, ker Vite v `dist`
+      # prekopira `public/` — kar takrat še ne obstaja, ne bo objavljeno.
+      # `tsx` gre prek npx namenoma: orodje ne posega v odvisnosti aplikacije.
+      - name: Zgradi karto vprašalnika
+        run: |
+          npx --yes tsx tools/karta-vprasalnika/extract.ts
+          node tools/karta-vprasalnika/build-diagram.mjs public/karta/index.html
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:

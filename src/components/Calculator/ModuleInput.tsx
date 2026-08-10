@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { UNKNOWN_ANSWER } from '../../config/modules';
 import styles from './ModuleInput.module.css';
 
 interface SliderFieldProps {
@@ -19,6 +20,8 @@ interface NumberFieldProps {
   helpText?: string;
   value: number;
   unit?: string;
+  /** Prikaže stikalo "Ne vem". Vrednost je tedaj UNKNOWN_ANSWER in ne 0. */
+  allowUnknown?: boolean;
   onChange: (value: number) => void;
 }
 
@@ -77,6 +80,8 @@ export function ModuleInput(props: ModuleInputProps) {
   }
 
   const { unit } = props;
+  const allowUnknown = props.mode === 'number' && props.allowUnknown === true;
+  const isUnknown = allowUnknown && value === UNKNOWN_ANSWER;
 
   return (
     <div className={styles.field}>
@@ -101,8 +106,10 @@ export function ModuleInput(props: ModuleInputProps) {
             type="number"
             // Prazno polje namesto dobesedne ničle: sicer mora uporabnik najprej
             // pobrisati "0", preden začne tipkati, kar da vmesne vrednosti kot "056".
-            value={Number.isFinite(value) && value !== 0 ? value : ''}
-            placeholder="0"
+            // Pri "ne vem" je prazno tudi vsebinsko pravilno — vrednosti ni.
+            value={Number.isFinite(value) && value > 0 ? value : ''}
+            placeholder={isUnknown ? '—' : '0'}
+            disabled={isUnknown}
             min={props.mode === 'slider' ? props.min : 0}
             max={props.mode === 'slider' ? props.max : undefined}
             step={props.mode === 'slider' ? props.step : 'any'}
@@ -112,6 +119,16 @@ export function ModuleInput(props: ModuleInputProps) {
           {unit ? <span className={styles.unit}>{unit}</span> : null}
         </div>
       </div>
+      {allowUnknown ? (
+        <label className={styles.unknown}>
+          <input
+            type="checkbox"
+            checked={isUnknown}
+            onChange={(event) => onChange(event.target.checked ? UNKNOWN_ANSWER : 0)}
+          />
+          <span>Tega podatka ne vodimo</span>
+        </label>
+      ) : null}
     </div>
   );
 }
