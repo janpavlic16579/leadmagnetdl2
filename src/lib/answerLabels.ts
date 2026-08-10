@@ -122,3 +122,15 @@ export function isUnknownChoice(field: ModuleField, value: number | undefined): 
   if (field.kind !== 'choice') return false;
   return field.choices?.find((choice) => choice.value === value)?.unknown === true;
 }
+
+/**
+ * Od kod vrednost prihaja — v enem izrazu, ki se izpiše ob odgovoru.
+ *
+ * Trije primeri, ki jih mora prodajnik ločiti: strankin podatek, izrecno priznano
+ * neznanje in nedotaknjen privzetek. Zadnja dva sta oba "mehka", a povesta različno:
+ * "Ne vem" je odgovor, privzetek pa je odsotnost odgovora.
+ */
+export function answerSource(field: ModuleField, value: number | undefined): string {
+  if (isUnknownChoice(field, value)) return '„Ne vem"';
+  return isAnswered(field, value) ? 'vneseno' : 'privzeto';
+}

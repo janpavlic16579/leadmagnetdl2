@@ -7,6 +7,7 @@ import { getSizeClass } from '../config/sizeClasses';
 import { getActionPlan, type ActionPlanEntry } from '../../content/actions/actions';
 import { MODULE_METHODOLOGY, type ModuleMethodology } from '../../content/methodology';
 import {
+  answerSource,
   contextOptionLabel,
   costBandLabel,
   fieldAnswerText,
@@ -16,9 +17,14 @@ import {
   mainCauseLabel,
   triageScoreLabel,
 } from './answerLabels';
+import { scoreIcp, type IcpScore, type IcpSignals } from '../config/icp';
+import { MODULE_E_ITEMS } from '../config/modules/legacy';
+import { buildSalesPlaybook, type SalesPlaybook } from './salesPlaybook';
 import type { FollowUpSequence } from './followUp';
-import { groupByModule, type TriageScores } from './moduleEngine';
+import { groupByModule, isModuleAnswered, type TriageScores } from './moduleEngine';
 import type { ConfidenceLevel, ResultTotals } from './potential';
+import { taxNumberState } from './validation';
+import type { LeadConsents, LeadContact } from '../types';
 
 /**
  * Priprava na pogovor: kar je stranka vnesla, zbrano na enem mestu.
@@ -28,22 +34,34 @@ import type { ConfidenceLevel, ResultTotals } from './potential';
  * številke so bile ugibane. Prodajnik je torej prišel na sestanek z istim listom
  * kot stranka in brez enega samega podatka več.
  *
- * NAMENOMA BREZ INTERNIH OCEN LEADA. Datoteka se prenese na napravo, kjer sedi
- * stranka, zato tu ni ničesar, česar ji prodajnik ne bi mogel povedati v obraz:
- * nobenega točkovanja, nobenih scenarijev za pritisk. Poročilo pove, kaj je stranka
- * odgovorila, katere številke so trdne in katere ne, ter kaj se splača preveriti.
- * To ni omejitev uporabnosti — na sestanku šteje prav to.
+ * TO JE INTERNI DOKUMENT, strogo ločen od poročila, ki ga dobi stranka. Vsebuje
+ * iztočnice za pogovor, priporočeno ponudbo, pričakovane ugovore in ICP oceno
+ * ustreznosti. Strankino poročilo (lib/pdf.ts) ne vsebuje ničesar od tega.
+ *
+ * Kljub temu velja eno pravilo pri ubeseditvi: datoteka se fizično prenese na
+ * napravo, kjer sedi stranka. Ocena je zato zapisana kot USTREZNOST in ne kot sodba
+ * o podjetju — "velikost: pod ciljnim razredom" in ne "premajhen". Isti podatek,
+ * brez stavka, ki bi ga bilo nerodno pojasniti, če bi ga stranka odprla.
  *
  * Gradnik je čista funkcija brez dostopa do DOM ali datuma: časovni žig pride kot
  * parameter. Predstavitev (PDF, HTML) je zato zamenljiva, test pa determinističen.
  */
 
-export interface SalesReportMeta {
+/**
+ * Kontakt in privolitve sta razširjena ploskó, ne ugnezdena: oba izrisovalca
+ * bereta posamezne skalarje v vrstice tabele in nihče kontakta ne potrebuje kot
+ * celoto. Razširjanje vmesnikov pomeni, da dodano polje v LeadContact tu ni
+ * mogoče pozabiti.
+ */
+export interface SalesReportMeta extends LeadContact, LeadConsents {
   generatedAtISO: string;
-  companyName: string;
-  email: string;
-  gdprConsent: boolean;
   utmSource: string | null;
+  /**
+   * Davčna je neobvezna in napačna ne blokira oddaje — dvom zato pripotuje sem,
+   * kjer ga vidi svetovalec, ki lahko ukrepa. Izračunano enkrat, da ostaneta
+   * izrisovalca brez logike.
+   */
+  taxNumberLooksValid: boolean;
 }
 
 export interface SalesReportQualification {
@@ -96,6 +114,22 @@ export function hourAssumptionSource(row: HourAssumptionRow): string {
   return row.bandLabel ? `izbran razpon ${row.bandLabel}` : 'ni odgovora — privzetek dejavnosti';
 }
 
+/**
+ * Izpisi kontakta so tu in ne v izrisovalcih, da PDF in HTML ne moreta razhajati —
+ * enaka vrstica v dveh datotekah se ob prvi spremembi razide.
+ */
+export function contactPerson(report: SalesReport): string {
+  return `${report.meta.firstName} ${report.meta.lastName}`.trim();
+}
+
+/** Davčna z opozorilom, kadar ne prestane kontrolne vsote — napačna izgleda enako verodostojno kot prava. */
+export function taxNumberCell(report: SalesReport): string {
+  if (!report.meta.taxNumber) return '—';
+  return report.meta.taxNumberLooksValid
+    ? report.meta.taxNumber
+    : `${report.meta.taxNumber} (ni videti veljavna)`;
+}
+
 export interface SoftFieldRow {
   moduleTitle: string;
   question: string;
@@ -129,6 +163,15 @@ export interface AnswerRow {
   contextOnly: boolean;
   /** Je stranka vrednost vnesla ali je ostala privzeta. */
   answered: boolean;
+  /**
+   * Od kod vrednost prihaja: "vneseno", "privzeto", '„Ne vem"'.
+   *
+   * Doslej je bilo to svoj razdelek („Kje so številke trdne in kje ne") s tremi
+   * tabelami, ki so ista polja naštele drugič — prodajnik je moral trdnost številke
+   * iskati dvajset vrstic niže od nje same. Izpeljano tu in ne v izrisovalcih, da
+   * PDF in HTML ne moreta razhajati.
+   */
+  source: string;
 }
 
 export interface MeasuredArea {
@@ -154,13 +197,17 @@ export interface SalesReport {
   risks: ModuleOutput[];
   actionPlan: ActionPlanEntry | null;
   highestModuleTitle: string | null;
+  /** Kaj vprašati, kaj ponuditi, kaj bo slišal v odgovor in kako velik je posel. */
+  playbook: SalesPlaybook;
+  /** Ustreznost idealnemu profilu. Merila so v config/icp.ts in se uravnavajo tam. */
+  icp: IcpScore;
 }
 
 export interface BuildSalesReportParams {
   generatedAtISO: string;
-  companyName: string;
-  email: string;
-  gdprConsent: boolean;
+  /** Enota, ki potuje EmailGate → CalculatorFlow → sem; razbije se šele v meta. */
+  contact: LeadContact;
+  consents: LeadConsents;
   utmSource: string | null;
   industry: string;
   employeeCount: number;
@@ -184,13 +231,15 @@ export function buildSalesReport(params: BuildSalesReportParams): SalesReport {
   const activeIds = new Set(params.activeModules.map((definition) => definition.id));
   const outputsByModule = groupByModule(params.outputs);
 
-  return {
+  // Ocena in playbook se sestavita iz že izračunanega poročila, zato nastane najprej
+  // ono. Vrstni red je pomemben: playbook bere iztočnice iz triaže in mehkih številk.
+  const base: Omit<SalesReport, 'playbook' | 'icp'> = {
     meta: {
       generatedAtISO: params.generatedAtISO,
-      companyName: params.companyName,
-      email: params.email,
-      gdprConsent: params.gdprConsent,
+      ...params.contact,
+      ...params.consents,
       utmSource: params.utmSource,
+      taxNumberLooksValid: taxNumberState(params.contact.taxNumber) !== 'invalid',
     },
 
     qualification: {
@@ -244,6 +293,51 @@ export function buildSalesReport(params: BuildSalesReportParams): SalesReport {
       params.segmentModules.find((definition) => definition.id === params.highestModule)?.title ??
       null,
   };
+
+  const icp = scoreIcp(buildIcpSignals(params, base));
+  return {
+    ...base,
+    icp,
+    playbook: buildSalesPlaybook(base, segment.id, profile.currentSystem, icp),
+  };
+}
+
+/**
+ * Signali za oceno ustreznosti — vsi iz podatkov, ki jih poročilo že ima.
+ *
+ * Zbrani na enem mestu, da model (config/icp.ts) ne pozna ne poročila ne modulov:
+ * uravnavanje meril je zato urejanje ene tabele in ne iskanje po kodi.
+ */
+function buildIcpSignals(
+  params: BuildSalesReportParams,
+  base: Omit<SalesReport, 'playbook' | 'icp'>,
+): IcpSignals {
+  const triageable = params.segmentModules.filter((definition) => definition.triage !== undefined);
+
+  return {
+    employeeCount: params.employeeCount,
+    improvementBandMax: base.qualification.improvementBand.max,
+    isPantheonCustomer: base.qualification.isPantheonCustomer,
+    roleId: params.profile.role,
+    measuredLossEUR: base.summary.directLossEUR + base.summary.capacityEUR,
+    highLossThresholdEUR: params.segment.highLossThresholdEUR,
+    // Roki iz modula E: odkljukana polja preslikamo v datume, ki jih nosi vsebina.
+    // `warningDate` doslej ni bil uporabljen nikjer — prikazovalo se je le besedilo.
+    deadlineDates: MODULE_E_ITEMS.filter(
+      (item) => (params.values.E?.[item.key] ?? 0) === 1,
+    ).map((item) => item.warningDate),
+    confidence: base.summary.confidence,
+    measuredAreaCount: triageable.filter(
+      (definition) =>
+        params.activeModules.some((active) => active.id === definition.id) &&
+        isModuleAnswered(definition, params.values[definition.id]),
+    ).length,
+    offeredAreaCount: triageable.length,
+    hasPhone: params.contact.phone.trim().length > 0,
+    hasTaxNumber: params.contact.taxNumber.trim().length > 0,
+    consentOffers: params.consents.consentOffers,
+    generatedAtISO: params.generatedAtISO,
+  };
 }
 
 // --- Podrobnosti -------------------------------------------------------------
@@ -271,6 +365,7 @@ function buildMeasuredArea(
       answer: fieldAnswerText(field, moduleValues[field.key] ?? field.default),
       contextOnly: field.contextOnly === true,
       answered: isAnswered(field, moduleValues[field.key]),
+      source: answerSource(field, moduleValues[field.key]),
     })),
     outputs,
     pantheon: definition.pantheon ?? [],

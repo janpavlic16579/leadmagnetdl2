@@ -12,6 +12,35 @@ export interface BasicInfo {
  */
 export type ModuleInputsState = Record<string, Record<string, number>>;
 
+/**
+ * Kontaktni podatki iz obrazca za prevzem poročila.
+ *
+ * Neobvezna polja so prazen niz in ne null: ujemajo se s sosednjimi in z izpisom
+ * `|| '—'` v obeh izrisovalcih, strictNullChecks pa je izklopljen, zato null ne bi
+ * prinesel nobenega jamstva pri prevajanju.
+ */
+export interface LeadContact {
+  firstName: string;
+  lastName: string;
+  companyName: string;
+  email: string;
+  /** Neobvezno. Shranjen tako, kot ga je obiskovalec vpisal — svojo obliko pričakuje videti. */
+  phone: string;
+  /** Neobvezno. Shranjen NORMALIZIRAN: brez presledkov in brez predpone "SI". */
+  taxNumber: string;
+}
+
+/**
+ * Privolitve, ločene po namenu. Ena sama zastavica bi na revizijsko vprašanje
+ * "ali je privolil v trženje?" ne mogla odgovoriti.
+ */
+export interface LeadConsents {
+  /** OBVEZNA — brez nje obrazca ni mogoče oddati. */
+  consentProcessing: boolean;
+  consentOffers: boolean;
+  consentContent: boolean;
+}
+
 export type FlowStep =
   | 'industry'
   /** Število zaposlenih — svoj korak, ker na izračun ne vpliva in ni del izbire dejavnosti. */

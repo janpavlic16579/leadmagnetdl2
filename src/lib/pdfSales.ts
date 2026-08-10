@@ -19,7 +19,13 @@ import {
   RISK_LEVEL_LABEL,
   setFont,
 } from './pdfKit';
-import { hourAssumptionSource, type MeasuredArea, type SalesReport } from './salesReport';
+import {
+  contactPerson,
+  hourAssumptionSource,
+  taxNumberCell,
+  type MeasuredArea,
+  type SalesReport,
+} from './salesReport';
 
 /**
  * Prodajna priprava na pogovor.
@@ -28,10 +34,16 @@ import { hourAssumptionSource, type MeasuredArea, type SalesReport } from './sal
  * stane", to pa na "kaj mi je stranka povedala in česa še ne vem". Zato ni grafa
  * (skupni znesek je tu postranski) in je namesto njega tabela vseh odgovorov.
  *
- * Datoteka se prenese na napravo, kjer sedi stranka. Zato tu ni ničesar, česar ji
- * prodajnik ne bi mogel povedati v obraz — nobenega točkovanja leada, nobenih
- * scenarijev. Vsebina je: kaj je odgovorila, katere številke so trdne, kaj se
- * splača preveriti.
+ * PET RAZDELKOV, v tem vrstnem redu: sodba (ocena) → dejstva (osnovni podatki,
+ * rezultati) → ukrep (priporočilo) → utemeljitev sodbe (razčlenitev ocene).
+ * Poročilo je prej naraščalo s prištevanjem in doseglo dvanajst naslovov; vse
+ * ostalo je zdaj podnaslov znotraj teh petih, nič vsebine ni izpadlo.
+ *
+ * Zgradba mora biti ista kot v salesReportHtml.ts — svetovalec bere obe datoteki
+ * in razlika med njima bi izgledala kot razlika v podatkih.
+ *
+ * Datoteka se fizično prenese na napravo, kjer sedi stranka, zato je ocena
+ * ustreznosti ubesedena kot ustreznost in ne kot sodba o podjetju.
  */
 
 const HEADER_HEIGHT = 30;
@@ -43,14 +55,13 @@ export async function buildSalesPdfFile(report: SalesReport): Promise<DownloadFi
   registerFonts(doc);
   const logo = await loadImage(`${import.meta.env.BASE_URL}logo-datalab.png`);
 
+  // Pet razdelkov: sodba → dejstva → ukrep → utemeljitev sodbe.
   let y = drawHeader(doc, report, logo);
-  y = drawQualification(doc, report, y);
-  y = drawSummary(doc, report, y);
-  y = drawSoftness(doc, report, y);
-  y = drawTriage(doc, report, y);
-  y = drawAreas(doc, report, y);
-  y = drawRisks(doc, report, y);
-  drawActions(doc, report, y);
+  y = drawScore(doc, report, y);             // 1. Ocena — kvalifikacija stranke
+  y = drawQualification(doc, report, y);     // 2. Osnovni podatki
+  y = drawResults(doc, report, y);           // 3. Rezultati vprašalnika (3a + 3b)
+  y = drawRecommendation(doc, report, y);    // 4. Priporočilo licenc
+  drawIcp(doc, report, y);                   // 5. Podrobnejša razlaga
 
   drawFooterOnEveryPage(doc, 'Datalab · Priprava na pogovor', PDF_DISCLAIMER);
 
@@ -98,13 +109,19 @@ function drawHeader(
   return HEADER_HEIGHT + 8;
 }
 
-// --- Kdo je stranka ----------------------------------------------------------
+// --- 2. Osnovni podatki ------------------------------------------------------
 
 function drawQualification(doc: jsPDF, report: SalesReport, startY: number): number {
   const q = report.qualification;
   const band = `${formatPercent(q.improvementBand.min)} – ${formatPercent(q.improvementBand.max)}`;
 
+  // Zrcali vrstice v salesReportHtml.ts, isti vrstni red — svetovalec bere obe
+  // datoteki in razlika med njima bi izgledala kot razlika v podatkih.
   const rows: string[][] = [
+    ['Kontaktna oseba', contactPerson(report) || '—'],
+    ['E-naslov', report.meta.email || '—'],
+    ['Telefon', report.meta.phone || '—'],
+    ['Davčna številka', taxNumberCell(report)],
     ['Dejavnost', q.industryLabel],
     ['Vprašalnik', q.segmentName],
     ['Velikost', `${q.sizeClass} zaposlenih (vneseno: ${q.employeeCount})`],
@@ -114,11 +131,13 @@ function drawQualification(doc: jsPDF, report: SalesReport, startY: number): num
     ['Obstoječi uporabnik PANTHEON', q.isPantheonCustomer ? 'Da' : 'Ne'],
     ['Pas realistične izboljšave', band],
     ['Vir obiska', report.meta.utmSource ?? 'neposredno'],
-    ['Privolitev za obdelavo (GDPR)', report.meta.gdprConsent ? 'Da' : 'Ne'],
+    ['Privolitev — obdelava osebnih podatkov', report.meta.consentProcessing ? 'Da' : 'Ne'],
+    ['Privolitev — ponudbe PANTHEON', report.meta.consentOffers ? 'Da' : 'Ne'],
+    ['Privolitev — vsebine in dogodki', report.meta.consentContent ? 'Da' : 'Ne'],
   ];
 
   let y = ensurePageSpace(doc, startY, 24);
-  y = drawSectionTitle(doc, 'Kdo je stranka', y);
+  y = drawSectionTitle(doc, 'Osnovni podatki', y);
   y = drawTable(doc, { head: ['', 'Odgovor'], rows, startY: y, columnWidths: [62] });
 
   if (!q.isPantheonCustomer) {
@@ -132,7 +151,7 @@ function drawQualification(doc: jsPDF, report: SalesReport, startY: number): num
   return y;
 }
 
-// --- Zneski ------------------------------------------------------------------
+// --- 3a. Njihove info --------------------------------------------------------
 
 function drawSummary(doc: jsPDF, report: SalesReport, startY: number): number {
   const s = report.summary;
@@ -160,7 +179,6 @@ function drawSummary(doc: jsPDF, report: SalesReport, startY: number): number {
   }
 
   let y = ensurePageSpace(doc, startY, 30);
-  y = drawSectionTitle(doc, 'Kaj je izračun pokazal', y);
   y = drawTable(doc, {
     head: ['Postavka', 'Znesek', 'Kaj pomeni'],
     rows,
@@ -174,67 +192,12 @@ function drawSummary(doc: jsPDF, report: SalesReport, startY: number): number {
   return y;
 }
 
-// --- Kje so številke mehke ---------------------------------------------------
-
-function drawSoftness(doc: jsPDF, report: SalesReport, startY: number): number {
-  const { hourAssumptions, unknownAnswers, untouchedFields } = report.softness;
-
-  let y = ensurePageSpace(doc, startY, 30);
-  y = drawSectionTitle(doc, 'Kje so številke trdne in kje ne', y);
-  y = drawMutedParagraph(
-    doc,
-    'Ta razdelek pove, katero številko je smiselno vzeti zares in katero je treba na sestanku najprej preveriti.',
-    y,
-  );
-
-  if (hourAssumptions.length > 0) {
-    y = drawTable(doc, {
-      head: ['Urna postavka', 'Vrednost', 'Vir'],
-      rows: hourAssumptions.map((row) => [
-        row.label,
-        formatEUR(row.valueEUR),
-        hourAssumptionSource(row),
-      ]),
-      startY: ensurePageSpace(doc, y, 22),
-      columnWidths: [82, 26],
-    });
-  }
-
-  if (unknownAnswers.length > 0) {
-    y = drawTable(doc, {
-      head: ['Odgovor "Ne vem"', 'Področje'],
-      rows: unknownAnswers.map((row) => [row.question, row.moduleTitle]),
-      startY: ensurePageSpace(doc, y, 22),
-      columnWidths: [120],
-    });
-  }
-
-  if (untouchedFields.length > 0) {
-    y = drawTable(doc, {
-      head: ['Ostalo na privzeti vrednosti', 'Področje'],
-      rows: untouchedFields.map((row) => [row.question, row.moduleTitle]),
-      startY: ensurePageSpace(doc, y, 22),
-      columnWidths: [120],
-      trailingNotes: [
-        'Ta polja v izračun vstopajo z ničlo ali privzetkom. Vsaka številka, ki jo stranka na sestanku doda, znesek zviša — nikoli zniža.',
-      ],
-    });
-  }
-
-  if (hourAssumptions.length === 0 && unknownAnswers.length === 0 && untouchedFields.length === 0) {
-    y = drawMutedParagraph(doc, 'Stranka je odgovorila na vsa vprašanja. Zneske je mogoče vzeti takšne, kot so.', y);
-  }
-
-  return y;
-}
-
-// --- Triaža ------------------------------------------------------------------
+// --- 3b. Njihovi največji painpointi -----------------------------------------
 
 function drawTriage(doc: jsPDF, report: SalesReport, startY: number): number {
   if (report.triage.length === 0) return startY;
 
   let y = ensurePageSpace(doc, startY, 30);
-  y = drawSectionTitle(doc, 'Kaj stranko tišči', y);
 
   const painfulUnmeasured = report.triage.filter((row) => !row.measured && row.score >= 2);
 
@@ -279,7 +242,8 @@ function drawAreas(doc: jsPDF, report: SalesReport, startY: number): number {
       rows: area.answers.map((row) => [
         row.contextOnly ? `${row.question} (kontekst)` : row.question,
         row.answer,
-        row.answered ? 'vneseno' : 'privzeto',
+        // Trdnost stoji OB številki, ne v ločenem razdelku dvajset vrstic niže.
+        row.source,
       ]),
       startY: ensurePageSpace(doc, y, 24),
       columnWidths: [104, 46],
@@ -338,7 +302,7 @@ function drawRisks(doc: jsPDF, report: SalesReport, startY: number): number {
   if (report.risks.length === 0) return startY;
 
   let y = ensurePageSpace(doc, startY, 30);
-  y = drawSectionTitle(doc, 'Podatki, procesna tveganja in roki', y);
+  y = drawSubTitle(doc, 'Podatki, procesna tveganja in roki', y);
 
   for (const risk of report.risks) {
     const level = risk.riskLevel ?? 'low';
@@ -379,11 +343,11 @@ function drawRisks(doc: jsPDF, report: SalesReport, startY: number): number {
 
 // --- Ukrepi ------------------------------------------------------------------
 
-function drawActions(doc: jsPDF, report: SalesReport, startY: number): void {
-  if (!report.actionPlan) return;
+function drawActions(doc: jsPDF, report: SalesReport, startY: number): number {
+  if (!report.actionPlan) return startY;
 
   let y = ensurePageSpace(doc, startY, 40);
-  y = drawSectionTitle(doc, report.actionPlan.headline, y);
+  y = drawSubTitle(doc, report.actionPlan.headline, y);
   y = drawMutedParagraph(
     doc,
     'Isti trije ukrepi so v strankinem poročilu. Stranka jih je torej že prebrala — na sestanku so izhodišče, ne novica.',
@@ -410,4 +374,244 @@ function drawActions(doc: jsPDF, report: SalesReport, startY: number): void {
     doc.text(lines, MARGIN + 9, y + 3.2);
     y += rowHeight;
   });
+
+  return y + 2;
+}
+
+// --- 1. Ocena — kvalifikacija stranke ----------------------------------------
+
+/**
+ * Sodba na vrh, utemeljitev na dno (glej drawIcp).
+ *
+ * Prodajnik mora v treh sekundah vedeti, ali je to A ali C; razčlenitev po
+ * dimenzijah ga takrat ne zanima.
+ */
+function drawScore(doc: jsPDF, report: SalesReport, startY: number): number {
+  const { icp } = report;
+  const deal = report.playbook.dealSizing;
+
+  let y = ensurePageSpace(doc, startY, 46);
+  y = drawSectionTitle(doc, 'Ocena — kvalifikacija stranke', y);
+
+  const cardHeight = 16;
+  y = ensurePageSpace(doc, y, cardHeight + 4);
+  doc.setFillColor(...PALETTE.cream);
+  doc.setDrawColor(...PALETTE.border);
+  doc.setLineWidth(0.2);
+  doc.roundedRect(MARGIN, y, CONTENT_WIDTH, cardHeight, 1.5, 1.5, 'FD');
+
+  setFont(doc, 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(...PALETTE.amber);
+  doc.text(`${icp.total} / 100 · pas ${icp.band}`, MARGIN + 5, y + 10);
+
+  setFont(doc, 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...PALETTE.textMuted);
+  doc.text(icp.bandNote, PAGE_WIDTH - MARGIN - 5, y + 10, { align: 'right' });
+  y += cardHeight + 5;
+
+  return drawTable(doc, {
+    head: ['', 'Ocena'],
+    rows: [
+      ['Velikost posla', `${deal.sizeLabel} (${report.qualification.sizeClass} zaposlenih)`],
+      ['Izmerjena letna bolečina', formatEUR(deal.measuredLossEUR)],
+      ['Nujnost', `${deal.urgency} — ${deal.urgencyReason}`],
+      ['Priporočena licenca', report.playbook.recommendedPantheon.licence.name],
+    ],
+    startY: ensurePageSpace(doc, y, 24),
+    columnWidths: [56],
+  });
+}
+
+// --- 3. Rezultati vprašalnika ------------------------------------------------
+
+/** Dva podnaslova v enem razdelku, da zgradba ostane petdelna. */
+function drawResults(doc: jsPDF, report: SalesReport, startY: number): number {
+  let y = ensurePageSpace(doc, startY, 30);
+  y = drawSectionTitle(doc, 'Rezultati vprašalnika', y);
+  y = drawSubTitle(doc, 'Njihove info', y);
+  y = drawSummary(doc, report, y);
+  y = drawHourAssumptions(doc, report, y);
+  y = drawAreas(doc, report, y);
+
+  y = drawSubTitle(doc, 'Njihovi največji painpointi', ensurePageSpace(doc, y, 24));
+  y = drawTriage(doc, report, y);
+  y = drawRisks(doc, report, y);
+  y = drawOpeningQuestions(doc, report, y);
+  return drawObjections(doc, report, y);
+}
+
+/** Podnaslov znotraj razdelka — brez rumene oznake, ki pripada le razdelkom. */
+function drawSubTitle(doc: jsPDF, title: string, y: number): number {
+  const next = ensurePageSpace(doc, y, 12);
+  setFont(doc, 'bold');
+  doc.setFontSize(10.5);
+  doc.setTextColor(...PALETTE.brandDark);
+  doc.text(title, MARGIN, next + 3);
+  return next + 8;
+}
+
+/** Urne postavke: niso odgovor na modul, zato svoja kratka tabela. */
+function drawHourAssumptions(doc: jsPDF, report: SalesReport, startY: number): number {
+  const rows = report.softness.hourAssumptions;
+  if (rows.length === 0) return startY;
+
+  return drawTable(doc, {
+    head: ['Urna postavka', 'Vrednost', 'Vir'],
+    rows: rows.map((row) => [row.label, formatEUR(row.valueEUR), hourAssumptionSource(row)]),
+    startY: ensurePageSpace(doc, startY, 22),
+    columnWidths: [82, 26],
+  });
+}
+
+function drawOpeningQuestions(doc: jsPDF, report: SalesReport, startY: number): number {
+  const questions = report.playbook.openingQuestions;
+  if (questions.length === 0) return startY;
+
+  let y = ensurePageSpace(doc, startY, 30);
+  y = drawSubTitle(doc, 'Kaj vprašati', y);
+  y = drawMutedParagraph(
+    doc,
+    'Po vrsti, od najmočnejše. Prva so področja, ki jih je stranka sama označila za boleča, a jih ni izmerila — zanje v poročilu ni nobenega zneska.',
+    y,
+  );
+
+  return drawTable(doc, {
+    head: ['Vprašajte', 'Zakaj prav to'],
+    rows: questions.map((item) => [item.question, item.why]),
+    startY: ensurePageSpace(doc, y, 24),
+    columnWidths: [104],
+  });
+}
+
+function drawRecommendation(doc: jsPDF, report: SalesReport, startY: number): number {
+  const fit = report.playbook.recommendedPantheon;
+
+  let y = ensurePageSpace(doc, startY, 40);
+  y = drawSectionTitle(doc, 'Priporočilo licenc glede na kriterije', y);
+
+  // Merila najprej: prodajnik mora videti, IZ ČESA je priporočilo izpeljano,
+  // preden prebere, kaj naj ponudi.
+  y = drawTable(doc, {
+    head: ['', 'Ocena'],
+    rows: [
+      ['Licenca', fit.licence.name],
+      ['Dejavnost', report.qualification.industryLabel],
+      ['Sedanji sistem', report.qualification.currentSystemLabel ?? '—'],
+      ['Velikost', `${report.qualification.sizeClass} zaposlenih`],
+    ],
+    startY: y,
+    columnWidths: [56],
+  });
+
+  if (fit.licence.note) {
+    y = drawMutedParagraph(doc, `Pozor: ${fit.licence.note}`, y);
+  }
+
+  setFont(doc, 'semibold');
+  doc.setFontSize(10);
+  doc.setTextColor(...PALETTE.brandDark);
+  const headlineLines = doc.splitTextToSize(fit.headline, CONTENT_WIDTH);
+  y = ensurePageSpace(doc, y, headlineLines.length * 5 + 2);
+  doc.text(headlineLines, MARGIN, y);
+  y += headlineLines.length * 5 + 2;
+
+  y = drawMutedParagraph(doc, fit.why, y);
+  if (fit.addresses.length > 0) {
+    y = drawMutedParagraph(doc, `Naslavlja: ${fit.addresses.join(' · ')}`, y, 8);
+  }
+  y = drawMutedParagraph(doc, fit.confirm, y, 7.5);
+
+  // "3 ukrepi" spadajo k ponudbi: ukrep brez ponudbe je nasvet, ki ga stranka že ima.
+  return drawActions(doc, report, y);
+}
+
+function drawObjections(doc: jsPDF, report: SalesReport, startY: number): number {
+  const objections = report.playbook.objections;
+  if (objections.length === 0) return startY;
+
+  let y = ensurePageSpace(doc, startY, 30);
+  y = drawSubTitle(doc, 'Kaj boste slišali in kaj odgovoriti', y);
+  y = drawMutedParagraph(
+    doc,
+    'Našteti so samo ugovori, ki iz njenih odgovorov res sledijo — ne seznam vseh možnih.',
+    y,
+  );
+
+  for (const objection of objections) {
+    y = ensurePageSpace(doc, y, 26);
+
+    setFont(doc, 'semibold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(...PALETTE.brandDark);
+    const objectionLines = doc.splitTextToSize(objection.objection, CONTENT_WIDTH);
+    doc.text(objectionLines, MARGIN, y);
+    y += objectionLines.length * 4.6 + 1;
+
+    y = drawMutedParagraph(doc, `Sproženo: ${objection.trigger}`, y, 7.5);
+
+    setFont(doc, 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(...PALETTE.text);
+    const answerLines = doc.splitTextToSize(objection.answer, CONTENT_WIDTH);
+    y = ensurePageSpace(doc, y, answerLines.length * 4.6 + 4);
+    doc.text(answerLines, MARGIN, y);
+    y += answerLines.length * 4.6 + 5;
+  }
+
+  return y;
+}
+
+// --- Velikost posla in ICP ocena ---------------------------------------------
+
+
+/**
+ * Ocena ustreznosti idealnemu profilu.
+ *
+ * Na dnu in z razčlenitvijo: skupno število brez utemeljitev je neuporabno pri
+ * pogovoru in neuravnavljivo pozneje. Merila so v config/icp.ts.
+ */
+function drawIcp(doc: jsPDF, report: SalesReport, startY: number): void {
+  const { icp } = report;
+
+  let y = ensurePageSpace(doc, startY, 40);
+  y = drawSectionTitle(doc, 'Kvalifikacija stranke — podrobnejša razlaga', y);
+
+  // Skupna ocena kot kartica, da je vidna na prvi pogled.
+  const cardHeight = 16;
+  y = ensurePageSpace(doc, y, cardHeight + 4);
+  doc.setFillColor(...PALETTE.cream);
+  doc.setDrawColor(...PALETTE.border);
+  doc.setLineWidth(0.2);
+  doc.roundedRect(MARGIN, y, CONTENT_WIDTH, cardHeight, 1.5, 1.5, 'FD');
+
+  setFont(doc, 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(...PALETTE.amber);
+  doc.text(`${icp.total} / 100 · pas ${icp.band}`, MARGIN + 5, y + 10);
+
+  setFont(doc, 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...PALETTE.textMuted);
+  doc.text(icp.bandNote, PAGE_WIDTH - MARGIN - 5, y + 10, { align: 'right' });
+  y += cardHeight + 5;
+
+  y = drawTable(doc, {
+    head: ['Dimenzija', 'Točke', 'Iz česa'],
+    rows: icp.dimensions.map((dimension) => [
+      dimension.label,
+      `${Math.round(dimension.points)} / ${Math.round(dimension.weight * 100)}`,
+      dimension.note,
+    ]),
+    startY: ensurePageSpace(doc, y, 24),
+    columnWidths: [44, 20],
+  });
+
+  drawMutedParagraph(
+    doc,
+    'Merila so začetne ocene brez empirije in se uravnavajo v src/config/icp.ts. Ocena pove ustreznost profilu, ne kakovosti podjetja.',
+    y,
+    7.5,
+  );
 }

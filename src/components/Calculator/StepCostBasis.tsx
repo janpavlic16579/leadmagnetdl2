@@ -3,6 +3,8 @@ import type {
   BusinessProfile,
   CostAssumption,
   CostQuestion,
+  ScaleAssumption,
+  ScaleQuestion,
   SegmentContext,
 } from '../../config/contexts';
 import buttonStyles from '../../styles/buttons.module.css';
@@ -61,6 +63,21 @@ export function StepCostBasis({
             question={context.chargeOutRate}
             value={profile.chargeOutRate}
             onChange={(chargeOutRate) => onChange({ ...profile, chargeOutRate })}
+          />
+        )}
+        {/* Prihodek in marža: osnova za vsak odstotek v nadaljevanju vprašalnika. */}
+        {context.annualRevenue && (
+          <ScaleField
+            question={context.annualRevenue}
+            value={profile.annualRevenue}
+            onChange={(annualRevenue) => onChange({ ...profile, annualRevenue })}
+          />
+        )}
+        {context.contributionMargin && (
+          <ScaleField
+            question={context.contributionMargin}
+            value={profile.contributionMargin}
+            onChange={(contributionMargin) => onChange({ ...profile, contributionMargin })}
           />
         )}
       </div>
@@ -136,6 +153,76 @@ function CostField({ question, value, onChange }: CostFieldProps) {
                 name={groupId}
                 checked={selectedBand?.id === band.id}
                 onChange={() => onChange({ valueEUR: band.midpointEUR, estimated: true })}
+              />
+              <span>{band.label}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+    </div>
+  );
+}
+
+interface ScaleFieldProps {
+  question: ScaleQuestion;
+  value: ScaleAssumption;
+  onChange: (value: ScaleAssumption) => void;
+}
+
+/**
+ * Prihodek in marža. Ista razporeditev kot pri urni postavki (natančen vnos zgoraj,
+ * razponi spodaj), a s pretvorbo za deleže: marža se hrani kot ulomek in prikaže kot
+ * odstotek — enako pravilo kot pri poljih kind 'percent' v modulih.
+ */
+function ScaleField({ question, value, onChange }: ScaleFieldProps) {
+  const groupId = useId();
+  const selectedBand = value.estimated
+    ? question.bands.find((band) => band.midpoint === value.value)
+    : undefined;
+
+  const toDisplay = (raw: number) => (question.asPercent ? Math.round(raw * 1000) / 10 : raw);
+  const fromDisplay = (shown: number) => (question.asPercent ? shown / 100 : shown);
+
+  return (
+    <div className={styles.field}>
+      <label className={styles.label} htmlFor={`${groupId}-input`}>
+        {question.label}
+      </label>
+      <p className={styles.help}>{question.help}</p>
+
+      <div className={styles.inputRow}>
+        <input
+          id={`${groupId}-input`}
+          className={styles.input}
+          type="number"
+          min={0}
+          inputMode="numeric"
+          placeholder={question.asPercent ? 'npr. 25' : 'npr. 2000000'}
+          value={value.estimated || !value.value ? '' : toDisplay(value.value)}
+          onChange={(event) =>
+            onChange(
+              event.target.value === ''
+                ? { value: question.fallback, estimated: true }
+                : { value: fromDisplay(Number(event.target.value)), estimated: false },
+            )
+          }
+        />
+        <span className={styles.unit}>{question.unit}</span>
+      </div>
+
+      <fieldset className={styles.bands}>
+        <legend className={styles.bandsLegend}>Ne vem — izberi razpon</legend>
+        <div className={styles.bandOptions}>
+          {question.bands.map((band) => (
+            <label
+              key={band.id}
+              className={`${styles.band} ${selectedBand?.id === band.id ? styles.bandActive : ''}`}
+            >
+              <input
+                type="radio"
+                name={groupId}
+                checked={selectedBand?.id === band.id}
+                onChange={() => onChange({ value: band.midpoint, estimated: true })}
               />
               <span>{band.label}</span>
             </label>

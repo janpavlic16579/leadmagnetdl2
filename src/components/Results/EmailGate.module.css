@@ -30,8 +30,65 @@
   margin-bottom: var(--space-4);
 }
 
+/*
+ * Ime in priimek drug ob drugem. auto-fit/minmax je idiom te kode (StepContext,
+ * StepCostBasis, StepTriage, ResultsSummary) — stolpca se zložita sama, brez
+ * medijske poizvedbe. Notranja širina kartice je ~30rem, dva stolpca po 12rem z
+ * razmikom 16px pa 25rem: na namizju drug ob drugem, na ozkem telefonu zložena.
+ */
+.nameRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+/* Sicer bi se lastni rob polja seštel z razmikom mreže, ko se stolpca zložita. */
+.nameRow .formRow {
+  margin-bottom: 0;
+}
+
 .formLabel {
   font-weight: 600;
+}
+
+/* Neobvezno in zvezdica za obvezno — oboje mora biti vidno, ne le v glavi razvijalca. */
+.optional,
+.required {
+  font-weight: 400;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.hint {
+  font-size: var(--font-size-sm);
+  color: var(--color-danger);
+  margin: 0;
+}
+
+.consentGroup {
+  border: 0;
+  margin: 0 0 var(--space-2);
+  padding: 0;
+}
+
+.consentLegend {
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: var(--space-3);
+}
+
+/* Obvezna privolitev je ločena od neobveznih, da razlika ni le v zvezdici. */
+.consentOptional {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.requiredNote {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-4);
 }
 
 .input {

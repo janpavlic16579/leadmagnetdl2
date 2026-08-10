@@ -273,6 +273,7 @@ export const obseg: ModuleDefinition = {
       kind: 'number',
       unit: 'h/mesec',
       default: 0,
+      help: 'Popravki med izvedbo projekta. Servis in garancijska popravila po predaji sodijo v področje Reklamacije in poprodajni servis.',
     },
     {
       key: 'writeOffEUR',

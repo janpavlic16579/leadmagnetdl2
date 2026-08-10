@@ -19,7 +19,15 @@ import { resolveInputs } from '../../lib/moduleEngine';
  * evro se ne pojavi v dveh področjih.
  */
 
-const CONTEXT: ComputeContext = { operationalHourCostEUR: 24, adminHourCostEUR: 32, chargeOutRateEUR: 75 };
+const CONTEXT: ComputeContext = {
+  operationalHourCostEUR: 24,
+  adminHourCostEUR: 32,
+  chargeOutRateEUR: 75,
+  // Ta segment prihodek vpraša kot svoje polje modula (glej terjatve), iz konteksta
+  // ga ne bere — zato 0. Sicer bi test meril nekaj, česar modul ne uporablja.
+  annualRevenueEUR: 0,
+  contributionMarginRate: 0,
+};
 const MONTHS = 12;
 
 function run(definition: ModuleDefinition, overrides: Record<string, number> = {}): ModuleOutputDraft[] {

@@ -25,6 +25,10 @@ const CONTEXT: ComputeContext = {
   // Splošni segment ur ne prodaja po ceniku — postavka je tu samo zato, ker je v
   // ComputeContext obvezna. Noben izid je ne sme uporabiti.
   chargeOutRateEUR: 90,
+  // Ta segment prihodek vpraša kot svoje polje modula (glej terjatve), iz konteksta
+  // ga ne bere — zato 0. Sicer bi test meril nekaj, česar modul ne uporablja.
+  annualRevenueEUR: 0,
+  contributionMarginRate: 0,
 };
 const MONTHS = 12;
 

@@ -19,7 +19,20 @@ export interface LeadExportRecord {
   employeeCount: number;
   companyName: string;
   email: string;
+  /** Literalni true in ne boolean: zapis brez obvezne privolitve ne sme obstajati. */
   gdprConsent: true;
+  /**
+   * Kontakt iz obrazca. Brez teh polj bi modul dejavno zavajal: obrazec zbere šest
+   * kontaktnih podatkov, kdor ga ožiči, pa bi tri tiho izgubil.
+   */
+  firstName: string;
+  lastName: string;
+  /** Neobvezna, zato prazen niz. */
+  phone: string;
+  /** Neobvezna in normalizirana (brez presledkov in predpone SI). */
+  taxNumber: string;
+  consentOffers: boolean;
+  consentContent: boolean;
   /** Moduli, ki so bili dejansko izračunani. */
   selectedModules: string[];
   /** Ocene VSEH modulov iz triaže — "stalno prestavljamo naloge" je signal tudi brez evrov. */
@@ -60,7 +73,7 @@ export function downloadAsJson(record: LeadExportRecord): void {
  * Novi stolpci se dodajajo NA KONEC. Vsaka obstoječa preslikava je pozicijska,
  * zato bi vrivanje na sredino tiho premaknilo vse za njim.
  */
-const CSV_COLUMNS = [
+export const CSV_COLUMNS = [
   'timestampISO',
   'segment',
   'industry',
@@ -93,6 +106,14 @@ const CSV_COLUMNS = [
   'operationalHourCostEUR',
   'adminHourCostEUR',
   'hourCostsEstimated',
+  // Kontakt je dodan NA KONEC, čeprav vsebinsko sodi k companyName: vrivanje na
+  // sredino bi tiho premaknilo vsako obstoječo pozicijsko preslikavo v CRM-ju.
+  'firstName',
+  'lastName',
+  'phone',
+  'taxNumber',
+  'consentOffers',
+  'consentContent',
 ] as const;
 
 /** Prazna celica namesto "0" — segment brez te vrednosti je ni izračunal, ni je izmeril kot nič. */
@@ -107,10 +128,15 @@ function csvEscape(value: string): string {
   return value;
 }
 
-export function downloadAsCsv(record: LeadExportRecord): void {
+/**
+ * Vrstica CSV, izluščena iz prenosa, da lahko test trdi enako dolžino kot
+ * CSV_COLUMNS. Dodajanje samo v eno od obeh polj tiho zamakne vse za njim —
+ * natanko napaka, pred katero svari opomba nad seznamom stolpcev.
+ */
+export function buildCsvRow(record: LeadExportRecord): string[] {
   const risks = record.outputs.filter((output) => output.bucket === 'risk');
 
-  const row = [
+  return [
     record.timestampISO,
     record.segment,
     record.industry,
@@ -143,9 +169,17 @@ export function downloadAsCsv(record: LeadExportRecord): void {
     optionalRounded(record.profile?.adminHour.valueEUR),
     // Prodaja mora vedeti, ali sta urni postavki podatek ali le izbran razpon.
     record.profile ? String(record.profile.operationalHour.estimated || record.profile.adminHour.estimated) : '',
+    record.firstName,
+    record.lastName,
+    record.phone,
+    record.taxNumber,
+    String(record.consentOffers),
+    String(record.consentContent),
   ].map((value) => csvEscape(value));
+}
 
-  const csv = `${CSV_COLUMNS.join(',')}\n${row.join(',')}`;
+export function downloadAsCsv(record: LeadExportRecord): void {
+  const csv = `${CSV_COLUMNS.join(',')}\n${buildCsvRow(record).join(',')}`;
   const filename = `datalab-lead-${record.segment}-${record.timestampISO.slice(0, 10)}.csv`;
   triggerDownload(filename, csv, 'text/csv');
 }

@@ -21,6 +21,7 @@ interface ScenarioOptions {
   inputs?: Record<string, Record<string, number>>;
   currentSystem?: string | null;
   exactHours?: boolean;
+  taxNumber?: string;
 }
 
 /** Sestavi poročilo za dani segment po isti poti kot CalculatorFlow. */
@@ -51,14 +52,22 @@ function reportFor(segmentId: SegmentId, options: ScenarioOptions = {}) {
   const outputs = computeModules(activeModules, values, buildComputeContext(profile));
   const totals = aggregateResults(outputs, {
     band: context ? improvementBandFor(context, profile.currentSystem) : undefined,
-    confidence: context ? assessConfidence({ profile, context, modules: activeModules, values }) : undefined,
+    confidence: context
+      ? assessConfidence({ profile, context, modules: activeModules, values, outputs })
+      : undefined,
   });
 
   const params: BuildSalesReportParams = {
     generatedAtISO: STAMP,
-    companyName: 'Testno podjetje d.o.o.',
-    email: 'test@example.com',
-    gdprConsent: true,
+    contact: {
+      firstName: 'Janez',
+      lastName: 'Novak',
+      companyName: 'Testno podjetje d.o.o.',
+      email: 'test@example.com',
+      phone: '+386 1 234 5678',
+      taxNumber: options.taxNumber ?? '12345679',
+    },
+    consents: { consentProcessing: true, consentOffers: true, consentContent: false },
     utmSource: 'linkedin',
     industry: INDUSTRIES.find((i) => i.segment === segmentId)?.id ?? '',
     employeeCount: 45,
@@ -124,9 +133,8 @@ describe('Poročilo se sestavi za vsako dejavnost', () => {
     const segmentModules = getModules(segment.moduleIds);
     const report = buildSalesReport({
       generatedAtISO: STAMP,
-      companyName: '',
-      email: '',
-      gdprConsent: true,
+      contact: { firstName: '', lastName: '', companyName: '', email: '', phone: '', taxNumber: '' },
+      consents: { consentProcessing: true, consentOffers: false, consentContent: false },
       utmSource: null,
       industry: 'trgovina',
       employeeCount: 12,
@@ -138,7 +146,14 @@ describe('Poročilo se sestavi za vsako dejavnost', () => {
       values: {},
       triageScores: {},
       outputs: [],
-      totals: { directLossEUR: 0, capacityEUR: 0, capacityHoursPerMonth: 0, oneTimeCapitalEUR: 0, risks: [] },
+      totals: {
+        directLossEUR: 0,
+        lostMarginEUR: 0,
+        capacityEUR: 0,
+        capacityHoursPerMonth: 0,
+        oneTimeCapitalEUR: 0,
+        risks: [],
+      },
       highestModule: null,
       followUpSequence: 'low-loss-newsletter',
     });
@@ -292,11 +307,39 @@ describe('Triaža in izmerjena področja', () => {
 });
 
 describe('Zapis ne izgubi podatkov, ki jih je tok doslej zavrgel', () => {
-  it('e-naslov, privolitev in vir kampanje so v poročilu', () => {
+  it('vsa kontaktna polja pristanejo v zapisu', () => {
+    // Edini test, ki ujame polje, pozabljeno v razširjanju (spread) v buildSalesReport:
+    // manjkajoče polje se tam ne pozna ne pri prevajanju ne v izrisu.
     const report = reportFor('trgovina');
+    expect(report.meta.firstName).toBe('Janez');
+    expect(report.meta.lastName).toBe('Novak');
+    expect(report.meta.companyName).toBe('Testno podjetje d.o.o.');
     expect(report.meta.email).toBe('test@example.com');
-    expect(report.meta.gdprConsent).toBe(true);
+    expect(report.meta.phone).toBe('+386 1 234 5678');
+    expect(report.meta.taxNumber).toBe('12345679');
+  });
+
+  it('vse tri privolitve so ločene, ne združene v eno zastavico', () => {
+    const report = reportFor('trgovina');
+    expect(report.meta.consentProcessing).toBe(true);
+    expect(report.meta.consentOffers).toBe(true);
+    expect(report.meta.consentContent).toBe(false);
+  });
+
+  it('vir kampanje in časovni žig sta v poročilu', () => {
+    const report = reportFor('trgovina');
     expect(report.meta.utmSource).toBe('linkedin');
     expect(report.meta.generatedAtISO).toBe(STAMP);
+  });
+
+  it('dvom o davčni potuje s podatkom, ne ostane v obrazcu', () => {
+    // Napačna davčna oddaje ne blokira, zato mora opozorilo priti tja, kjer ga
+    // vidi svetovalec — sicer se napaka tiho preseli v CRM.
+    expect(reportFor('trgovina').meta.taxNumberLooksValid).toBe(true);
+    expect(reportFor('trgovina', { taxNumber: '12345678' }).meta.taxNumberLooksValid).toBe(false);
+  });
+
+  it('nevnesena davčna ne velja za sumljivo', () => {
+    expect(reportFor('trgovina', { taxNumber: '' }).meta.taxNumberLooksValid).toBe(true);
   });
 });

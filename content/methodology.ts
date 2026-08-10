@@ -153,11 +153,17 @@ export const MODULE_METHODOLOGY: Record<string, ModuleMethodology> = {
     rationale:
       'Marža se v maloprodaji izgublja po centih na artikel, zato je vprašana kot delež nabavne vrednosti in ne kot znesek, ki ga nihče ne knjiži. Ure vzdrževanja cenikov so že plačan čas vodij — sproščene ure ne znižajo plačne mase, zato so kapaciteta in ne denar, ki odteka.',
   },
-  mankoMp: {
+  razpolozljivostMp: {
     formula:
-      'letni prihodek × delež inventurne razlike; + stroški vračil in blagajniških napak; ure razčiščevanja × strošek administrativne ure × 12',
+      'letni prihodek × delež izgubljene prodaje × prispevna marža × (1 − delež nadomeščenih nakupov); + ekspresne dobave; ure iskanja zaloge × strošek ure v poslovalnici × 12',
     rationale:
-      'Manko se meri kot delež prihodka, ker se tako tudi ugotavlja — ob inventuri, za nazaj. Šteje se samo NEZNANA razlika: znano odpisano, poteklo ali znižano blago je že v področju Zaloge. Prav razlika med obojim pove, ali gre za proces ali za krajo.',
+      'Izgubljena prodaja se vpiše kot delež prometa in ne kot znesek marže — promet trgovec pozna, maržo pa izpelje kalkulator iz skupne finančne osnove. Kdor kupi nadomestni artikel, ni izgubljen kupec, zato se ta delež odšteje; brez tega bi bila prazna polica ovrednotena kot popolna izguba nakupa. Ekspresne dobave so ločen izid, ker so denar, ki odteče, in ne nezaslužena marža.',
+  },
+  blagajnaMp: {
+    formula:
+      'blagajne × minute zaključka × 305 odprtih dni ÷ 60 × strošek ure v poslovalnici; + inventurni manko; ure inventur × strošek ure v poslovalnici',
+    rationale:
+      'Manko se vpiše v evrih, kot je bil ugotovljen ob inventuri, in ne izpelje iz odstotka prometa — odstotek je videti natančen, čeprav je ugibanje. Šteje se samo NEZNANA razlika: znano odpisano, poteklo ali znižano blago je že v področju Presežna zaloga. Prav razlika med obojim pove, ali gre za proces ali za krajo. Zaključek blagajne se vpraša po ENI blagajni, ker je to edina številka, ki jo je mogoče izmeriti z uro v roki.',
   },
   prevzemMp: {
     formula:
@@ -283,5 +289,37 @@ export const MODULE_METHODOLOGY: Record<string, ModuleMethodology> = {
     formula: 'ocena tveganja iz štirih odgovorov — brez zneska',
     rationale:
       'Kjer podjetje ne pozna lastne cene ali nima sledljivosti, natančnega zneska ni mogoče izračunati — prav to je težava. Navidezno natančna številka bi jo skrila, zato prikazujemo stopnjo tveganja in ne evrov.',
+  },
+
+  // --- Horizontalna področja (v več segmentih) --------------------------------
+  analitikaHz: {
+    formula:
+      '(priprava rednih poročil + izredne analize + združevanje podatkov) × strošek administrativne ure × 12',
+    rationale:
+      'Vsaka od treh vrst dela je prikazana posebej, da je vidno, kje ročno delo dejansko nastaja. Ure, vpisane v drugem področju, se tu ne ponavljajo — ista ura se nikoli ne šteje dvakrat.',
+  },
+  financeHz: {
+    formula:
+      '(knjiženje in priprava dokumentov + usklajevanje + obračuni in poročanje) × strošek administrativne ure × 12; + letne zamudne obresti, globe in popravki',
+    rationale:
+      'Ure so že plačan čas ekipe in zato kapaciteta, obresti in globe pa denar, ki odteče — zato sta ločena. Opominjanje kupcev sem ne sodi: to meri področje terjatev, sicer bi bila ista ura šteta dvakrat.',
+  },
+  kadriHz: {
+    formula:
+      '(evidence ur + priprava obračuna plač + kadrovska administracija) × strošek administrativne ure × 12; + letni stroški napačnih obračunov',
+    rationale:
+      'Ure so že plačan čas ekipe in zato kapaciteta, poračuni in zamudne obresti pa denar, ki odteče — zato sta ločena. Rezultat je vrednost izgubljene kapacitete, ne prihranek pri plačah.',
+  },
+  dokumentiHz: {
+    formula:
+      '(potrjevanje + iskanje in arhiviranje + tiskanje in ročno pošiljanje) × strošek administrativne ure × 12; + letni stroški izgubljenih in prepozno potrjenih dokumentov',
+    rationale:
+      'Ure so že plačan čas ekipe in zato kapaciteta, zamujeni skonti in obresti pa denar, ki odteče — zato sta ločena. Ure, vpisane v drugem področju, se tu ne ponavljajo.',
+  },
+  servisHz: {
+    formula:
+      'servisni posegi × strošek neposredne ure × 12; vodenje postopka × strošek administrativne ure × 12; + letni stroški nadomestnih delov, zunanjega servisa in kulance',
+    rationale:
+      'Servisni poseg opravi tisti, ki sicer proizvaja ali izvaja storitev, zato se vrednoti po neposredni uri; vodenje postopka je pisarniško delo po administrativni. Dobropisi, vračila kupnine in poškodovano blago sem ne sodijo — te meri panožno področje, sicer bi bil isti evro štet dvakrat.',
   },
 };

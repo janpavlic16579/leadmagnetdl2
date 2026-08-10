@@ -49,10 +49,11 @@ export function ResultsView({
       return {
         name: definition.title,
         directLossEUR: sumBucket('directLoss'),
+        lostMarginEUR: sumBucket('lostMargin'),
         capacityEUR: sumBucket('capacity'),
       };
     })
-    .filter((datum) => datum.directLossEUR > 0 || datum.capacityEUR > 0);
+    .filter((datum) => datum.directLossEUR > 0 || datum.lostMarginEUR > 0 || datum.capacityEUR > 0);
 
   return (
     <div className={styles.wrap}>
@@ -71,7 +72,14 @@ export function ResultsView({
         <div className={styles.card}>
           <h2 className={styles.sectionTitle}>Razčlenitev po področjih</h2>
           <BreakdownChart data={chartData} />
-          <Breakdown modules={modules} outputsByModule={outputsByModule} buckets={['directLoss']} />
+          {/* Oba letna denarna koša v istem seznamu: postavke so poimenovane tako,
+              da je razlika vidna, ločena razdelka pa bi isto področje razbila na
+              dva bloka in razčlenitev bi izgubila smisel. */}
+          <Breakdown
+            modules={modules}
+            outputsByModule={outputsByModule}
+            buckets={['directLoss', 'lostMargin']}
+          />
         </div>
       ) : null}
 

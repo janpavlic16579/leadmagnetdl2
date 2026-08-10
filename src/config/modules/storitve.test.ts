@@ -21,6 +21,11 @@ const CONTEXT: ComputeContext = {
   operationalHourCostEUR: 50,
   adminHourCostEUR: 35,
   chargeOutRateEUR: 90,
+  // Prihodek in marža sta obvezna v ComputeContext, moduli tega segmenta pa ju iz
+  // konteksta ne berejo. 0 in ne izmišljena vrednost: promet, ki ga ni, ne sme
+  // ustvariti zneska, če ga kak izid vseeno uporabi.
+  annualRevenueEUR: 0,
+  contributionMarginRate: 0,
 };
 const MONTHS = 12;
 

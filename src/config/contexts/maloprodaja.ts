@@ -1,5 +1,5 @@
 import { ADMIN_HOUR_BANDS } from './shared';
-import type { CostBand, SegmentContext } from './contextTypes';
+import type { CostBand, ScaleBand, SegmentContext } from './contextTypes';
 
 /**
  * Ura v poslovalnici je bistveno cenejša od proizvodne, zato ima svoje razpone.
@@ -13,12 +13,41 @@ const SHOP_HOUR_BANDS: CostBand[] = [
   { id: 'nad32', label: 'Več kot 32 EUR', midpointEUR: 38 },
 ];
 
+/**
+ * Razponi prihodka pokrivajo ciljni razred (mikro trgovina do manjše verige).
+ * Sredina je geometrijska in ne aritmetična: pri razponu 3–10 mio je 6,5 mio bližje
+ * dejanski porazdelitvi kot 6,5 mio bi bilo pri enakomerni — trgovcev s 3,5 mio je
+ * bistveno več kot tistih z 9,5 mio.
+ *
+ * KALIBRACIJA: začetne ocene, preveriti po prvih ~50 vnosih.
+ */
+const REVENUE_BANDS: ScaleBand[] = [
+  { id: 'do1mio', label: 'Do 1 mio EUR', midpoint: 600_000 },
+  { id: '1do3mio', label: '1–3 mio EUR', midpoint: 1_800_000 },
+  { id: '3do10mio', label: '3–10 mio EUR', midpoint: 5_500_000 },
+  { id: 'nad10mio', label: 'Več kot 10 mio EUR', midpoint: 15_000_000 },
+];
+
+/**
+ * Prispevna marža, ne bruto marža in ne pribitek.
+ *
+ * Razponi izhajajo iz scenarijev raziskave (konzervativno 22 %, realistično 27 %,
+ * potencial 30 %), razširjeni navzdol za živila in tehniko, kjer je prispevna marža
+ * po stroških kanala pogosto pod 20 %.
+ */
+const MARGIN_BANDS: ScaleBand[] = [
+  { id: 'do15', label: 'Do 15 %', midpoint: 0.12 },
+  { id: '15do25', label: '15–25 %', midpoint: 0.2 },
+  { id: '25do35', label: '25–35 %', midpoint: 0.3 },
+  { id: 'nad35', label: 'Več kot 35 %', midpoint: 0.42 },
+];
+
 export const MALOPRODAJA_CONTEXT: SegmentContext = {
   title: 'Nekaj o vaši maloprodaji',
   intro:
     'Tri vprašanja, ki ne sprašujejo po številkah. Iz njih izpeljemo, koliko od izmerjenega stroška je realno mogoče nasloviti — trgovec, ki ima blagajno že povezano z zalogami, je lažje izboljšave namreč večinoma že pobral.',
   costBasisIntro:
-    'Dve številki, ki veljata za vsa področja. Polni strošek pomeni bruto plačo z vsemi prispevki in režijo, ne neto izplačila.',
+    'Štiri številke, ki veljajo za vsa področja. Polni strošek ure pomeni bruto plačo z vsemi prispevki in režijo, ne neto izplačila. Prihodek in maržo vprašamo enkrat, ker se iz njiju računa vsak odstotek v nadaljevanju.',
 
   businessType: {
     legend: 'Kako pretežno prodajate?',
@@ -80,5 +109,22 @@ export const MALOPRODAJA_CONTEXT: SegmentContext = {
     help: 'Vodja poslovalnice, nabava, kategorijski vodja, priprava cen in akcij.',
     bands: ADMIN_HOUR_BANDS,
     fallbackEUR: 32,
+  },
+
+  annualRevenue: {
+    label: 'Letni prihodek od prodaje blaga',
+    help: 'Neto, brez DDV, vse poslovalnice in kanali skupaj. Če razpona ne izberete, odstotkovnih izgub ne bomo ocenili — prometa si ne izmišljamo.',
+    bands: REVENUE_BANDS,
+    fallback: 0,
+    unit: 'EUR/leto',
+  },
+
+  contributionMargin: {
+    label: 'Povprečna prispevna marža',
+    help: 'Kar ostane od prodajne cene po nabavni vrednosti in neposrednih stroških kanala (provizije, kartice, dostava). Ni pribitek na nabavno ceno.',
+    bands: MARGIN_BANDS,
+    fallback: 0.25,
+    unit: '%',
+    asPercent: true,
   },
 };

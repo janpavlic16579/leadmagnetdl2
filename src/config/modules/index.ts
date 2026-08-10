@@ -1,3 +1,4 @@
+import { HORIZONTAL_MODULES } from './horizontal';
 import { LEGACY_MODULES } from './legacy';
 import { LOGISTIKA_MODULES } from './logistika';
 import { MALOPRODAJA_MODULES } from './maloprodaja';
@@ -27,6 +28,7 @@ export const ALL_MODULES: ModuleDefinition[] = [
   ...STORITVE_MODULES,
   ...RACUNOVODSTVO_MODULES,
   ...SPLOSNO_MODULES,
+  ...HORIZONTAL_MODULES,
 ];
 
 export const MODULE_REGISTRY: Record<string, ModuleDefinition> = Object.fromEntries(

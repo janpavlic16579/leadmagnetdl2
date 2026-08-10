@@ -107,6 +107,7 @@ function Field({
           helpText={field.help}
           value={value}
           unit={field.unit}
+          allowUnknown={field.allowUnknown}
           onChange={(next) => onChange(field.key, next)}
         />
       );

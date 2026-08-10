@@ -1,15 +1,16 @@
 import { addressableShareOf, mainCauseField, type CauseOption } from './addressableShare';
 import {
   ASSURANCE_CHOICES,
+  INVENTORY_CAPITAL_COST,
   MONTHS_PER_YEAR,
   reducibleShareField,
   reducibleShareOf,
   riskLevelFromScore,
 } from './shared';
-import type { ModuleDefinition, RiskLevel } from './moduleTypes';
+import type { ModuleDefinition, ModuleField, RiskLevel } from './moduleTypes';
 
 /**
- * Pet medsebojno izključujočih se stroškovnih področij za maloprodajo.
+ * Šest medsebojno izključujočih se stroškovnih področij za maloprodajo.
  *
  * Zgrajeno po istem vzorcu kot proizvodnja — z istima načeloma, ki ju je treba
  * ohraniti ob vsaki spremembi:
@@ -22,70 +23,109 @@ import type { ModuleDefinition, RiskLevel } from './moduleTypes';
  *    besedilih help, ne le v komentarjih — obiskovalec je edini, ki jih lahko
  *    upošteva pri vnosu.
  *
- * Najostrejša meja v maloprodaji je med ZNANO in NEZNANO izgubo blaga:
- * odpisano, poteklo in prisilno znižano blago je področje Zaloge (vemo, kaj se je
- * zgodilo), inventurni manko pa področje Blagajna (ne vemo). Trgovec obe številki
- * pozna ločeno, v enem znesku pa bi bila razlika izgubljena — z njo pa tudi vsak
- * ukrep, ki iz nje sledi.
+ * Tri ločnice, ki jih postavlja panožna raziskava in jih ni dovoljeno zabrisati:
  *
- * Strošek ure v poslovalnici in administrativne ure prideta iz konteksta: sta
- * lastnost podjetja, ne področja, in se vprašata enkrat v svojem koraku.
+ * - PRAZNA POLICA proti PRESEŽNI ZALOGI. To sta nasprotna problema z nasprotnima
+ *   vzrokoma (premalo oziroma preveč naročenega) in ju en sam "glavni vzrok" ne
+ *   more opisati. Zato dve področji in ne eno (§8.4).
+ * - ZNANA proti NEZNANI izgubi blaga. Odpisano, poteklo in prisilno znižano blago
+ *   je področje Presežna zaloga (vemo, kaj se je zgodilo), inventurni manko pa
+ *   področje Blagajna (ne vemo). V enem znesku bi bila razlika izgubljena — z njo
+ *   pa vsak ukrep, ki iz nje sledi.
+ * - ODTEKEL DENAR proti NEZASLUŽENI MARŽI. Odpis je na kontu, izgubljena marža
+ *   stoji na predpostavki o kupčevem vedenju. Zato ločena koša (glej BucketId).
+ *
+ * Prihodek, prispevna marža in strošek ure pridejo iz konteksta: so lastnost
+ * podjetja, ne področja, in se vprašajo enkrat v svojem koraku.
  */
 
-// --- 1. Zaloge, police in odpisi --------------------------------------------
+/**
+ * Trgovina je odprta približno šest dni na teden.
+ *
+ * KALIBRACIJA: 305 dni je zaokroženo navzdol (živilske trgovine so odprte več,
+ * specializirane manj). Napaka je namerno v smeri nižjega zneska.
+ */
+const OPEN_DAYS_PER_YEAR = 305;
 
-const ZALOGE_CAUSES: CauseOption[] = [
+const MINUTES_PER_HOUR = 60;
+
+// --- 1. Prazne police in nedobavljivi artikli --------------------------------
+
+const POLICE_CAUSES: CauseOption[] = [
   { label: 'Naročamo po oceni, ne po podatkih o prodaji', category: 'planning' },
   { label: 'Stanje zalog v sistemu ni zanesljivo', category: 'data' },
-  { label: 'Podatki o artiklih in dobavnih rokih niso ažurni', category: 'data' },
-  { label: 'Dobavitelji so nezanesljivi', category: 'external' },
-  { label: 'Zalogo zavestno držimo kot varovalko', category: 'people' },
+  { label: 'Ne vidimo zaloge v drugih poslovalnicah ali skladišču', category: 'data' },
+  { label: 'Police ne dopolnjujemo dovolj hitro', category: 'people' },
+  { label: 'Dobavitelji zamujajo ali dobavijo le del naročila', category: 'external' },
 ];
 
-export const zalogeMp: ModuleDefinition = {
-  id: 'zalogeMp',
-  title: 'Zaloge, police in odpisi',
+/**
+ * Deleži nadomeščenega ali odloženega nakupa za izbrane indekse.
+ *
+ * Brez tega vprašanja bi vsak izgubljen obisk štel kot izgubljena marža, kar je
+ * najpogostejši način, kako kalkulatorji precenijo stockout: velik del kupcev vzame
+ * drug artikel ali se vrne. "Ne vem" pade na sredino razpona iz raziskave (A06).
+ */
+const SUBSTITUTION_SHARES = [0.7, 0.5, 0.2, 0.45];
+
+const substitutionField: ModuleField = {
+  key: 'substitutionShare',
+  label: 'Kolikšen del teh kupcev kupi drug artikel pri vas ali se vrne pozneje?',
+  kind: 'choice',
+  default: 3,
+  help: 'Ta del prodaje ni izgubljen, zato ga od izgubljene marže odštejemo.',
+  choices: [
+    { value: 0, label: 'Skoraj vsi — nad 60 %' },
+    { value: 1, label: 'Približno polovica' },
+    { value: 2, label: 'Manjši del — pod 30 %' },
+    { value: 3, label: 'Ne vem', unknown: true },
+  ],
+};
+
+export const razpolozljivostMp: ModuleDefinition = {
+  id: 'razpolozljivostMp',
+  title: 'Prazne police in nedobavljivi artikli',
   summary:
-    'Izgubljena marža zaradi praznih polic, odpisi in prisilna znižanja ter kapital, vezan v zalogah.',
+    'Marža, ki je ne zaslužite, ker artikla ni na zalogi, ekspresne dobave in čas iskanja blaga po enotah.',
   triage: {
-    prompt:
-      'Kako pogosto se zgodi, da artikla ni na polici, hkrati pa imate na zalogi blago, ki se ne prodaja?',
+    prompt: 'Kako pogosto kupec pri vas ne dobi artikla, ki bi ga kupil — ker ga ni na polici ali ni dobavljiv?',
     options: [
-      { value: 0, label: 'Zaloge so pod nadzorom' },
-      { value: 1, label: 'Občasno' },
-      { value: 2, label: 'Redno' },
-      { value: 3, label: 'Skoraj vsak teden' },
+      { value: 0, label: 'Redko — police so polne' },
+      { value: 1, label: 'Nekajkrat na mesec' },
+      { value: 2, label: 'Vsak teden' },
+      { value: 3, label: 'Vsak dan — koliko nas stane, pa ne vemo' },
     ],
   },
   fields: [
     {
-      key: 'inventoryValueEUR',
-      label: 'Kolikšna je povprečna vrednost zalog v vseh poslovalnicah in skladišču?',
-      kind: 'number',
-      unit: 'EUR',
+      key: 'lostSalesSharePercent',
+      label: 'Kolikšen delež letne prodaje po vaši oceni izgubite, ker artikla ni na zalogi?',
+      kind: 'percent',
+      min: 0,
+      max: 0.03,
+      step: 0.0025,
       default: 0,
-      help: 'Vnesite nabavno vrednost, ne prodajne.',
+      help: 'Delež prometa, ne marže — maržo izračunamo sami. Če ocene nimate, pustite 0: en mesec beleženih vprašanj "imate to?" da boljši podatek kot ugibanje.',
     },
+    substitutionField,
     {
-      key: 'annualWriteOffEUR',
+      key: 'expressDeliveryCostEUR',
       label:
-        'Kolikšna je bila v zadnjih 12 mesecih vrednost odpisov, poteklega blaga in prisilnih znižanj zaradi sezone ali zastaranja?',
+        'Koliko ste v zadnjih 12 mesecih plačali za ekspresne dobave in nujne prevoze, da polica ne bi ostala prazna?',
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
-      help: 'Sem sodi samo ZNANA izguba. Neznano razliko, ki jo ugotovite šele ob inventuri, vpišite v področju Blagajna — sicer bo ista izguba šteta dvakrat.',
+      allowUnknown: true,
     },
     {
-      key: 'stockoutLostMarginEUR',
-      label: 'Kolikšno prispevno maržo letno izgubite, ker artikla ni na zalogi?',
+      key: 'stockCheckHoursPerMonth',
+      label:
+        'Koliko ur mesečno gre za preverjanje, ali je artikel na zalogi v drugi poslovalnici ali skladišču?',
       kind: 'number',
-      unit: 'EUR/leto',
+      unit: 'h/mesec',
       default: 0,
-      help: 'Vpišite izgubljeno maržo, ne celotne prodajne vrednosti nerealizirane prodaje.',
+      help: 'Klici med enotami, iskanje po skladišču, obljube kupcu. Prenos blaga sam po sebi šteje področje Prevzem.',
     },
-    reducibleShareField(
-      'Kolikšen delež zalog bi po vaši oceni lahko zmanjšali, ne da bi se police spraznile?',
-    ),
     {
       key: 'replenishmentMethod',
       label: 'Kako danes določate, kaj in koliko naročiti?',
@@ -99,23 +139,144 @@ export const zalogeMp: ModuleDefinition = {
         { value: 3, label: 'Na oko, v poslovalnici' },
       ],
     },
-    mainCauseField(ZALOGE_CAUSES),
+    mainCauseField(POLICE_CAUSES),
   ],
-  compute: (input) => {
-    const addressableShare = addressableShareOf(ZALOGE_CAUSES, input.mainCause);
-    const reducibleShare = reducibleShareOf(input.reducibleShare);
+  compute: (input, context) => {
+    const addressableShare = addressableShareOf(POLICE_CAUSES, input.mainCause);
+    const substitution = SUBSTITUTION_SHARES[input.substitutionShare] ?? SUBSTITUTION_SHARES[3];
 
     return [
       {
-        bucket: 'directLoss',
-        label: 'Odpisi in prisilna znižanja',
-        valueEUR: input.annualWriteOffEUR,
+        // Formula raziskave (F01): izgubljena prodaja × prispevna marža ×
+        // (1 − nadomeščeni ali odloženi nakup). Prihodek in marža prideta iz
+        // skupne finančne osnove, zato ju to področje ne sprašuje znova.
+        bucket: 'lostMargin',
+        label: 'Nezaslužena marža zaradi praznih polic',
+        valueEUR:
+          context.annualRevenueEUR *
+          input.lostSalesSharePercent *
+          context.contributionMarginRate *
+          (1 - substitution),
         addressableShare,
       },
       {
         bucket: 'directLoss',
-        label: 'Izgubljena marža zaradi praznih polic',
-        valueEUR: input.stockoutLostMarginEUR,
+        label: 'Ekspresne dobave in nujni prevozi',
+        valueEUR: input.expressDeliveryCostEUR,
+        addressableShare,
+      },
+      {
+        bucket: 'capacity',
+        label: 'Iskanje in preverjanje zaloge po enotah',
+        valueEUR: input.stockCheckHoursPerMonth * context.operationalHourCostEUR * MONTHS_PER_YEAR,
+        hoursPerMonth: input.stockCheckHoursPerMonth,
+        addressableShare,
+      },
+    ];
+  },
+  pantheon: [
+    'Samodejni predlogi naročil iz dejanske prodaje',
+    'Minimalne in maksimalne zaloge po poslovalnici',
+    'Zaloga vseh poslovalnic in skladišč na enem zaslonu',
+  ],
+};
+
+// --- 2. Presežna zaloga, odpisi in znižanja ---------------------------------
+
+const ZALOGE_CAUSES: CauseOption[] = [
+  { label: 'Naročamo preveč, ker podatkov o obračanju nimamo', category: 'planning' },
+  { label: 'Artiklov brez prodaje ne opazimo pravočasno', category: 'data' },
+  { label: 'Roki uporabnosti in serije niso sproti vidni', category: 'data' },
+  { label: 'Zalogo zavestno držimo kot varovalko', category: 'people' },
+  { label: 'Dobavitelji zahtevajo velike minimalne količine', category: 'external' },
+];
+
+export const zalogeMp: ModuleDefinition = {
+  id: 'zalogeMp',
+  title: 'Presežna zaloga, odpisi in znižanja',
+  summary:
+    'Odpisano in poteklo blago, marža, izgubljena s prisilnimi znižanji, ter kapital, vezan v zalogah.',
+  triage: {
+    prompt: 'Koliko blaga vam obleži — poteče, se poškoduje ali ga morate prodati z znižanjem?',
+    options: [
+      { value: 0, label: 'Skoraj nič' },
+      { value: 1, label: 'Občasno' },
+      { value: 2, label: 'Redno, predvsem ob koncu sezone' },
+      { value: 3, label: 'Veliko — obsega pa ne merimo' },
+    ],
+  },
+  fields: [
+    {
+      key: 'annualWriteOffEUR',
+      label:
+        'Kolikšna je bila v zadnjih 12 mesecih vrednost odpisov ter poteklega in poškodovanega blaga?',
+      kind: 'number',
+      unit: 'EUR/leto',
+      default: 0,
+      allowUnknown: true,
+      help: 'Po nabavni vrednosti in samo ZNANA izguba. Neznano razliko, ki jo ugotovite šele ob inventuri, vpišite v področju Blagajna — sicer bo ista izguba šteta dvakrat.',
+    },
+    {
+      key: 'forcedMarkdownMarginEUR',
+      label:
+        'Koliko marže ste v zadnjih 12 mesecih izgubili s prisilnimi znižanji — razprodajo sezone, odprodajo pred rokom?',
+      kind: 'number',
+      unit: 'EUR/leto',
+      default: 0,
+      allowUnknown: true,
+      help: 'Samo razlika do marže, ki ste jo načrtovali, ne celoten popust. Načrtovane sezonske razprodaje sem ne sodijo — te bi bile tudi z boljšim sistemom.',
+    },
+    {
+      key: 'inventoryValueEUR',
+      label: 'Kolikšna je povprečna vrednost zalog v vseh poslovalnicah in skladišču?',
+      kind: 'number',
+      unit: 'EUR',
+      default: 0,
+      allowUnknown: true,
+      help: 'Vnesite nabavno vrednost, ne prodajne.',
+    },
+    reducibleShareField(
+      'Kolikšen delež zalog bi po vaši oceni lahko zmanjšali, ne da bi se police spraznile?',
+    ),
+    {
+      key: 'staleStockShare',
+      label: 'Kolikšen del zaloge se v zadnjih šestih mesecih ni prodal?',
+      kind: 'choice',
+      default: 3,
+      contextOnly: true,
+      choices: [
+        { value: 0, label: 'Skoraj nič' },
+        { value: 1, label: 'Do desetine' },
+        { value: 2, label: 'Petina ali več' },
+        { value: 3, label: 'Tega ne vemo' },
+      ],
+    },
+    mainCauseField(ZALOGE_CAUSES),
+  ],
+  compute: (input) => {
+    const addressableShare = addressableShareOf(ZALOGE_CAUSES, input.mainCause);
+    const releasableEUR = input.inventoryValueEUR * reducibleShareOf(input.reducibleShare);
+
+    return [
+      {
+        bucket: 'directLoss',
+        label: 'Odpisi ter poteklo in poškodovano blago',
+        valueEUR: input.annualWriteOffEUR,
+        addressableShare,
+      },
+      {
+        bucket: 'lostMargin',
+        label: 'Marža, izgubljena s prisilnimi znižanji',
+        valueEUR: input.forcedMarkdownMarginEUR,
+        addressableShare,
+      },
+      {
+        // Letni strošek denarja, ki leži v presežni zalogi (F03). Ločen od
+        // sprostljivega kapitala spodaj in ne podvojen z njim: kapital je enkraten
+        // denarni učinek, to pa cena, ki se plačuje vsako leto, dokler zaloga leži.
+        bucket: 'directLoss',
+        label: 'Strošek financiranja presežne zaloge',
+        valueEUR: releasableEUR * INVENTORY_CAPITAL_COST,
         addressableShare,
       },
       {
@@ -123,18 +284,18 @@ export const zalogeMp: ModuleDefinition = {
         // Množenje s pasom izboljšave bi ga štelo dvakrat.
         bucket: 'oneTimeCapital',
         label: 'Sprostljiv obratni kapital v zalogah',
-        valueEUR: input.inventoryValueEUR * reducibleShare,
+        valueEUR: releasableEUR,
       },
     ];
   },
   pantheon: [
-    'Samodejni predlogi naročil iz dejanske prodaje',
-    'Minimalne in maksimalne zaloge po poslovalnici',
     'Analiza obračanja zalog in artiklov brez prometa',
+    'Roki uporabnosti in serije s samodejnim opozorilom pred potekom',
+    'Predlog odprodaje, dokler ima blago še vrednost',
   ],
 };
 
-// --- 2. Nabavne cene, akcije in marža ---------------------------------------
+// --- 3. Cene, akcije in marža -----------------------------------------------
 
 const MARZE_CAUSES: CauseOption[] = [
   { label: 'Cenike in akcije vzdržujemo ročno', category: 'data' },
@@ -146,9 +307,9 @@ const MARZE_CAUSES: CauseOption[] = [
 
 export const marzeMp: ModuleDefinition = {
   id: 'marzeMp',
-  title: 'Nabavne cene, akcije in marža',
+  title: 'Cene, akcije in marža',
   summary:
-    'Neizkoriščeni dobaviteljski pogoji, prodaja po napačni ceni in ročno vzdrževanje cenikov ter akcij.',
+    'Prodaja po napačni ceni, neizkoriščeni dobaviteljski pogoji in ročno vzdrževanje cenikov ter akcij.',
   triage: {
     prompt:
       'Kako pogosto ugotovite, da je bil artikel prodan po napačni ceni ali da dogovorjen dobaviteljski pogoj ni bil izkoriščen?',
@@ -161,29 +322,34 @@ export const marzeMp: ModuleDefinition = {
   },
   fields: [
     {
-      key: 'annualPurchaseSpendEUR',
-      label: 'Kolikšna je letna nabavna vrednost prodanega blaga?',
-      kind: 'number',
-      unit: 'EUR/leto',
-      default: 0,
-    },
-    {
-      key: 'priceErrorSharePercent',
-      label:
-        'Kolikšen delež te vrednosti po vaši oceni izgubite zaradi zastarelih prodajnih cen in nepravilno obračunanih akcij?',
+      key: 'wrongPriceSalesSharePercent',
+      label: 'Kolikšen delež prodaje steče po napačni, zastareli ali pozabljeni akcijski ceni?',
       kind: 'percent',
       min: 0,
-      max: 0.05,
-      step: 0.0025,
-      default: 0.01,
+      max: 0.15,
+      step: 0.005,
+      default: 0,
+      help: 'Delež prodaje, ki je napake dejansko prizadela — ne celotnega prometa in ne celotne nabavne vrednosti.',
+    },
+    {
+      key: 'marginGapPercent',
+      label: 'Za koliko odstotnih točk je marža pri tej prodaji nižja od načrtovane?',
+      kind: 'percent',
+      min: 0,
+      max: 0.2,
+      step: 0.01,
+      default: 0,
+      help: 'Primer: načrtovanih 30 %, dosežene 22 % — razlika je 8 odstotnih točk.',
     },
     {
       key: 'unclaimedRebatesEUR',
-      label: 'Kolikšno vrednost dobaviteljskih rabatov in bonusov letno ne uveljavite ali je ne znate preveriti?',
+      label:
+        'Kolikšno vrednost dobaviteljskih rabatov, bonusov in sofinanciranja akcij letno ne uveljavite?',
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
-      help: 'Če vrednosti ne poznate, pustite 0 — nižja zanesljivost rezultata je boljša od izmišljene številke.',
+      allowUnknown: true,
+      help: 'Če tega ne vodite, odkljukajte "Tega podatka ne vodimo" — nižja zanesljivost rezultata je boljša od izmišljene številke.',
     },
     {
       key: 'priceMaintenanceHoursPerMonth',
@@ -194,16 +360,18 @@ export const marzeMp: ModuleDefinition = {
       help: 'Ne vključujte prevzema blaga in usklajevanja dokumentov — to meri področje Prevzem.',
     },
     {
-      key: 'marginVisibility',
-      label: 'Kako dober je vaš pregled nad dejansko maržo?',
+      key: 'previousPriceProof',
+      label:
+        'Ali lahko za posamezen artikel, poslovalnico in kanal dokažete najnižjo ceno zadnjih 30 dni?',
       kind: 'choice',
       default: 2,
       contextOnly: true,
+      help: 'Zakon o varstvu potrošnikov zahteva, da je ob znižanju navedena najnižja cena zadnjih 30 dni.',
       choices: [
-        { value: 0, label: 'Sproten, po artiklu in poslovalnici' },
-        { value: 1, label: 'Mesečno, na ravni blagovne skupine' },
-        { value: 2, label: 'Le skupno za podjetje' },
-        { value: 3, label: 'Šele ob zaključku leta' },
+        { value: 0, label: 'Da, neposredno iz sistema' },
+        { value: 1, label: 'Da, z ročnim iskanjem po evidencah' },
+        { value: 2, label: 'Le približno' },
+        { value: 3, label: 'Ne' },
       ],
     },
     mainCauseField(MARZE_CAUSES),
@@ -213,9 +381,14 @@ export const marzeMp: ModuleDefinition = {
 
     return [
       {
-        bucket: 'directLoss',
-        label: 'Izgubljena marža zaradi napačnih cen in akcij',
-        valueEUR: input.annualPurchaseSpendEUR * input.priceErrorSharePercent,
+        // Osnova je PRIZADETA PRODAJA in ne celotna nabavna vrednost: napačna cena
+        // ne pokvari marže na vsem prodanem blagu, ampak na tistem delu, ki je
+        // stekel po napačni ceni. Prejšnja različica je odstotek množila s celotnim
+        // COGS in je znesek precenila za red velikosti.
+        bucket: 'lostMargin',
+        label: 'Marža, izgubljena pri prodaji po napačni ceni',
+        valueEUR:
+          context.annualRevenueEUR * input.wrongPriceSalesSharePercent * input.marginGapPercent,
         addressableShare,
       },
       {
@@ -236,15 +409,15 @@ export const marzeMp: ModuleDefinition = {
     ];
   },
   pantheon: [
-    'Cenik, akcije in popusti na enem mestu za vse poslovalnice',
+    'Cenik, akcije in popusti na enem mestu za vse poslovalnice in kanale',
+    'Zgodovina cen z dokazom najnižje cene zadnjih 30 dni',
     'Nabavni pogoji, rabati in bonusi po dobavitelju',
-    'Analitika marže po artiklu, poslovalnici in obdobju',
   ],
 };
 
-// --- 3. Blagajna, manko in vračila ------------------------------------------
+// --- 4. Blagajna, zaključki in manko ----------------------------------------
 
-const MANKO_CAUSES: CauseOption[] = [
+const BLAGAJNA_CAUSES: CauseOption[] = [
   { label: 'Prevzem in odpis nista evidentirana sproti', category: 'data' },
   { label: 'Zaloga v sistemu se ne ujema z dejansko', category: 'data' },
   { label: 'Napake pri delu na blagajni', category: 'people' },
@@ -252,51 +425,51 @@ const MANKO_CAUSES: CauseOption[] = [
   { label: 'Poškodbe blaga pri rokovanju ali skladiščenju', category: 'physical' },
 ];
 
-export const mankoMp: ModuleDefinition = {
-  id: 'mankoMp',
-  title: 'Blagajna, manko in vračila',
+export const blagajnaMp: ModuleDefinition = {
+  id: 'blagajnaMp',
+  title: 'Blagajna, zaključki in manko',
   summary:
-    'Neznane inventurne razlike, vračila in blagajniške napake ter čas, ki gre za njihovo razčiščevanje.',
+    'Dnevni zaključki blagajn, inventure ter neznane razlike med sistemom in dejanskim stanjem.',
   triage: {
-    prompt: 'Kolikšne so razlike med sistemom in dejanskim stanjem, ki jih ugotovite šele ob inventuri?',
+    prompt:
+      'Koliko časa in denarja poberejo dnevni zaključki blagajn ter razlike, ki jih odkrijete šele ob inventuri?',
     options: [
-      { value: 0, label: 'Razlike so zanemarljive' },
-      { value: 1, label: 'Manjše, a jih poznamo' },
-      { value: 2, label: 'Opazne' },
-      { value: 3, label: 'Velike ali jih sploh ne merimo' },
+      { value: 0, label: 'Zaključek je hiter, razlike zanemarljive' },
+      { value: 1, label: 'Nekaj minut na blagajno, manjše razlike' },
+      { value: 2, label: 'Opazno — vsak dan in ob vsaki inventuri' },
+      { value: 3, label: 'Veliko ali pa tega sploh ne merimo' },
     ],
   },
   fields: [
     {
-      key: 'annualRetailRevenueEUR',
-      label: 'Kolikšen je letni prihodek maloprodaje?',
+      key: 'tillCount',
+      label: 'Koliko blagajniških mest imate skupaj v vseh poslovalnicah?',
       kind: 'number',
-      unit: 'EUR/leto',
+      unit: 'blagajn',
       default: 0,
     },
     {
-      key: 'shrinkageSharePercent',
-      label: 'Kolikšen delež prihodka je znašala zadnja ugotovljena inventurna razlika (manko)?',
-      kind: 'percent',
-      min: 0,
-      max: 0.05,
-      step: 0.0025,
-      default: 0.01,
-      help: 'Samo NEZNANA razlika. Znano odpisano, poteklo ali znižano blago sodi v področje Zaloge.',
-    },
-    {
-      key: 'annualReturnsCostEUR',
-      label: 'Kolikšni so letni neposredni stroški vračil, reklamacij in napačno obračunanih računov?',
+      key: 'closingMinutesPerTillPerDay',
+      label: 'Koliko minut na dan porabi ena blagajna za odprtje, zaključek in oddajo izkupička?',
       kind: 'number',
-      unit: 'EUR/leto',
+      unit: 'min/dan',
       default: 0,
-      help: 'Vnesite samo stroške, ki še niso zajeti v manku.',
+      help: 'Najbolj dokazljiva številka v trgovini — izmerite jo v enem dnevu. Računamo z 305 odprtimi dnevi na leto.',
     },
     {
-      key: 'cashDeskFixHoursPerMonth',
-      label: 'Koliko skupnih ur mesečno porabite za razčiščevanje blagajniških razlik, storniranih računov in vračil?',
+      key: 'shrinkageEUR',
+      label: 'Kolikšna je bila po nabavni vrednosti neznana razlika (manko) ob zadnji inventuri?',
       kind: 'number',
-      unit: 'h/mesec',
+      unit: 'EUR',
+      default: 0,
+      allowUnknown: true,
+      help: 'Samo NEZNANA razlika, skupaj z nepojasnjenimi blagajniškimi razlikami. Znano odpisano, poteklo ali znižano blago sodi v področje Presežna zaloga. Če inventura ni letna, vrednost preračunajte na leto.',
+    },
+    {
+      key: 'stocktakeHoursPerYear',
+      label: 'Koliko ur na leto skupaj porabite za inventure — s pripravo, štetjem in vnosom razlik?',
+      kind: 'number',
+      unit: 'h/leto',
       default: 0,
     },
     {
@@ -312,41 +485,48 @@ export const mankoMp: ModuleDefinition = {
         { value: 3, label: 'Redne inventure praktično ne izvajamo' },
       ],
     },
-    mainCauseField(MANKO_CAUSES),
+    mainCauseField(BLAGAJNA_CAUSES),
   ],
   compute: (input, context) => {
-    const addressableShare = addressableShareOf(MANKO_CAUSES, input.mainCause);
+    const addressableShare = addressableShareOf(BLAGAJNA_CAUSES, input.mainCause);
+
+    // Zaključki: minute × blagajne × odprti dnevi. Vprašano po ENI blagajni in ne
+    // skupno, ker je to edina številka, ki jo vodja lahko izmeri z uro v roki —
+    // skupno oceno bi moral šele izračunati, in ravno tam nastane največja napaka.
+    const closingHoursPerYear =
+      (input.tillCount * input.closingMinutesPerTillPerDay * OPEN_DAYS_PER_YEAR) / MINUTES_PER_HOUR;
 
     return [
       {
-        bucket: 'directLoss',
-        label: 'Inventurni manko',
-        valueEUR: input.annualRetailRevenueEUR * input.shrinkageSharePercent,
+        bucket: 'capacity',
+        label: 'Dnevni zaključki blagajn',
+        valueEUR: closingHoursPerYear * context.operationalHourCostEUR,
+        hoursPerMonth: closingHoursPerYear / MONTHS_PER_YEAR,
         addressableShare,
       },
       {
         bucket: 'directLoss',
-        label: 'Vračila, reklamacije in blagajniške napake',
-        valueEUR: input.annualReturnsCostEUR,
+        label: 'Inventurni manko',
+        valueEUR: input.shrinkageEUR,
         addressableShare,
       },
       {
         bucket: 'capacity',
-        label: 'Razčiščevanje razlik in vračil',
-        valueEUR: input.cashDeskFixHoursPerMonth * context.adminHourCostEUR * MONTHS_PER_YEAR,
-        hoursPerMonth: input.cashDeskFixHoursPerMonth,
+        label: 'Izvedba inventur',
+        valueEUR: input.stocktakeHoursPerYear * context.operationalHourCostEUR,
+        hoursPerMonth: input.stocktakeHoursPerYear / MONTHS_PER_YEAR,
         addressableShare,
       },
     ];
   },
   pantheon: [
-    'Blagajna POS z davčnim potrjevanjem in sledenjem storniranj',
+    'Blagajna POS z davčnim potrjevanjem in samodejnim dnevnim zaključkom',
     'Inventura s terminali, tudi sprotna po skupinah',
     'Sledljivost gibanja artikla od prevzema do računa',
   ],
 };
 
-// --- 4. Prevzem blaga, dokumenti in prenosi ---------------------------------
+// --- 5. Prevzem blaga, dokumenti in prenosi ---------------------------------
 
 const PREVZEM_CAUSES: CauseOption[] = [
   { label: 'Podatke vodimo v več različnih orodjih', category: 'data' },
@@ -448,7 +628,7 @@ export const prevzemMp: ModuleDefinition = {
   ],
 };
 
-// --- 5. Spletna prodaja in usklajenost kanalov ------------------------------
+// --- 6. Spletna prodaja, vračila in usklajenost kanalov ---------------------
 
 const KANALI_CAUSES: CauseOption[] = [
   { label: 'Artikle in cene vzdržujemo ločeno za vsak kanal', category: 'data' },
@@ -460,11 +640,12 @@ const KANALI_CAUSES: CauseOption[] = [
 
 export const kanaliMp: ModuleDefinition = {
   id: 'kanaliMp',
-  title: 'Spletna prodaja in usklajenost kanalov',
+  title: 'Spletna prodaja, vračila in usklajenost kanalov',
   summary:
-    'Odpovedana spletna naročila ter ročno usklajevanje artiklov, cen in zalog med spletno trgovino in poslovalnicami.',
+    'Odpovedana spletna naročila, dejanski strošek vračil ter ročno usklajevanje artiklov, cen in zalog med kanali.',
   triage: {
-    prompt: 'Kako pogosto se spletna trgovina in poslovalnice razhajajo v zalogah, cenah ali podatkih o artiklih?',
+    prompt:
+      'Kako pogosto spletna prodaja povzroči dodatno delo ali strošek — odpovedi, vračila, ročno usklajevanje?',
     options: [
       { value: 0, label: 'Spletne prodaje nimamo ali je usklajena sproti' },
       { value: 1, label: 'Občasno' },
@@ -474,21 +655,29 @@ export const kanaliMp: ModuleDefinition = {
   },
   fields: [
     {
-      key: 'onlineOrdersPerMonth',
-      label: 'Koliko spletnih naročil mesečno prejmete?',
-      kind: 'number',
-      unit: 'naročil/mesec',
-      default: 0,
-      contextOnly: true,
-      help: 'Podatek ne vstopa v izračun — služi za oceno obsega.',
-    },
-    {
-      key: 'cancelledOrderMarginEUR',
-      label: 'Kolikšno prispevno maržo letno izgubite zaradi odpovedanih ali nedobavljivih spletnih naročil?',
+      key: 'cancelledOrderSalesEUR',
+      label:
+        'Kolikšna je letna prodajna vrednost spletnih naročil, ki jih odpoveste ali ne morete dobaviti?',
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
-      help: 'Ne vpisujte celotne vrednosti naročila. Izgubljeno prodajo v poslovalnici šteje področje Zaloge.',
+      allowUnknown: true,
+      help: 'Vrednost naročil, ne marže — maržo izračunamo sami. Izgubljeno prodajo v poslovalnici šteje področje Prazne police.',
+    },
+    {
+      key: 'returnsPerMonth',
+      label: 'Koliko spletnih naročil vam kupci mesečno vrnejo?',
+      kind: 'number',
+      unit: 'vračil/mesec',
+      default: 0,
+    },
+    {
+      key: 'costPerReturnEUR',
+      label: 'Koliko vas v povprečju stane eno vračilo?',
+      kind: 'number',
+      unit: 'EUR/vračilo',
+      default: 0,
+      help: 'Delo, povratna dostava, nevrnjene provizije in znižanje vrnjenega artikla. BREZ vrnjene kupnine — artikel se večinoma proda znova, zato kupnina sama po sebi ni strošek.',
     },
     {
       key: 'catalogSyncHoursPerMonth',
@@ -512,9 +701,18 @@ export const kanaliMp: ModuleDefinition = {
 
     return [
       {
+        bucket: 'lostMargin',
+        label: 'Nezaslužena marža odpovedanih spletnih naročil',
+        valueEUR: input.cancelledOrderSalesEUR * context.contributionMarginRate,
+        addressableShare,
+      },
+      {
+        // Formula raziskave (F06): število vračil × neposredni strošek enega.
+        // Vrnjena kupnina je izrecno izven — to je najpogostejša napaka pri
+        // vrednotenju vračil in bi znesek napihnila za velikostni razred.
         bucket: 'directLoss',
-        label: 'Izgubljena marža odpovedanih spletnih naročil',
-        valueEUR: input.cancelledOrderMarginEUR,
+        label: 'Neposredni stroški vračil',
+        valueEUR: input.returnsPerMonth * input.costPerReturnEUR * MONTHS_PER_YEAR,
         addressableShare,
       },
       {
@@ -536,7 +734,7 @@ export const kanaliMp: ModuleDefinition = {
   pantheon: [
     'Enotna baza artiklov in cenikov za vse prodajne kanale',
     'Sprotna zaloga, vidna spletni trgovini',
-    'Samodejen prenos spletnih naročil v odpremo in račun',
+    'Samodejen prenos spletnih naročil v odpremo, račun in vračilo',
   ],
 };
 
@@ -624,9 +822,10 @@ export const diagnostikaMp: ModuleDefinition = {
 
 /** Vrstni red je hkrati prioriteta — odloči ob izenačenju v triaži. */
 export const MALOPRODAJA_MODULES: ModuleDefinition[] = [
+  razpolozljivostMp,
   zalogeMp,
   marzeMp,
-  mankoMp,
+  blagajnaMp,
   prevzemMp,
   kanaliMp,
   diagnostikaMp,

@@ -4,6 +4,8 @@ import {
   assessConfidence,
   buildComputeContext,
   computePotentialRange,
+  type AssessConfidenceParams,
+  type ConfidenceLevel,
 } from './potential';
 import { computeModules, resolveInputs } from './moduleEngine';
 import {
@@ -206,6 +208,18 @@ describe('assessConfidence', () => {
     planiranje: resolveInputs(planiranje, overrides),
   });
 
+  /**
+   * Izidi so v assessConfidence UTEŽ po denarju področja, ne dodaten podatek. Zato
+   * jih tu izpeljemo iz istih modulov, vrednosti in profila kot oceno samo — vpisan
+   * seznam bi test spremenil v preverjanje uteži, ki v aplikaciji ne nastane.
+   */
+  function assess(params: Omit<AssessConfidenceParams, 'outputs'>): ConfidenceLevel {
+    return assessConfidence({
+      ...params,
+      outputs: computeModules(params.modules, params.values, buildComputeContext(params.profile)),
+    });
+  }
+
   const allFilled = {
     waitingHoursPerMonth: 100,
     overtimeHoursPerMonth: 20,
@@ -214,7 +228,7 @@ describe('assessConfidence', () => {
   };
 
   it('visoka: točni urni postavki, izpolnjena polja in znan vzrok', () => {
-    const level = assessConfidence({
+    const level = assess({
       context: PROIZVODNJA,
       profile: profileWith(EXACT_HOURS),
       modules,
@@ -224,7 +238,7 @@ describe('assessConfidence', () => {
   });
 
   it('srednja: ena urna postavka je le ocenjen razpon', () => {
-    const level = assessConfidence({
+    const level = assess({
       context: PROIZVODNJA,
       profile: profileWith({
         operationalHour: { valueEUR: 50, estimated: true },
@@ -237,7 +251,7 @@ describe('assessConfidence', () => {
   });
 
   it('nizka: obe urni postavki sta ocenjeni', () => {
-    const level = assessConfidence({
+    const level = assess({
       context: PROIZVODNJA,
       profile: EMPTY_PROFILE,
       modules,
@@ -247,7 +261,7 @@ describe('assessConfidence', () => {
   });
 
   it('nizka: večina številskih polj je praznih', () => {
-    const level = assessConfidence({
+    const level = assess({
       context: PROIZVODNJA,
       profile: profileWith(EXACT_HOURS),
       modules,
@@ -260,7 +274,7 @@ describe('assessConfidence', () => {
     // napake ima dve polji s privzetkom nad 0 (delež napak, strošek napake). Če bi
     // se šteli med izpolnjena, bi obiskovalec, ki je vnesel samo število pošiljk,
     // dobil visoko zanesljivost — natanko obratno od resnice.
-    const untouched = assessConfidence({
+    const untouched = assess({
       context: LOGISTIKA,
       profile: profileWith(EXACT_HOURS),
       modules: [napake],
@@ -268,7 +282,7 @@ describe('assessConfidence', () => {
     });
     expect(untouched).toBe('low');
 
-    const answered = assessConfidence({
+    const answered = assess({
       context: LOGISTIKA,
       profile: profileWith(EXACT_HOURS),
       modules: [napake],
@@ -287,7 +301,7 @@ describe('assessConfidence', () => {
   });
 
   it('"Ne vemo" pri glavnem vzroku prepreči visoko zanesljivost', () => {
-    const level = assessConfidence({
+    const level = assess({
       context: PROIZVODNJA,
       profile: profileWith(EXACT_HOURS),
       modules,
@@ -298,7 +312,7 @@ describe('assessConfidence', () => {
 
   it('polja s contextOnly se ne štejejo med manjkajoče podatke', () => {
     // planningMethod je contextOnly; če bi se štel, bi izpolnjenost padla pod prag.
-    const level = assessConfidence({
+    const level = assess({
       context: PROIZVODNJA,
       profile: profileWith(EXACT_HOURS),
       modules,
@@ -311,14 +325,14 @@ describe('assessConfidence', () => {
     // Odkar je mogoče obkljukati vseh pet področij, bi štetje neizpolnjenih merilo
     // obiskovalčevo potrpežljivost in ne kakovosti podatkov: znesek je v obeh
     // primerih enak, oznaka pa ne bi bila.
-    const onlyAnswered = assessConfidence({
+    const onlyAnswered = assess({
       context: PROIZVODNJA,
       profile: profileWith(EXACT_HOURS),
       modules: [planiranje],
       values: valuesWith(allFilled),
     });
 
-    const withUntouched = assessConfidence({
+    const withUntouched = assess({
       context: PROIZVODNJA,
       profile: profileWith(EXACT_HOURS),
       modules: [planiranje, material],
@@ -333,7 +347,7 @@ describe('assessConfidence', () => {
   });
 
   it('obrazec, kjer je vse na privzetkih, ostane nizka zanesljivost', () => {
-    const level = assessConfidence({
+    const level = assess({
       context: PROIZVODNJA,
       profile: profileWith(EXACT_HOURS),
       modules: [planiranje, material],
@@ -348,7 +362,7 @@ describe('assessConfidence', () => {
   it('drugo izpolnjeno področje z manjkajočimi podatki oznako še vedno zniža', () => {
     // Preskok velja samo za povsem nedotaknjena področja. Kdor se področja dotakne
     // in ga pusti na pol, mora oznako znižati — sicer bi preskok postal izhod v sili.
-    const level = assessConfidence({
+    const level = assess({
       context: PROIZVODNJA,
       profile: profileWith(EXACT_HOURS),
       modules: [planiranje, material],
@@ -375,7 +389,7 @@ describe('assessConfidence', () => {
     };
     const exact = { valueEUR: 50, estimated: false };
 
-    const oneGuessed = assessConfidence({
+    const oneGuessed = assess({
       context: STORITVE,
       profile: {
         ...emptyProfileFor(STORITVE),
@@ -388,7 +402,7 @@ describe('assessConfidence', () => {
     });
     expect(oneGuessed).toBe('medium');
 
-    const allExact = assessConfidence({
+    const allExact = assess({
       context: STORITVE,
       profile: {
         ...emptyProfileFor(STORITVE),
@@ -402,7 +416,7 @@ describe('assessConfidence', () => {
     expect(allExact).toBe('high');
 
     // Vse tri ugibane → nizka, enako kot dve od dveh pri proizvodnji.
-    const allGuessed = assessConfidence({
+    const allGuessed = assess({
       context: STORITVE,
       profile: emptyProfileFor(STORITVE),
       modules: modulesSt,
@@ -414,7 +428,7 @@ describe('assessConfidence', () => {
   it('zaračunane postavke ne šteje dejavnosti, ki je ne vpraša', () => {
     // Proizvodni profil ima chargeOutRate vedno označen kot ocenjen. Če bi se štel,
     // bi bila najboljša dosegljiva ocena proizvodnje 'medium' namesto 'high'.
-    const level = assessConfidence({
+    const level = assess({
       context: PROIZVODNJA,
       profile: profileWith(EXACT_HOURS),
       modules,
@@ -441,7 +455,15 @@ describe('aggregateResults', () => {
         planiranje: { waitingHoursPerMonth: 100, mainCause: 0 },
         material: { annualMaterialSpendEUR: 1_000_000, scrapSharePercent: 0.03, mainCause: 0 },
       },
-      { operationalHourCostEUR: 50, adminHourCostEUR: 35, chargeOutRateEUR: 75 },
+      // Prihodek in marža v tem scenariju ne nastopata (planiranje in material ju ne
+      // berete), zato 0 — izmišljen promet bi v vsoto vnesel znesek brez podlage.
+      {
+        operationalHourCostEUR: 50,
+        adminHourCostEUR: 35,
+        chargeOutRateEUR: 75,
+        annualRevenueEUR: 0,
+        contributionMarginRate: 0,
+      },
     );
 
     const totals = aggregateResults(outputs, {
