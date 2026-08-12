@@ -8,8 +8,13 @@ export type FollowUpSequence =
 
 export interface SelectFollowUpParams {
   segment: SegmentId;
-  /** Samo neposredne letne izgube — sproščena kapaciteta in enkratni kapital ne štejeta. */
-  directLossEUR: number;
+  /**
+   * Letna izmerjena izguba: neposredni stroški + nezaslužena marža. Sproščena
+   * kapaciteta in enkratni kapital ne štejeta — kapaciteta ni denar, ki odteka,
+   * kapital pa je enkraten. Marža šteje, ker je prag "visoke izgube" merilo letne
+   * bolečine, pri maloprodaji pa je prav marža njena največja postavka.
+   */
+  annualLossEUR: number;
   hasModuleERisk: boolean;
   highLossThresholdEUR?: number;
 }
@@ -25,7 +30,7 @@ export function selectFollowUpSequence(params: SelectFollowUpParams): FollowUpSe
   }
 
   const isHighLoss =
-    params.highLossThresholdEUR !== undefined && params.directLossEUR > params.highLossThresholdEUR;
+    params.highLossThresholdEUR !== undefined && params.annualLossEUR > params.highLossThresholdEUR;
 
   if (isHighLoss) {
     return params.hasModuleERisk ? 'high-loss-with-risk' : 'high-loss-no-risk';

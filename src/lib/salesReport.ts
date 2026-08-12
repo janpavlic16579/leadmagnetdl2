@@ -21,8 +21,10 @@ import { scoreIcp, type IcpScore, type IcpSignals } from '../config/icp';
 import { MODULE_E_ITEMS } from '../config/modules/legacy';
 import { buildSalesPlaybook, type SalesPlaybook } from './salesPlaybook';
 import type { FollowUpSequence } from './followUp';
-import { groupByModule, isModuleAnswered, type TriageScores } from './moduleEngine';
-import type { ConfidenceLevel, ResultTotals } from './potential';
+import { ANNUAL_BUCKETS, groupByModule, isModuleAnswered, type TriageScores } from './moduleEngine';
+import { assessHoursPlausibility, hoursPlausibilityWarning } from './plausibility';
+import { isRevenueMissing, type ConfidenceLevel, type ResultTotals } from './potential';
+import type { TotalsRange } from './range';
 import { taxNumberState } from './validation';
 import type { LeadConsents, LeadContact } from '../types';
 
@@ -81,7 +83,15 @@ export interface SalesReportQualification {
 
 export interface SalesReportSummary {
   directLossEUR: number;
+  /** Marža, ki ni bila zaslužena — letna kot directLoss, a druge vrste dokaz. */
+  lostMarginEUR: number;
   capacityEUR: number;
+  /**
+   * Razpon zneskov, kadar finančna osnova stoji na izbranih pasovih (lib/range.ts).
+   * Prodajnik mora videti isti razpon kot stranka — točka, ki je stranka ni videla,
+   * bi bila na sestanku takoj izpodbita.
+   */
+  rangeEUR: TotalsRange | null;
   capacityHoursPerMonth: number;
   oneTimeCapitalEUR: number;
   potentialMinEUR?: number;
@@ -145,6 +155,12 @@ export interface SalesReportSoftness {
   unknownAnswers: SoftFieldRow[];
   /** Številska polja, ki so ostala na privzeti vrednosti. */
   untouchedFields: SoftFieldRow[];
+  /**
+   * Opozorilo, kadar vnesene ure presegajo verjetni delež kapacitete podjetja
+   * (lib/plausibility). Isti sum, kot ga je videla stranka pri vnosu — prodajnik
+   * mora vedeti, da je znesek morda precenjen, sicer ga na sestanku brani naslepo.
+   */
+  plausibilityWarning: string | null;
 }
 
 export interface TriageRow {
@@ -222,6 +238,8 @@ export interface BuildSalesReportParams {
   triageScores: TriageScores;
   outputs: ModuleOutput[];
   totals: ResultTotals;
+  /** Razpon, kadar finančna osnova stoji na izbranih pasovih (lib/range.ts). */
+  totalsRange?: TotalsRange | null;
   highestModule: string | null;
   followUpSequence: FollowUpSequence;
 }
@@ -257,7 +275,9 @@ export function buildSalesReport(params: BuildSalesReportParams): SalesReport {
 
     summary: {
       directLossEUR: params.totals.directLossEUR,
+      lostMarginEUR: params.totals.lostMarginEUR,
       capacityEUR: params.totals.capacityEUR,
+      rangeEUR: params.totalsRange ?? null,
       capacityHoursPerMonth: params.totals.capacityHoursPerMonth,
       oneTimeCapitalEUR: params.totals.oneTimeCapitalEUR,
       potentialMinEUR: params.totals.potential?.minEUR,
@@ -270,6 +290,9 @@ export function buildSalesReport(params: BuildSalesReportParams): SalesReport {
       hourAssumptions: buildHourAssumptions(context, profile),
       unknownAnswers: collectFields(params.activeModules, values, isUnknownChoice),
       untouchedFields: collectFields(params.activeModules, values, isUntouchedNumeric),
+      plausibilityWarning: hoursPlausibilityWarning(
+        assessHoursPlausibility(params.activeModules, values, params.employeeCount),
+      ),
     },
 
     triage: params.segmentModules
@@ -319,7 +342,8 @@ function buildIcpSignals(
     improvementBandMax: base.qualification.improvementBand.max,
     isPantheonCustomer: base.qualification.isPantheonCustomer,
     roleId: params.profile.role,
-    measuredLossEUR: base.summary.directLossEUR + base.summary.capacityEUR,
+    measuredLossEUR:
+      base.summary.directLossEUR + base.summary.lostMarginEUR + base.summary.capacityEUR,
     highLossThresholdEUR: params.segment.highLossThresholdEUR,
     // Roki iz modula E: odkljukana polja preslikamo v datume, ki jih nosi vsebina.
     // `warningDate` doslej ni bil uporabljen nikjer — prikazovalo se je le besedilo.
@@ -354,8 +378,10 @@ function buildMeasuredArea(
     moduleId: definition.id,
     title: definition.title,
     summary: definition.summary,
+    // Vsi letni koši — tudi lostMargin, sicer je izpisan "Skupaj" manjši od vsote
+    // postavk, naštetih tik pod njim (maloprodajno največjo postavko je izpuščal).
     totalEUR: outputs
-      .filter((output) => output.bucket === 'directLoss' || output.bucket === 'capacity')
+      .filter((output) => (ANNUAL_BUCKETS as readonly string[]).includes(output.bucket))
       .reduce((sum, output) => sum + (output.valueEUR ?? 0), 0),
     mainCauseLabel: mainCauseLabel(definition, moduleValues.mainCause),
     // Vsi izidi enega področja delijo isti delež, zato zadošča prvi, ki ga ima.
@@ -453,6 +479,9 @@ function buildConfidenceReason(params: BuildSalesReportParams): string {
   const untouched = collectFields(params.activeModules, params.values, isUntouchedNumeric);
 
   const parts: string[] = [];
+  if (isRevenueMissing(params.profile, params.activeModules, params.values)) {
+    parts.push('prihodek ni podan, zato so postavke, vezane na prihodek, enake 0');
+  }
   if (soft.length > 0) {
     parts.push(
       soft.length === 1

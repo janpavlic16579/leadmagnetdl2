@@ -7,10 +7,10 @@ import type { CostBand, ScaleBand, SegmentContext } from './contextTypes';
  * za faktor dve — in prav pretiravanje je tisto, kar direktor najprej opazi.
  */
 const SHOP_HOUR_BANDS: CostBand[] = [
-  { id: 'do18', label: 'Do 18 EUR', midpointEUR: 15 },
-  { id: '18do25', label: '18–25 EUR', midpointEUR: 21 },
-  { id: '25do32', label: '25–32 EUR', midpointEUR: 28 },
-  { id: 'nad32', label: 'Več kot 32 EUR', midpointEUR: 38 },
+  { id: 'do18', label: 'Do 18 EUR', midpointEUR: 15, minEUR: 12, maxEUR: 18 },
+  { id: '18do25', label: '18–25 EUR', midpointEUR: 21, minEUR: 18, maxEUR: 25 },
+  { id: '25do32', label: '25–32 EUR', midpointEUR: 28, minEUR: 25, maxEUR: 32 },
+  { id: 'nad32', label: 'Več kot 32 EUR', midpointEUR: 38, minEUR: 32, maxEUR: 44 },
 ];
 
 /**
@@ -22,10 +22,10 @@ const SHOP_HOUR_BANDS: CostBand[] = [
  * KALIBRACIJA: začetne ocene, preveriti po prvih ~50 vnosih.
  */
 const REVENUE_BANDS: ScaleBand[] = [
-  { id: 'do1mio', label: 'Do 1 mio EUR', midpoint: 600_000 },
-  { id: '1do3mio', label: '1–3 mio EUR', midpoint: 1_800_000 },
-  { id: '3do10mio', label: '3–10 mio EUR', midpoint: 5_500_000 },
-  { id: 'nad10mio', label: 'Več kot 10 mio EUR', midpoint: 15_000_000 },
+  { id: 'do1mio', label: 'Do 1 mio EUR', midpoint: 600_000, min: 200_000, max: 1_000_000 },
+  { id: '1do3mio', label: '1–3 mio EUR', midpoint: 1_800_000, min: 1_000_000, max: 3_000_000 },
+  { id: '3do10mio', label: '3–10 mio EUR', midpoint: 5_500_000, min: 3_000_000, max: 10_000_000 },
+  { id: 'nad10mio', label: 'Več kot 10 mio EUR', midpoint: 15_000_000, min: 10_000_000, max: 20_000_000 },
 ];
 
 /**
@@ -36,10 +36,10 @@ const REVENUE_BANDS: ScaleBand[] = [
  * po stroških kanala pogosto pod 20 %.
  */
 const MARGIN_BANDS: ScaleBand[] = [
-  { id: 'do15', label: 'Do 15 %', midpoint: 0.12 },
-  { id: '15do25', label: '15–25 %', midpoint: 0.2 },
-  { id: '25do35', label: '25–35 %', midpoint: 0.3 },
-  { id: 'nad35', label: 'Več kot 35 %', midpoint: 0.42 },
+  { id: 'do15', label: 'Do 15 %', midpoint: 0.12, min: 0.09, max: 0.15 },
+  { id: '15do25', label: '15–25 %', midpoint: 0.2, min: 0.15, max: 0.25 },
+  { id: '25do35', label: '25–35 %', midpoint: 0.3, min: 0.25, max: 0.35 },
+  { id: 'nad35', label: 'Več kot 35 %', midpoint: 0.42, min: 0.35, max: 0.49 },
 ];
 
 export const MALOPRODAJA_CONTEXT: SegmentContext = {
@@ -47,7 +47,7 @@ export const MALOPRODAJA_CONTEXT: SegmentContext = {
   intro:
     'Tri vprašanja, ki ne sprašujejo po številkah. Iz njih izpeljemo, koliko od izmerjenega stroška je realno mogoče nasloviti — trgovec, ki ima blagajno že povezano z zalogami, je lažje izboljšave namreč večinoma že pobral.',
   costBasisIntro:
-    'Štiri številke, ki veljajo za vsa področja. Polni strošek ure pomeni bruto plačo z vsemi prispevki in režijo, ne neto izplačila. Prihodek in maržo vprašamo enkrat, ker se iz njiju računa vsak odstotek v nadaljevanju.',
+    'Pet številk, ki veljajo za vsa področja. Polni strošek ure pomeni bruto plačo z vsemi prispevki in režijo, ne neto izplačila. Prihodek in maržo vprašamo enkrat, ker se iz njiju računa vsak odstotek v nadaljevanju.',
 
   businessType: {
     legend: 'Kako pretežno prodajate?',
@@ -124,6 +124,24 @@ export const MALOPRODAJA_CONTEXT: SegmentContext = {
     help: 'Kar ostane od prodajne cene po nabavni vrednosti in neposrednih stroških kanala (provizije, kartice, dostava). Ni pribitek na nabavno ceno.',
     bands: MARGIN_BANDS,
     fallback: 0.25,
+    unit: '%',
+    asPercent: true,
+  },
+  /**
+   * KALIBRACIJA: dosedanja konstanta 6 % (modules/shared.ts) je privzetek ob
+   * praznem vnosu; legacy modul je spraševal z 10 %. Sredine pasov se namenoma
+   * ne ujemajo s privzetkom, da "ni odgovora" ostane razpoznavno stanje.
+   */
+  capitalCostRate: {
+    label: 'Letni strošek financiranja obratnega kapitala',
+    help: 'Obrestna mera posojila oziroma donos, ki bi ga denar prinesel drugje. Množi denar, vezan v terjatvah in zalogah.',
+    bands: [
+      { id: 'do5', label: 'Do 5 %', midpoint: 0.04, min: 0.03, max: 0.05 },
+      { id: '5do8', label: '5–8 %', midpoint: 0.065, min: 0.05, max: 0.08 },
+      { id: '8do12', label: '8–12 %', midpoint: 0.1, min: 0.08, max: 0.12 },
+      { id: 'nad12', label: 'Več kot 12 %', midpoint: 0.15, min: 0.12, max: 0.18 },
+    ],
+    fallback: 0.06,
     unit: '%',
     asPercent: true,
   },

@@ -2,7 +2,6 @@ import { addressableShareOf, mainCauseField, type CauseOption } from './addressa
 import {
   ASSURANCE_CHOICES,
   MONTHS_PER_YEAR,
-  RECEIVABLES_CAPITAL_COST,
   reducibleShareField,
   reducibleShareOf,
   riskLevelFromScore,
@@ -493,6 +492,7 @@ const TERJATVE_CAUSES: CauseOption[] = [
 
 export const terjatveTrgovina: ModuleDefinition = {
   id: 'terjatve_trgovina',
+  usesRevenue: true,
   title: 'Plačilni roki in terjatve',
   summary:
     'Strošek denarja, ki predolgo čaka na kupca, čas za opominjanje in izterjavo ter odpisane terjatve.',
@@ -515,13 +515,8 @@ export const terjatveTrgovina: ModuleDefinition = {
       contextOnly: true,
       help: 'Podatek ne vstopa v izračun — služi za primerjavo z dogovorjenim rokom.',
     },
-    {
-      key: 'annualRevenueEUR',
-      label: 'Kolikšni so vaši letni prihodki od prodaje?',
-      kind: 'number',
-      unit: 'EUR/leto',
-      default: 0,
-    },
+    // Prihodek pride iz skupne finančne osnove (contexts/trgovina.ts) — je lastnost
+    // podjetja, ne področja, in mora obstajati tudi, kadar to področje ni izbrano.
     {
       key: 'overdueDaysAverage',
       label: 'Za koliko dni povprečno kupci prekoračijo dogovorjeni plačilni rok?',
@@ -549,13 +544,13 @@ export const terjatveTrgovina: ModuleDefinition = {
   ],
   compute: (input, context) => {
     const addressableShare = addressableShareOf(TERJATVE_CAUSES, input.mainCause);
-    const dailyRevenue = input.annualRevenueEUR / 365;
+    const dailyRevenue = context.annualRevenueEUR / 365;
 
     return [
       {
         bucket: 'directLoss',
         label: 'Strošek zamud pri plačilih',
-        valueEUR: dailyRevenue * input.overdueDaysAverage * RECEIVABLES_CAPITAL_COST,
+        valueEUR: dailyRevenue * input.overdueDaysAverage * context.capitalCostRate,
         addressableShare,
       },
       {

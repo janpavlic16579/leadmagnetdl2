@@ -28,6 +28,7 @@ const CONTEXT: ComputeContext = {
   chargeOutRateEUR: 75,
   annualRevenueEUR: 3_000_000,
   contributionMarginRate: 0.25,
+  capitalCostRate: 0.06,
 };
 const MONTHS = 12;
 
@@ -172,6 +173,20 @@ describe('Blagajna, zaključki in manko', () => {
     expect(item.hoursPerMonth).toBe(urNaLeto / MONTHS);
   });
 
+  it('odprti dnevi sledijo odgovoru 5/6/7 dni, ne fiksni konstanti', () => {
+    // Prej fiksnih 305 dni za vse: 7-dnevna živilska trgovina podcenjena, 5-dnevna
+    // specializirana precenjena za ±16 % pri najbolj dokazljivi številki vprašalnika.
+    const base = { tillCount: 8, closingMinutesPerTillPerDay: 15 };
+    const petDni = run(blagajnaMp, { ...base, openDaysPerWeek: 0 });
+    const sedemDni = run(blagajnaMp, { ...base, openDaysPerWeek: 2 });
+    expect(pick(petDni, 'Dnevni zaključki blagajn').valueEUR).toBe(
+      ((8 * 15 * 255) / 60) * CONTEXT.operationalHourCostEUR,
+    );
+    expect(pick(sedemDni, 'Dnevni zaključki blagajn').valueEUR).toBe(
+      ((8 * 15 * 355) / 60) * CONTEXT.operationalHourCostEUR,
+    );
+  });
+
   it('inventura je kapaciteta in ločena od manka, ki ga odkrije', () => {
     const item = pick(outputs, 'Izvedba inventur');
     expect(item.bucket).toBe('capacity');
@@ -286,10 +301,12 @@ describe('Kratka diagnostika', () => {
 });
 
 describe('Skupne lastnosti stroškovnih modulov', () => {
-  it('vsak modul ima 5–6 polj, da vprašalnik ostane kratek', () => {
+  it('vsak modul ima 5–7 polj, da vprašalnik ostane kratek', () => {
+    // Zgornja meja 7 zaradi blagajnaMp: vprašanje o odprtih dnevih (5/6/7) je en
+    // radio z eno izbiro in nadomešča fiksno konstanto — bremena ne povečuje opazno.
     for (const definition of COSTED_MODULES) {
       expect(definition.fields.length, definition.id).toBeGreaterThanOrEqual(5);
-      expect(definition.fields.length, definition.id).toBeLessThanOrEqual(6);
+      expect(definition.fields.length, definition.id).toBeLessThanOrEqual(7);
     }
   });
 

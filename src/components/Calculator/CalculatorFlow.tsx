@@ -21,7 +21,10 @@ import {
   type TriageScores,
 } from '../../lib/moduleEngine';
 import { aggregateResults, assessConfidence, buildComputeContext } from '../../lib/potential';
+import { buildTotalsRange } from '../../lib/range';
+import { assessHoursPlausibility, hoursPlausibilityWarning } from '../../lib/plausibility';
 import { selectFollowUpSequence } from '../../lib/followUp';
+import { triageScoreLabel } from '../../lib/answerLabels';
 import type { DownloadFile } from '../../lib/download';
 import type { SalesReport } from '../../lib/salesReport';
 import type {
@@ -176,6 +179,37 @@ export function CalculatorFlow({
   const highestModule = findHighestModule(outputs, segment.moduleIds);
 
   /**
+   * Rezultat kot razpon, kadar je katera od skupnih predpostavk izbran pas in ne
+   * vnesena številka (lib/range.ts) — sredina pasu je približek in prikaz tega ne
+   * sme skriti v navidezno natančni piki. Null = vse vneseno, prikaz ostane točka.
+   */
+  const totalsRange = useMemo(
+    () =>
+      buildTotalsRange({
+        modules: activeModules,
+        values: resolvedValues,
+        profile,
+        context,
+        band: context ? improvementBandFor(context, profile.currentSystem) : undefined,
+      }),
+    [activeModules, resolvedValues, profile, context],
+  );
+
+  /**
+   * Mehko opozorilo, kadar vsota vnesenih ur preseže verjetni delež kapacitete
+   * podjetja — število zaposlenih tu prvič dela, namesto da bi se zavrglo.
+   * Opozorilo nikoli ne blokira: podatek je lahko resničen, sum pa vseeno pripotuje
+   * do prodajnika v prodajni pripravi (buildSalesReport ga izračuna sam).
+   */
+  const plausibilityWarning = useMemo(
+    () =>
+      hoursPlausibilityWarning(
+        assessHoursPlausibility(activeModules, resolvedValues, basicInfo.employeeCount),
+      ),
+    [activeModules, resolvedValues, basicInfo.employeeCount],
+  );
+
+  /**
    * "+X strank brez nove zaposlitve" = sproščene ure / povprečne ure na stranko.
    *
    * Delitelja ne določa več skrita konstanta: vpraša ga področje Neobračunano delo
@@ -194,7 +228,7 @@ export function CalculatorFlow({
 
   const followUpSequence = selectFollowUpSequence({
     segment: segment.id,
-    directLossEUR: totals.directLossEUR,
+    annualLossEUR: totals.directLossEUR + totals.lostMarginEUR,
     hasModuleERisk: totals.risks.length > 0,
     highLossThresholdEUR: segment.highLossThresholdEUR,
   });
@@ -225,14 +259,23 @@ export function CalculatorFlow({
     // jsPDF je težka knjižnica in je potrebna šele tu — naloži se ob oddaji, ne ob
     // prvem prikazu strani. Prodajna dela gresta v isti blok, da ostaneta izven
     // začetnega svežnja.
-    const [{ buildResultsPdfFile }, { buildSalesReport }, { buildSalesPdfFile }, { buildSalesHtmlFile }, { downloadSequentially }] =
-      await Promise.all([
-        import('../../lib/pdf'),
-        import('../../lib/salesReport'),
-        import('../../lib/pdfSales'),
-        import('../../lib/salesReportHtml'),
-        import('../../lib/download'),
-      ]);
+    const [
+      { buildResultsPdfFile },
+      { buildSalesReport },
+      { buildSalesPdfFile },
+      { buildSalesHtmlFile, buildSalesReportHtml },
+      { downloadSequentially },
+      { buildLeadExportRecord },
+      { leadWebhookUrl, submitLead },
+    ] = await Promise.all([
+      import('../../lib/pdf'),
+      import('../../lib/salesReport'),
+      import('../../lib/pdfSales'),
+      import('../../lib/salesReportHtml'),
+      import('../../lib/download'),
+      import('../../lib/exportRecord'),
+      import('../../lib/submitLead'),
+    ]);
 
     // Strankino poročilo se sestavi PRVO in izven try/catch: je edina datoteka, ki
     // mora priti vedno, in napaka v prodajnem delu je ne sme odnesti s seboj.
@@ -243,6 +286,19 @@ export function CalculatorFlow({
       companyName: contact.companyName,
       outputs,
       totals,
+      totalsRange,
+      // Ista pokritost kot na zaslonu: hero znesek meri samo izbrana področja.
+      coverage: {
+        measuredCount: triageableIds.length - unmeasuredModules.length,
+        offeredCount: triageableIds.length,
+        unmeasured: unmeasuredModules.map((definition) => ({
+          title: definition.title,
+          scoreLabel:
+            (triageScores[definition.id] ?? 0) > 0
+              ? triageScoreLabel(definition, triageScores[definition.id] ?? 0)
+              : null,
+        })),
+      },
       highestModule,
       accountingCapacity,
     });
@@ -268,11 +324,49 @@ export function CalculatorFlow({
         triageScores,
         outputs,
         totals,
+        totalsRange,
         highestModule,
         followUpSequence,
       });
       setSalesReport(report);
-      salesFiles.push(await buildSalesPdfFile(report), buildSalesHtmlFile(report));
+
+      /**
+       * Dostava prodajne priprave in izvoznega zapisa (kalibracijska zanka):
+       * kadar je konfiguriran webhook (VITE_LEAD_WEBHOOK_URL), gre vse na
+       * strežnik — prodajna priprava je INTERNI dokument in ob uspešni dostavi
+       * ne pristane na napravi stranke. Brez webhooka (ali ob napaki) ostane
+       * dosedanje vedenje: prenos k stranki, da orodje deluje samostojno.
+       */
+      let deliveredToWebhook = false;
+      const webhookUrl = leadWebhookUrl();
+      if (webhookUrl) {
+        const record = buildLeadExportRecord({
+          timestampISO: report.meta.generatedAtISO,
+          contact,
+          consents,
+          industry: basicInfo.industry,
+          segment: segment.id,
+          employeeCount: basicInfo.employeeCount,
+          profile,
+          selectedModules: activeModules.map((definition) => definition.id),
+          triageScores,
+          moduleInputs: resolvedValues,
+          outputs,
+          totals,
+          followUpSequence,
+          utmSource,
+        });
+        if (record) {
+          deliveredToWebhook = await submitLead(
+            { record, salesReportHtml: buildSalesReportHtml(report) },
+            webhookUrl,
+          );
+        }
+      }
+
+      if (!deliveredToWebhook) {
+        salesFiles.push(await buildSalesPdfFile(report), buildSalesHtmlFile(report));
+      }
     } catch {
       // Strankina datoteka je že sestavljena in se prenese tako ali tako.
     }
@@ -379,7 +473,8 @@ export function CalculatorFlow({
         values={resolvedValues}
         raw={moduleInputs}
         onChange={setModuleInputs}
-        liveTotalEUR={totals.directLossEUR + totals.capacityEUR}
+        liveTotalEUR={totals.directLossEUR + totals.lostMarginEUR + totals.capacityEUR}
+        plausibilityWarning={plausibilityWarning}
         stepLabel={stepLabel('inputs')}
         onNext={goNext('inputs')}
         onBack={goBack('inputs')}
@@ -397,8 +492,10 @@ export function CalculatorFlow({
         segment={segment}
         outputsByModule={groupByModule(outputs)}
         totals={totals}
+        totalsRange={totalsRange}
         accountingCapacity={accountingCapacity}
         unmeasuredModules={unmeasuredModules}
+        triageScores={triageScores}
         stepLabel={stepLabel('results')}
         onMeasureModule={(id) => {
           // Odkar je "neizmerjeno" izpeljano iz podatkov, se gumb prikaže tudi pri

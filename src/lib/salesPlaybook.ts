@@ -167,7 +167,8 @@ function buildObjections(report: PlaybookInput): SalesPlaybook['objections'] {
     triggered.push('unmeasuredAreas');
   }
 
-  const painEUR = report.summary.directLossEUR + report.summary.capacityEUR;
+  const painEUR =
+    report.summary.directLossEUR + report.summary.lostMarginEUR + report.summary.capacityEUR;
   if (painEUR > 0 && report.qualification.improvementBand.max >= 0.25) {
     triggered.push('noTimeToImplement');
   }
@@ -184,7 +185,8 @@ function buildObjections(report: PlaybookInput): SalesPlaybook['objections'] {
 // --- Velikost posla in nujnost ----------------------------------------------
 
 function buildDealSizing(report: PlaybookInput, icp: IcpScore): DealSizing {
-  const measuredLossEUR = report.summary.directLossEUR + report.summary.capacityEUR;
+  const measuredLossEUR =
+    report.summary.directLossEUR + report.summary.lostMarginEUR + report.summary.capacityEUR;
   const urgencyValue = icp.dimensions.find((dimension) => dimension.key === 'urgency');
 
   const urgency: DealSizing['urgency'] =

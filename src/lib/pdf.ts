@@ -5,7 +5,8 @@ import type { SegmentConfig } from '../config/segments';
 import { getActionPlan } from '../../content/actions/actions';
 import { groupByModule } from './moduleEngine';
 import type { ConfidenceLevel, ResultTotals } from './potential';
-import { formatEUR, formatHours, formatNumber } from './format';
+import { formatEUR, formatEURRange, formatHours, formatNumber } from './format';
+import { displayRange, type EURRange, type TotalsRange } from './range';
 import { slugify, type DownloadFile } from './download';
 import {
   CONFIDENCE_LABEL,
@@ -32,8 +33,27 @@ export interface GeneratePdfParams {
   companyName: string;
   outputs: ModuleOutput[];
   totals: ResultTotals;
+  /** Razpon, kadar finančna osnova stoji na izbranih pasovih (lib/range.ts). */
+  totalsRange?: TotalsRange | null;
+  /**
+   * Pokritost izračuna: hero številka meri samo izbrana področja (privzeto 3 od
+   * 9–11). PDF brez tega pripisa se bere, kot da meri vse — enako kot na zaslonu
+   * (ResultsView.coverageNote).
+   */
+  coverage?: {
+    measuredCount: number;
+    offeredCount: number;
+    unmeasured: { title: string; scoreLabel: string | null }[];
+  };
   highestModule: string | null;
   accountingCapacity?: number;
+}
+
+/** Ista logika kot na zaslonu: razpon ima prednost, "najmanj" le pri točki. */
+function heroAmount(value: number, range: EURRange | undefined, lowConfidence: boolean): string {
+  const span = displayRange(range);
+  if (span) return formatEURRange(span.minEUR, span.maxEUR);
+  return lowConfidence ? `najmanj ${formatEUR(value)}` : formatEUR(value);
 }
 
 function moduleTitle(moduleId: string): string {
@@ -60,6 +80,7 @@ function rowsForBucket(outputs: ModuleOutput[], bucket: ModuleOutput['bucket']):
 interface ChartDatum {
   name: string;
   directLossEUR: number;
+  lostMarginEUR: number;
   capacityEUR: number;
 }
 
@@ -71,9 +92,14 @@ function buildChartData(segment: SegmentConfig, outputs: ModuleOutput[]): ChartD
       const moduleOutputs = outputsByModule[definition.id] ?? [];
       const sumBucket = (bucket: string) =>
         moduleOutputs.filter((output) => output.bucket === bucket).reduce((sum, output) => sum + (output.valueEUR ?? 0), 0);
-      return { name: definition.title, directLossEUR: sumBucket('directLoss'), capacityEUR: sumBucket('capacity') };
+      return {
+        name: definition.title,
+        directLossEUR: sumBucket('directLoss'),
+        lostMarginEUR: sumBucket('lostMargin'),
+        capacityEUR: sumBucket('capacity'),
+      };
     })
-    .filter((datum) => datum.directLossEUR > 0 || datum.capacityEUR > 0);
+    .filter((datum) => datum.directLossEUR > 0 || datum.lostMarginEUR > 0 || datum.capacityEUR > 0);
 }
 
 /** Najbližje "lepo" zaokroženo zgornje število za osne oznake grafa (1/2/2,5/5/10 × 10^n). */
@@ -108,7 +134,13 @@ export async function buildResultsPdfFile(params: GeneratePdfParams): Promise<Do
   y = drawHeroSection(doc, params, y);
 
   const chartData = buildChartData(params.segment, params.outputs);
-  const directLossRows = rowsForBucket(params.outputs, 'directLoss');
+  // Nezaslužena marža sodi v isto razčlenitev kot neposredna izguba — enako kot na
+  // zaslonu (ResultsView: buckets={['directLoss', 'lostMargin']}). Brez nje trgovec
+  // z največjo postavko "prazne police" v PDF-ju te postavke sploh ne bi videl.
+  const directLossRows = [
+    ...rowsForBucket(params.outputs, 'directLoss'),
+    ...rowsForBucket(params.outputs, 'lostMargin'),
+  ];
   if (chartData.length > 0 || directLossRows.length > 0) {
     y = ensurePageSpace(doc, y, 24);
     y = drawSectionTitle(doc, 'Razčlenitev po področjih', y);
@@ -132,6 +164,10 @@ export async function buildResultsPdfFile(params: GeneratePdfParams): Promise<Do
 
   if (params.totals.risks.length > 0) {
     y = drawRisksSection(doc, params.totals.risks, y);
+  }
+
+  if (params.coverage && params.coverage.unmeasured.length > 0) {
+    y = drawUnmeasuredSection(doc, params.coverage, y);
   }
 
   const actionPlan = getActionPlan(params.highestModule);
@@ -247,7 +283,11 @@ function drawHeroSection(doc: jsPDF, params: GeneratePdfParams, startY: number):
   setFont(doc, 'bold');
   doc.setFontSize(24);
   doc.setTextColor(...PALETTE.brandDark);
-  const amountLabel = params.totals.confidence === 'low' ? `najmanj ${formatEUR(params.totals.directLossEUR)}` : formatEUR(params.totals.directLossEUR);
+  const amountLabel = heroAmount(
+    params.totals.directLossEUR,
+    params.totalsRange?.directLoss,
+    params.totals.confidence === 'low',
+  );
   doc.text(amountLabel, MARGIN + 8, y + 23);
 
   setFont(doc, 'normal');
@@ -262,26 +302,53 @@ function drawHeroSection(doc: jsPDF, params: GeneratePdfParams, startY: number):
 
   y += heroHeight + 6;
 
-  // Sekundarne kartice: kapaciteta, enkratni kapital, potencial — vsaka samo, če je prisotna.
+  // Pokritost tik pod hero zneskom — znesek meri samo izbrana področja.
+  if (params.coverage && params.coverage.measuredCount < params.coverage.offeredCount) {
+    setFont(doc, 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(...PALETTE.textMuted);
+    doc.text(
+      `Izmerjeno ${params.coverage.measuredCount} od ${params.coverage.offeredCount} področij — neizmerjena v zneske ne vstopajo (glej zadnji razdelek).`,
+      MARGIN,
+      y,
+    );
+    y += 6;
+  }
+
+  // Sekundarne kartice: marža, kapaciteta, enkratni kapital, potencial — vsaka samo, če je prisotna.
+  const cardValue = (value: number, range: EURRange | undefined): string => {
+    const span = displayRange(range);
+    return span ? formatEURRange(span.minEUR, span.maxEUR) : formatEUR(value);
+  };
   const figures: { title: string; value: string; note: string }[] = [];
+  if (params.totals.lostMarginEUR > 0) {
+    figures.push({
+      title: 'NEZASLUŽENA LETNA MARŽA',
+      value: cardValue(params.totals.lostMarginEUR, params.totalsRange?.lostMargin),
+      note: 'Marža, ki ni bila zaslužena — prazna polica, napačna cena.',
+    });
+  }
   if (params.totals.capacityEUR > 0) {
     figures.push({
       title: 'VREDNOST IZGUBLJENE KAPACITETE',
-      value: formatEUR(params.totals.capacityEUR),
+      value: cardValue(params.totals.capacityEUR, params.totalsRange?.capacity),
       note: `${formatHours(params.totals.capacityHoursPerMonth)}/mesec — ni prihranek pri plačah, zaposleni ostane.`,
     });
   }
   if (params.totals.oneTimeCapitalEUR > 0) {
     figures.push({
       title: 'SPROSTLJIV OBRATNI KAPITAL',
-      value: formatEUR(params.totals.oneTimeCapitalEUR),
+      value: cardValue(params.totals.oneTimeCapitalEUR, params.totalsRange?.oneTimeCapital),
       note: 'Enkraten učinek, ne letni prihranek — se z zneski zgoraj ne sešteva.',
     });
   }
   if (params.totals.potential) {
     figures.push({
       title: 'REALISTIČNI POTENCIAL',
-      value: `${formatEUR(params.totals.potential.minEUR)} – ${formatEUR(params.totals.potential.maxEUR)}`,
+      value: formatEURRange(
+        params.totalsRange?.potential?.minEUR ?? params.totals.potential.minEUR,
+        params.totalsRange?.potential?.maxEUR ?? params.totals.potential.maxEUR,
+      ),
       note: 'Letno, konservativna ocena — ni obljuba prihranka.',
     });
   }
@@ -337,6 +404,7 @@ const CHART_TOTAL_HEIGHT = CHART_LEGEND_HEIGHT + CHART_PLOT_HEIGHT + CHART_LABEL
  */
 function drawBreakdownChart(doc: jsPDF, data: ChartDatum[], startY: number): number {
   let y = startY;
+  const hasLostMargin = data.some((datum) => datum.lostMarginEUR > 0);
   const hasCapacity = data.some((datum) => datum.capacityEUR > 0);
 
   setFont(doc, 'normal');
@@ -345,8 +413,14 @@ function drawBreakdownChart(doc: jsPDF, data: ChartDatum[], startY: number): num
   doc.rect(MARGIN, y, 3, 3, 'F');
   doc.setTextColor(...PALETTE.textMuted);
   doc.text('Neposredna izguba', MARGIN + 5, y + 2.6);
+  let legendX = MARGIN + 5 + doc.getTextWidth('Neposredna izguba') + 8;
+  if (hasLostMargin) {
+    doc.setFillColor(...PALETTE.amber);
+    doc.rect(legendX, y, 3, 3, 'F');
+    doc.text('Nezaslužena marža', legendX + 5, y + 2.6);
+    legendX += 5 + doc.getTextWidth('Nezaslužena marža') + 8;
+  }
   if (hasCapacity) {
-    const legendX = MARGIN + 5 + doc.getTextWidth('Neposredna izguba') + 8;
     doc.setFillColor(...PALETTE.brandDark);
     doc.rect(legendX, y, 3, 3, 'F');
     doc.text('Sproščena kapaciteta', legendX + 5, y + 2.6);
@@ -354,7 +428,9 @@ function drawBreakdownChart(doc: jsPDF, data: ChartDatum[], startY: number): num
   y += CHART_LEGEND_HEIGHT;
 
   const plotBottom = y + CHART_PLOT_HEIGHT;
-  const maxValue = Math.max(...data.flatMap((datum) => [datum.directLossEUR, datum.capacityEUR]));
+  const maxValue = Math.max(
+    ...data.flatMap((datum) => [datum.directLossEUR, datum.lostMarginEUR, datum.capacityEUR]),
+  );
   const niceMax = niceCeiling(maxValue);
 
   const steps = 4;
@@ -370,26 +446,34 @@ function drawBreakdownChart(doc: jsPDF, data: ChartDatum[], startY: number): num
     doc.text(formatNumber(value), MARGIN - 2, gridY + 1.2, { align: 'right' });
   }
 
+  // Serije so prisotne le, kadar imajo denar — enako kot na zaslonu, kjer stolpec
+  // brez vrednosti ne zaseda širine skupine.
+  const series: { color: typeof PALETTE.brandYellow; value: (datum: ChartDatum) => number }[] = [
+    { color: PALETTE.brandYellow, value: (datum) => datum.directLossEUR },
+    ...(hasLostMargin ? [{ color: PALETTE.amber, value: (datum: ChartDatum) => datum.lostMarginEUR }] : []),
+    ...(hasCapacity ? [{ color: PALETTE.brandDark, value: (datum: ChartDatum) => datum.capacityEUR }] : []),
+  ];
+
   const slotWidth = CONTENT_WIDTH / data.length;
   const barGap = Math.min(2, slotWidth * 0.08);
-  const barWidth = hasCapacity ? (slotWidth - barGap * 3) / 2 : slotWidth - barGap * 2;
+  const barWidth = (slotWidth - barGap * (series.length + 1)) / series.length;
 
   data.forEach((datum, index) => {
     const slotX = MARGIN + index * slotWidth;
 
-    const directHeight = (datum.directLossEUR / niceMax) * CHART_PLOT_HEIGHT;
-    if (directHeight > 0) {
-      doc.setFillColor(...PALETTE.brandYellow);
-      doc.rect(slotX + barGap, plotBottom - directHeight, barWidth, directHeight, 'F');
-    }
-
-    if (hasCapacity) {
-      const capacityHeight = (datum.capacityEUR / niceMax) * CHART_PLOT_HEIGHT;
-      if (capacityHeight > 0) {
-        doc.setFillColor(...PALETTE.brandDark);
-        doc.rect(slotX + barGap * 2 + barWidth, plotBottom - capacityHeight, barWidth, capacityHeight, 'F');
+    series.forEach((entry, seriesIndex) => {
+      const height = (entry.value(datum) / niceMax) * CHART_PLOT_HEIGHT;
+      if (height > 0) {
+        doc.setFillColor(...entry.color);
+        doc.rect(
+          slotX + barGap * (seriesIndex + 1) + barWidth * seriesIndex,
+          plotBottom - height,
+          barWidth,
+          height,
+          'F',
+        );
       }
-    }
+    });
 
     setFont(doc, 'normal');
     doc.setFontSize(6.3);
@@ -466,6 +550,38 @@ function drawRisksSection(doc: jsPDF, risks: ModuleOutput[], startY: number): nu
   }
 
   return y;
+}
+
+// --- Česa nismo izmerili ----------------------------------------------------
+
+/**
+ * Neizmerjena področja poimensko, z obiskovalčevo lastno triažno oceno. Lead
+ * magnet, ki zamolči, česa ni izmeril, prikaže hero znesek kot celoto — in ravno
+ * področje z oceno "vsak dan" brez zneska je najmočnejši razlog za pogovor.
+ */
+function drawUnmeasuredSection(
+  doc: jsPDF,
+  coverage: NonNullable<GeneratePdfParams['coverage']>,
+  startY: number,
+): number {
+  let y = ensurePageSpace(doc, startY, 24);
+  y = drawSectionTitle(doc, 'Česa nismo izmerili', y);
+
+  setFont(doc, 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...PALETTE.textMuted);
+  const intro = doc.splitTextToSize(
+    'Za ta področja nimamo vaših številk, zato v zgornje zneske ne vstopajo z nobenim zneskom. Kjer je navedena vaša ocena, ste področje sami označili kot problematično — dejanski skupni strošek je torej višji od prikazanega.',
+    CONTENT_WIDTH,
+  );
+  doc.text(intro, MARGIN, y);
+  y += intro.length * 4.5 + 4;
+
+  return drawTable(doc, {
+    head: ['Področje', 'Vaša ocena'],
+    rows: coverage.unmeasured.map((entry) => [entry.title, entry.scoreLabel ?? '—']),
+    startY: y,
+  });
 }
 
 // --- Akcijski načrt --------------------------------------------------------

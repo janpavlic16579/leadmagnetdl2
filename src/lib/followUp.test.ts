@@ -5,7 +5,7 @@ describe('selectFollowUpSequence', () => {
   it('visoka izguba + E-tveganje -> high-loss-with-risk', () => {
     const seq = selectFollowUpSequence({
       segment: 'proizvodnja',
-      directLossEUR: 20000,
+      annualLossEUR: 20000,
       hasModuleERisk: true,
       highLossThresholdEUR: 15000,
     });
@@ -15,7 +15,7 @@ describe('selectFollowUpSequence', () => {
   it('visoka izguba brez E-tveganja -> high-loss-no-risk', () => {
     const seq = selectFollowUpSequence({
       segment: 'proizvodnja',
-      directLossEUR: 20000,
+      annualLossEUR: 20000,
       hasModuleERisk: false,
       highLossThresholdEUR: 15000,
     });
@@ -25,7 +25,7 @@ describe('selectFollowUpSequence', () => {
   it('nizka izguba -> low-loss-newsletter', () => {
     const seq = selectFollowUpSequence({
       segment: 'proizvodnja',
-      directLossEUR: 5000,
+      annualLossEUR: 5000,
       hasModuleERisk: true,
       highLossThresholdEUR: 15000,
     });
@@ -35,7 +35,7 @@ describe('selectFollowUpSequence', () => {
   it('računovodstvo vedno -> accounting-lm07-bridge, ne glede na višino', () => {
     const seq = selectFollowUpSequence({
       segment: 'racunovodstvo',
-      directLossEUR: 0,
+      annualLossEUR: 0,
       hasModuleERisk: false,
     });
     expect(seq).toBe('accounting-lm07-bridge');

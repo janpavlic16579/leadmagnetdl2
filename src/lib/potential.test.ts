@@ -4,6 +4,7 @@ import {
   assessConfidence,
   buildComputeContext,
   computePotentialRange,
+  isRevenueMissing,
   type AssessConfidenceParams,
   type ConfidenceLevel,
 } from './potential';
@@ -18,6 +19,7 @@ import {
 import { SEGMENT_ORDER } from '../config/segments';
 import { napake } from '../config/modules/logistika';
 import { material, planiranje } from '../config/modules/proizvodnja';
+import { terjatveTrgovina } from '../config/modules/trgovina';
 import { obracun } from '../config/modules/storitve';
 import type { ModuleOutput } from '../config/modules/moduleTypes';
 
@@ -463,6 +465,7 @@ describe('aggregateResults', () => {
         chargeOutRateEUR: 75,
         annualRevenueEUR: 0,
         contributionMarginRate: 0,
+  capitalCostRate: 0.06,
       },
     );
 
@@ -477,5 +480,81 @@ describe('aggregateResults', () => {
     expect(totals.potential!.minEUR).toBeLessThan(totals.potential!.maxEUR);
     expect(totals.potential!.maxEUR).toBeLessThan(totals.directLossEUR + totals.capacityEUR);
     expect(totals.confidence).toBe('medium');
+  });
+});
+
+describe('isRevenueMissing in oznaka ob manjkajočem prihodku', () => {
+  const TRGOVINA = getSegmentContext('trgovina')!;
+  const trgovinaProfile = (overrides: Partial<BusinessProfile>): BusinessProfile => ({
+    ...emptyProfileFor(TRGOVINA),
+    ...overrides,
+  });
+
+  const answeredTerjatve = {
+    terjatve_trgovina: resolveInputs(terjatveTrgovina, {
+      overdueDaysAverage: 18,
+      dunningHoursPerMonth: 25,
+      annualBadDebtEUR: 12_000,
+      mainCause: 0,
+    }),
+  };
+
+  it('izpolnjene terjatve brez prihodka -> prisilno nizka, ne glede na ostale odgovore', () => {
+    const level = assessConfidence({
+      context: TRGOVINA,
+      profile: trgovinaProfile(EXACT_HOURS),
+      modules: [terjatveTrgovina],
+      values: answeredTerjatve,
+      outputs: computeModules(
+        [terjatveTrgovina],
+        answeredTerjatve,
+        buildComputeContext(trgovinaProfile(EXACT_HOURS)),
+      ),
+    });
+    expect(level).toBe('low');
+  });
+
+  it('vnesen prihodek pravila ne sproži', () => {
+    expect(
+      isRevenueMissing(
+        trgovinaProfile({ annualRevenue: { value: 5_000_000, estimated: false } }),
+        [terjatveTrgovina],
+        answeredTerjatve,
+      ),
+    ).toBe(false);
+  });
+
+  it('neizpolnjeno področje pravila ne sproži — prispeva 0 EUR tako ali tako', () => {
+    const untouched = { terjatve_trgovina: resolveInputs(terjatveTrgovina, undefined) };
+    expect(isRevenueMissing(trgovinaProfile({}), [terjatveTrgovina], untouched)).toBe(false);
+  });
+
+  it('proizvodnja brez modula, ki bi bral prihodek, zaradi ocenjenega prihodka ne izgubi visoke oznake', () => {
+    const level = assessConfidence({
+      context: PROIZVODNJA,
+      profile: profileWith(EXACT_HOURS),
+      modules: [planiranje],
+      values: {
+        planiranje: resolveInputs(planiranje, {
+          waitingHoursPerMonth: 100,
+          overtimeHoursPerMonth: 20,
+          replanningHoursPerMonth: 40,
+          mainCause: 0,
+        }),
+      },
+      outputs: computeModules(
+        [planiranje],
+        {
+          planiranje: resolveInputs(planiranje, {
+            waitingHoursPerMonth: 100,
+            overtimeHoursPerMonth: 20,
+            replanningHoursPerMonth: 40,
+            mainCause: 0,
+          }),
+        },
+        buildComputeContext(profileWith(EXACT_HOURS)),
+      ),
+    });
+    expect(level).toBe('high');
   });
 });

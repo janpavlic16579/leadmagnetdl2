@@ -118,6 +118,16 @@ export interface ComputeContext {
    * se to pozabi — `undefined × ure × 12` je NaN, ki se izriše kot veljaven znesek.
    */
   chargeOutRateEUR: number;
+  /**
+   * Letni strošek financiranja (obresti oziroma oportunitetni donos) kot delež
+   * (0–1). Množi denar, vezan v terjatvah in zalogah.
+   *
+   * Doslej fiksno 6 % (shared.ts) — legacy modul je isti koncept spraševal s
+   * privzetkom 10 %, torej 67-odstotno neskladje za isto številko. Zdaj je del
+   * skupne finančne osnove: vpraša ga dejavnost, katere moduli ga uporabljajo,
+   * drugod obvelja privzetek 6 %. Nikoli 0 — denar ni nikjer zastonj.
+   */
+  capitalCostRate: number;
 }
 
 export interface ModuleField {
@@ -213,6 +223,30 @@ export interface ModuleDefinition {
   compute: (input: Record<string, number>, context: ComputeContext) => ModuleOutputDraft[];
   /** Funkcionalnosti PANTHEON, ki naslavljajo ta modul — prikaz na rezultatih in v PDF. */
   pantheon?: string[];
+  /**
+   * compute() množi context.annualRevenueEUR. Prihodek brez odgovora je namenoma 0
+   * (glej ScaleQuestion.fallback) in tedaj te postavke tiho izpadejo — zastavica
+   * omogoči, da ocena zanesljivosti pade na "nizko" in da razlaga pove, zakaj.
+   * Skladnost z dejansko formulo varuje registrski test (compute.toString()).
+   */
+  usesRevenue?: true;
+  /**
+   * compute() množi context.contributionMarginRate. Marža ima neničeln privzetek,
+   * zato manjkajoč odgovor ne izniči postavk — zastavica pove le, ali naj ocenjena
+   * marža sploh šteje pri oceni zanesljivosti (dejavnosti, kjer je ne uporablja
+   * noben izbran modul, zaradi nje ne smejo izgubiti oznake "visoka").
+   */
+  usesMargin?: true;
+  /**
+   * Tipičen letni razpon izgube tega področja za podjetje ciljne velikosti.
+   *
+   * REZERVIRANO za kalibracijo: polje se danes NE izpolnjuje in NE prikazuje —
+   * okvirna številka brez empirije bi kršila jamstvo "nobene številke si ne
+   * izmislimo". Ko bo zbranih dovolj vnosov (glej lib/exportRecord.ts), se sem
+   * vpišejo izmerjeni razponi in prikaz neizmerjenih področij jih lahko pokaže
+   * kot označen pas ("neizmerjeno, tipično X–Y EUR").
+   */
+  typicalAnnualLossBand?: { minEUR: number; maxEUR: number };
 }
 
 /** Privzete vrednosti modula kot zapis, primeren za compute(). */

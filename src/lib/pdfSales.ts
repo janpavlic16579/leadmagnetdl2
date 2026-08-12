@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
-import { formatEUR, formatHours, formatPercent } from './format';
+import { formatEUR, formatEURRange, formatHours, formatPercent } from './format';
+import { displayRange, type EURRange } from './range';
 import { slugify, type DownloadFile } from './download';
 import {
   CONFIDENCE_LABEL,
@@ -155,25 +156,36 @@ function drawQualification(doc: jsPDF, report: SalesReport, startY: number): num
 
 function drawSummary(doc: jsPDF, report: SalesReport, startY: number): number {
   const s = report.summary;
+  // Isti razpon kot na strankinem zaslonu (glej salesReportHtml.ts).
+  const value = (point: number, range: EURRange | undefined): string => {
+    const span = displayRange(range);
+    return span ? formatEURRange(span.minEUR, span.maxEUR) : formatEUR(point);
+  };
   const rows: string[][] = [
-    ['Neposredne letne izgube', formatEUR(s.directLossEUR), 'Denar, ki odteka'],
+    ['Neposredne letne izgube', value(s.directLossEUR, s.rangeEUR?.directLoss), 'Denar, ki odteka'],
+    ...(s.lostMarginEUR > 0
+      ? [['Nezaslužena letna marža', value(s.lostMarginEUR, s.rangeEUR?.lostMargin), 'Prazna polica, napačna cena']]
+      : []),
     [
       'Vrednost izgubljene kapacitete',
-      formatEUR(s.capacityEUR),
+      value(s.capacityEUR, s.rangeEUR?.capacity),
       `${formatHours(s.capacityHoursPerMonth)}/mesec — ni prihranek pri plačah`,
     ],
   ];
   if (s.oneTimeCapitalEUR > 0) {
     rows.push([
       'Sprostljiv obratni kapital',
-      formatEUR(s.oneTimeCapitalEUR),
+      value(s.oneTimeCapitalEUR, s.rangeEUR?.oneTimeCapital),
       'Enkraten učinek, se z letnimi zneski ne sešteva',
     ]);
   }
   if (s.potentialMinEUR !== undefined && s.potentialMaxEUR !== undefined) {
     rows.push([
       'Realistični potencial',
-      `${formatEUR(s.potentialMinEUR)} – ${formatEUR(s.potentialMaxEUR)}`,
+      formatEURRange(
+        s.rangeEUR?.potential?.minEUR ?? s.potentialMinEUR,
+        s.rangeEUR?.potential?.maxEUR ?? s.potentialMaxEUR,
+      ),
       'Letno, konservativno — ni obljuba prihranka',
     ]);
   }
@@ -188,6 +200,13 @@ function drawSummary(doc: jsPDF, report: SalesReport, startY: number): number {
 
   if (s.confidence) {
     y = drawMutedParagraph(doc, `${CONFIDENCE_LABEL[s.confidence]}. ${s.confidenceReason}`, y);
+  }
+  if (report.softness.plausibilityWarning) {
+    y = drawMutedParagraph(
+      doc,
+      `Opozorilo o verjetnosti: ${report.softness.plausibilityWarning}`,
+      y,
+    );
   }
   return y;
 }

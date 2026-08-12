@@ -7,10 +7,10 @@ import type { CostBand, SegmentContext } from './contextTypes';
  * privzetek naj raje podceni kot preceni, ker podjetja ne poznamo.
  */
 const OPERATIONAL_HOUR_BANDS: CostBand[] = [
-  { id: 'do25', label: 'Do 25 EUR', midpointEUR: 21 },
-  { id: '25do35', label: '25–35 EUR', midpointEUR: 30 },
-  { id: '35do50', label: '35–50 EUR', midpointEUR: 42 },
-  { id: 'nad50', label: 'Več kot 50 EUR', midpointEUR: 58 },
+  { id: 'do25', label: 'Do 25 EUR', midpointEUR: 21, minEUR: 17, maxEUR: 25 },
+  { id: '25do35', label: '25–35 EUR', midpointEUR: 30, minEUR: 25, maxEUR: 35 },
+  { id: '35do50', label: '35–50 EUR', midpointEUR: 42, minEUR: 35, maxEUR: 50 },
+  { id: 'nad50', label: 'Več kot 50 EUR', midpointEUR: 58, minEUR: 50, maxEUR: 66 },
 ];
 
 /**
@@ -37,7 +37,7 @@ export const SPLOSNO_CONTEXT: SegmentContext = {
   intro:
     'Tri vprašanja, ki ne sprašujejo po številkah. Ker vaše dejavnosti nismo mogli natančneje opredeliti, so naslednja vprašanja splošna — izračun bo zato bolj zadržan kot pri panožno prilagojenem vprašalniku.',
   costBasisIntro:
-    'Dve številki, ki veljata za vsa področja. Polni strošek pomeni bruto plačo z vsemi prispevki in režijo, ne neto izplačila.',
+    'Pet številk, ki veljajo za vsa področja. Polni strošek ure pomeni bruto plačo z vsemi prispevki in režijo, ne neto izplačila. Prihodek in maržo vprašamo enkrat — iz prihodka se med drugim izračuna strošek plačilnih zamud.',
 
   businessType: {
     legend: 'Kaj najbolje opiše vaše poslovanje?',
@@ -98,5 +98,54 @@ export const SPLOSNO_CONTEXT: SegmentContext = {
     help: 'Uprava, finance, nabava, prodaja, priprava dela.',
     bands: ADMIN_HOUR_BANDS,
     fallbackEUR: 35,
+  },
+
+  /**
+   * Prihodek je doslej spraševalo področje Terjatve — kdor ga v triaži ni izbral,
+   * je ostal brez osnove. KALIBRACIJA: sredine so geometrijske, preveriti po ~50 vnosih.
+   */
+  annualRevenue: {
+    label: 'Letni prihodki',
+    help: 'Neto, brez DDV. Če razpona ne izberete, postavk, vezanih na prihodek (npr. strošek plačilnih zamud), ne bomo ocenili — prihodka si ne izmišljamo.',
+    bands: [
+      { id: 'do1mio', label: 'Do 1 mio EUR', midpoint: 600_000, min: 200_000, max: 1_000_000 },
+      { id: '1do3mio', label: '1–3 mio EUR', midpoint: 1_800_000, min: 1_000_000, max: 3_000_000 },
+      { id: '3do10mio', label: '3–10 mio EUR', midpoint: 5_500_000, min: 3_000_000, max: 10_000_000 },
+      { id: 'nad10mio', label: 'Več kot 10 mio EUR', midpoint: 15_000_000, min: 10_000_000, max: 20_000_000 },
+    ],
+    fallback: 0,
+    unit: 'EUR/leto',
+  },
+
+  contributionMargin: {
+    label: 'Povprečna prispevna marža',
+    help: 'Kar od prodajne cene ostane po neposrednih stroških (material, blago ali izvedba).',
+    bands: [
+      { id: 'do15', label: 'Do 15 %', midpoint: 0.12, min: 0.09, max: 0.15 },
+      { id: '15do25', label: '15–25 %', midpoint: 0.2, min: 0.15, max: 0.25 },
+      { id: '25do35', label: '25–35 %', midpoint: 0.3, min: 0.25, max: 0.35 },
+      { id: 'nad35', label: 'Več kot 35 %', midpoint: 0.42, min: 0.35, max: 0.49 },
+    ],
+    fallback: 0.25,
+    unit: '%',
+    asPercent: true,
+  },
+  /**
+   * KALIBRACIJA: dosedanja konstanta 6 % (modules/shared.ts) je privzetek ob
+   * praznem vnosu; legacy modul je spraševal z 10 %. Sredine pasov se namenoma
+   * ne ujemajo s privzetkom, da "ni odgovora" ostane razpoznavno stanje.
+   */
+  capitalCostRate: {
+    label: 'Letni strošek financiranja obratnega kapitala',
+    help: 'Obrestna mera posojila oziroma donos, ki bi ga denar prinesel drugje. Množi denar, vezan v terjatvah in zalogah.',
+    bands: [
+      { id: 'do5', label: 'Do 5 %', midpoint: 0.04, min: 0.03, max: 0.05 },
+      { id: '5do8', label: '5–8 %', midpoint: 0.065, min: 0.05, max: 0.08 },
+      { id: '8do12', label: '8–12 %', midpoint: 0.1, min: 0.08, max: 0.12 },
+      { id: 'nad12', label: 'Več kot 12 %', midpoint: 0.15, min: 0.12, max: 0.18 },
+    ],
+    fallback: 0.06,
+    unit: '%',
+    asPercent: true,
   },
 };

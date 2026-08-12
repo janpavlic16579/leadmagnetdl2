@@ -1,5 +1,6 @@
 import { slugify, type DownloadFile } from './download';
-import { formatEUR, formatHours, formatPercent } from './format';
+import { formatEUR, formatEURRange, formatHours, formatPercent } from './format';
+import { displayRange, type EURRange } from './range';
 import {
   contactPerson,
   hourAssumptionSource,
@@ -112,24 +113,40 @@ function sectionResults(report: SalesReport): string {
 
 function subsectionTheirInfo(report: SalesReport): string {
   const s = report.summary;
+  // Isti razpon kot na strankinem zaslonu — točka, ki je stranka ni videla, bi
+  // bila na sestanku takoj izpodbita.
+  const value = (point: number, range: EURRange | undefined): string => {
+    const span = displayRange(range);
+    return span ? formatEURRange(span.minEUR, span.maxEUR) : formatEUR(point);
+  };
   const cards: string[] = [
-    card('Neposredne letne izgube', formatEUR(s.directLossEUR), 'Denar, ki odteka'),
+    card('Neposredne letne izgube', value(s.directLossEUR, s.rangeEUR?.directLoss), 'Denar, ki odteka'),
+    ...(s.lostMarginEUR > 0
+      ? [card('Nezaslužena letna marža', value(s.lostMarginEUR, s.rangeEUR?.lostMargin), 'Prazna polica, napačna cena')]
+      : []),
     card(
       'Izgubljena kapaciteta',
-      formatEUR(s.capacityEUR),
+      value(s.capacityEUR, s.rangeEUR?.capacity),
       `${formatHours(s.capacityHoursPerMonth)}/mesec — ni prihranek pri plačah`,
     ),
   ];
   if (s.oneTimeCapitalEUR > 0) {
     cards.push(
-      card('Sprostljiv kapital', formatEUR(s.oneTimeCapitalEUR), 'Enkraten učinek, se ne sešteva'),
+      card(
+        'Sprostljiv kapital',
+        value(s.oneTimeCapitalEUR, s.rangeEUR?.oneTimeCapital),
+        'Enkraten učinek, se ne sešteva',
+      ),
     );
   }
   if (s.potentialMinEUR !== undefined && s.potentialMaxEUR !== undefined) {
     cards.push(
       card(
         'Realistični potencial',
-        `${formatEUR(s.potentialMinEUR)} – ${formatEUR(s.potentialMaxEUR)}`,
+        formatEURRange(
+          s.rangeEUR?.potential?.minEUR ?? s.potentialMinEUR,
+          s.rangeEUR?.potential?.maxEUR ?? s.potentialMaxEUR,
+        ),
         'Letno, konservativno — ni obljuba',
       ),
     );
@@ -140,6 +157,11 @@ function subsectionTheirInfo(report: SalesReport): string {
   return `<h3>Njihove info</h3>
   <div class="cards">${cards.join('')}</div>
   <p class="note">${esc(s.confidenceReason)}</p>
+  ${
+    report.softness.plausibilityWarning
+      ? `<p class="warn"><strong>Opozorilo o verjetnosti:</strong> ${esc(report.softness.plausibilityWarning)}</p>`
+      : ''
+  }
   ${
     hours.length > 0
       ? table(
@@ -482,6 +504,8 @@ tbody tr:nth-child(even){background:#faf9f6}
 table.kv th{width:40%;background:none;color:var(--text);font-weight:600}
 td:last-child{white-space:normal}
 .soft{color:var(--warn-text);background:var(--warn-bg);padding:1px 6px;border-radius:4px;font-size:.8rem}
+.warn{color:var(--warn-text);background:var(--warn-bg);border:1px solid var(--warn-border);
+padding:8px 12px;border-radius:6px;font-size:.85rem}
 .firm{color:var(--amber);font-weight:600}
 .cards{display:flex;flex-wrap:wrap;gap:10px}
 .card{flex:1 1 200px;border:1px solid var(--border);border-radius:8px;padding:12px}

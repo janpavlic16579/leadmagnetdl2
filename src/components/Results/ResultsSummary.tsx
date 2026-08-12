@@ -1,9 +1,12 @@
-import { formatEUR, formatHours } from '../../lib/format';
+import { formatEUR, formatEURRange, formatHours } from '../../lib/format';
 import type { ConfidenceLevel, ResultTotals } from '../../lib/potential';
+import { displayRange, type EURRange, type TotalsRange } from '../../lib/range';
 import styles from './ResultsSummary.module.css';
 
 interface ResultsSummaryProps {
   totals: ResultTotals;
+  /** Razpon, kadar finančna osnova stoji na izbranih pasovih (lib/range.ts). */
+  totalsRange?: TotalsRange | null;
   /** Primeri postavk te dejavnosti; brez njih ostane nevtralno besedilo. */
   directLossNote?: string;
 }
@@ -32,10 +35,15 @@ const CONFIDENCE_NOTE: Record<ConfidenceLevel, string> = {
  * Kartica se izriše samo, kadar ima vrednost — segmenti brez potenciala tako
  * ostanejo pri treh ali manj, brez praznih ničel.
  */
-export function ResultsSummary({ totals, directLossNote }: ResultsSummaryProps) {
+export function ResultsSummary({ totals, totalsRange, directLossNote }: ResultsSummaryProps) {
   const confidence = totals.confidence;
   // Pri nizki zanesljivosti je navidezno natančen znesek slabši od poštenega "najmanj".
-  const amount = (value: number) => (confidence === 'low' ? `najmanj ${formatEUR(value)}` : formatEUR(value));
+  // Razpon ima prednost pred obojim: "X – Y" negotovost že pove, "najmanj" bi jo podvojil.
+  const amount = (value: number, range?: EURRange) => {
+    const span = displayRange(range);
+    if (span) return formatEURRange(span.minEUR, span.maxEUR);
+    return confidence === 'low' ? `najmanj ${formatEUR(value)}` : formatEUR(value);
+  };
 
   return (
     <>
@@ -49,7 +57,7 @@ export function ResultsSummary({ totals, directLossNote }: ResultsSummaryProps) 
       <div className={styles.grid}>
         <Figure
           title="Neposredni letni stroški"
-          value={amount(totals.directLossEUR)}
+          value={amount(totals.directLossEUR, totalsRange?.directLoss)}
           note={directLossNote ?? DEFAULT_DIRECT_LOSS_NOTE}
         />
 
@@ -62,7 +70,7 @@ export function ResultsSummary({ totals, directLossNote }: ResultsSummaryProps) 
         {totals.lostMarginEUR > 0 ? (
           <Figure
             title="Nezaslužena letna marža"
-            value={amount(totals.lostMarginEUR)}
+            value={amount(totals.lostMarginEUR, totalsRange?.lostMargin)}
             note="Marža, ki je niste zaslužili — prazna polica, odpovedano naročilo, prodaja po napačni ceni. Ni odtekel denar, zato je prikazana ločeno."
           />
         ) : null}
@@ -70,7 +78,7 @@ export function ResultsSummary({ totals, directLossNote }: ResultsSummaryProps) 
         {totals.capacityEUR > 0 ? (
           <Figure
             title="Vrednost izgubljene kapacitete"
-            value={amount(totals.capacityEUR)}
+            value={amount(totals.capacityEUR, totalsRange?.capacity)}
             note={`${formatHours(totals.capacityHoursPerMonth)}/mesec. To ni prihranek pri plačah — zaposleni ostane, njegov čas pa se lahko usmeri v delo, ki prinaša vrednost.`}
           />
         ) : null}
@@ -78,7 +86,11 @@ export function ResultsSummary({ totals, directLossNote }: ResultsSummaryProps) 
         {totals.oneTimeCapitalEUR > 0 ? (
           <Figure
             title="Sprostljiv obratni kapital"
-            value={formatEUR(totals.oneTimeCapitalEUR)}
+            value={
+              displayRange(totalsRange?.oneTimeCapital)
+                ? formatEURRange(totalsRange!.oneTimeCapital.minEUR, totalsRange!.oneTimeCapital.maxEUR)
+                : formatEUR(totals.oneTimeCapitalEUR)
+            }
             note="Enkraten učinek, ne letni prihranek — zato se z zneski zgoraj ne sešteva."
           />
         ) : null}
@@ -86,7 +98,10 @@ export function ResultsSummary({ totals, directLossNote }: ResultsSummaryProps) 
         {totals.potential ? (
           <Figure
             title="Realistični potencial izboljšave"
-            value={`${formatEUR(totals.potential.minEUR)} – ${formatEUR(totals.potential.maxEUR)}`}
+            value={formatEURRange(
+              totalsRange?.potential?.minEUR ?? totals.potential.minEUR,
+              totalsRange?.potential?.maxEUR ?? totals.potential.maxEUR,
+            )}
             note="Letno. Izpeljano iz glavnih vzrokov, ki ste jih navedli, in sistemov, ki jih danes uporabljate. Ni obljuba prihranka, ampak konservativen poslovni potencial, ki ga je mogoče preveriti na uvodnem sestanku."
           />
         ) : null}

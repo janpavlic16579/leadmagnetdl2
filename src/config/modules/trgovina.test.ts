@@ -23,10 +23,11 @@ const CONTEXT: ComputeContext = {
   operationalHourCostEUR: 24,
   adminHourCostEUR: 32,
   chargeOutRateEUR: 75,
-  // Ta segment prihodek vpraša kot svoje polje modula (glej terjatve), iz konteksta
-  // ga ne bere — zato 0. Sicer bi test meril nekaj, česar modul ne uporablja.
+  // V osnovnem kontekstu 0: od modulov segmenta prihodek bere samo terjatve (ima
+  // svoj kontekst spodaj) in vsak drug modul, ki bi ga tiho začel brati, test takoj izda.
   annualRevenueEUR: 0,
   contributionMarginRate: 0,
+  capitalCostRate: 0.06,
 };
 const MONTHS = 12;
 
@@ -187,13 +188,17 @@ describe('Odprema, vračila in reklamacije', () => {
 });
 
 describe('Plačilni roki in terjatve', () => {
-  const outputs = run(terjatveTrgovina, {
-    annualRevenueEUR: 8_000_000,
-    overdueDaysAverage: 18,
-    dunningHoursPerMonth: 25,
-    annualBadDebtEUR: 12_000,
-    mainCause: 0, // Opominjanje ni sistematično → planning
-  });
+  // Prihodek pride iz skupne finančne osnove, ne iz polja modula (korak 2 prenove).
+  const REVENUE_CONTEXT: ComputeContext = { ...CONTEXT, annualRevenueEUR: 8_000_000 };
+  const outputs = terjatveTrgovina.compute(
+    resolveInputs(terjatveTrgovina, {
+      overdueDaysAverage: 18,
+      dunningHoursPerMonth: 25,
+      annualBadDebtEUR: 12_000,
+      mainCause: 0, // Opominjanje ni sistematično → planning
+    }),
+    REVENUE_CONTEXT,
+  );
 
   it('šteje se samo prekoračitev roka, ne celoten DSO', () => {
     // currentDSODays je 60 in je contextOnly. Če bi vstopil v formulo, bi bil
@@ -213,8 +218,24 @@ describe('Plačilni roki in terjatve', () => {
   });
 
   it('kupec, ki roke drži, ne dobi izmišljenega stroška zamude', () => {
-    const onTime = run(terjatveTrgovina, { annualRevenueEUR: 8_000_000, overdueDaysAverage: 0 });
+    const onTime = terjatveTrgovina.compute(
+      resolveInputs(terjatveTrgovina, { overdueDaysAverage: 0 }),
+      REVENUE_CONTEXT,
+    );
     expect(pick(onTime, 'Strošek zamud pri plačilih').valueEUR).toBe(0);
+  });
+
+  it('strošek kapitala pride iz konteksta, ne iz konstante', () => {
+    // Korak 5 prenove: 6 % je samo še privzetek — kdor v finančni osnovi izbere
+    // drugačen strošek financiranja, dobi izračun iz svoje številke.
+    const expensive = terjatveTrgovina.compute(
+      resolveInputs(terjatveTrgovina, { overdueDaysAverage: 18 }),
+      { ...REVENUE_CONTEXT, capitalCostRate: 0.12 },
+    );
+    expect(pick(expensive, 'Strošek zamud pri plačilih').valueEUR).toBeCloseTo(
+      (8_000_000 / 365) * 18 * 0.12,
+      6,
+    );
   });
 });
 
@@ -299,8 +320,8 @@ describe('Skupne lastnosti stroškovnih modulov', () => {
       },
       {
         definition: terjatveTrgovina,
-        base: { annualRevenueEUR: 8_000_000, overdueDaysAverage: 18, currentDSODays: 0 },
-        twist: { annualRevenueEUR: 8_000_000, overdueDaysAverage: 18, currentDSODays: 90 },
+        base: { overdueDaysAverage: 18, currentDSODays: 0 },
+        twist: { overdueDaysAverage: 18, currentDSODays: 90 },
       },
     ];
 

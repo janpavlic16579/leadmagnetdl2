@@ -1,7 +1,6 @@
 import { addressableShareOf, mainCauseField, type CauseOption } from './addressableShare';
 import {
   ASSURANCE_CHOICES,
-  INVENTORY_CAPITAL_COST,
   MONTHS_PER_YEAR,
   reducibleShareField,
   reducibleShareOf,
@@ -40,12 +39,12 @@ import type { ModuleDefinition, ModuleField, RiskLevel } from './moduleTypes';
  */
 
 /**
- * Trgovina je odprta približno šest dni na teden.
- *
- * KALIBRACIJA: 305 dni je zaokroženo navzdol (živilske trgovine so odprte več,
- * specializirane manj). Napaka je namerno v smeri nižjega zneska.
+ * Odprti dnevi na leto po odgovoru "Koliko dni v tednu obratujete?" (5/6/7).
+ * Prej fiksnih 305 dni (šest dni na teden) za vse — napaka ±16 % pri najbolj
+ * dokazljivi številki vprašalnika. Privzetek ostane šest dni.
  */
-const OPEN_DAYS_PER_YEAR = 305;
+const OPEN_DAYS_PER_YEAR_BY_CHOICE = [255, 305, 355];
+const DEFAULT_OPEN_DAYS_PER_YEAR = 305;
 
 const MINUTES_PER_HOUR = 60;
 
@@ -84,6 +83,8 @@ const substitutionField: ModuleField = {
 
 export const razpolozljivostMp: ModuleDefinition = {
   id: 'razpolozljivostMp',
+  usesRevenue: true,
+  usesMargin: true,
   title: 'Prazne police in nedobavljivi artikli',
   summary:
     'Marža, ki je ne zaslužite, ker artikla ni na zalogi, ekspresne dobave in čas iskanja blaga po enotah.',
@@ -253,7 +254,7 @@ export const zalogeMp: ModuleDefinition = {
     },
     mainCauseField(ZALOGE_CAUSES),
   ],
-  compute: (input) => {
+  compute: (input, context) => {
     const addressableShare = addressableShareOf(ZALOGE_CAUSES, input.mainCause);
     const releasableEUR = input.inventoryValueEUR * reducibleShareOf(input.reducibleShare);
 
@@ -276,7 +277,7 @@ export const zalogeMp: ModuleDefinition = {
         // denarni učinek, to pa cena, ki se plačuje vsako leto, dokler zaloga leži.
         bucket: 'directLoss',
         label: 'Strošek financiranja presežne zaloge',
-        valueEUR: releasableEUR * INVENTORY_CAPITAL_COST,
+        valueEUR: releasableEUR * context.capitalCostRate,
         addressableShare,
       },
       {
@@ -307,6 +308,7 @@ const MARZE_CAUSES: CauseOption[] = [
 
 export const marzeMp: ModuleDefinition = {
   id: 'marzeMp',
+  usesRevenue: true,
   title: 'Cene, akcije in marža',
   summary:
     'Prodaja po napačni ceni, neizkoriščeni dobaviteljski pogoji in ročno vzdrževanje cenikov ter akcij.',
@@ -454,7 +456,20 @@ export const blagajnaMp: ModuleDefinition = {
       kind: 'number',
       unit: 'min/dan',
       default: 0,
-      help: 'Najbolj dokazljiva številka v trgovini — izmerite jo v enem dnevu. Računamo z 305 odprtimi dnevi na leto.',
+      help: 'Najbolj dokazljiva številka v trgovini — izmerite jo v enem dnevu.',
+    },
+    {
+      // Fiksnih 305 dni je 7-dnevno živilsko trgovino podcenilo in specializirano
+      // 5-dnevno precenilo za ±16 % pri najbolj dokazljivi številki vprašalnika.
+      key: 'openDaysPerWeek',
+      label: 'Koliko dni v tednu obratujete?',
+      kind: 'choice',
+      default: 1,
+      choices: [
+        { value: 0, label: '5 dni' },
+        { value: 1, label: '6 dni' },
+        { value: 2, label: '7 dni' },
+      ],
     },
     {
       key: 'shrinkageEUR',
@@ -493,8 +508,10 @@ export const blagajnaMp: ModuleDefinition = {
     // Zaključki: minute × blagajne × odprti dnevi. Vprašano po ENI blagajni in ne
     // skupno, ker je to edina številka, ki jo vodja lahko izmeri z uro v roki —
     // skupno oceno bi moral šele izračunati, in ravno tam nastane največja napaka.
+    const openDaysPerYear =
+      OPEN_DAYS_PER_YEAR_BY_CHOICE[input.openDaysPerWeek] ?? DEFAULT_OPEN_DAYS_PER_YEAR;
     const closingHoursPerYear =
-      (input.tillCount * input.closingMinutesPerTillPerDay * OPEN_DAYS_PER_YEAR) / MINUTES_PER_HOUR;
+      (input.tillCount * input.closingMinutesPerTillPerDay * openDaysPerYear) / MINUTES_PER_HOUR;
 
     return [
       {
@@ -640,6 +657,7 @@ const KANALI_CAUSES: CauseOption[] = [
 
 export const kanaliMp: ModuleDefinition = {
   id: 'kanaliMp',
+  usesMargin: true,
   title: 'Spletna prodaja, vračila in usklajenost kanalov',
   summary:
     'Odpovedana spletna naročila, dejanski strošek vračil ter ročno usklajevanje artiklov, cen in zalog med kanali.',
