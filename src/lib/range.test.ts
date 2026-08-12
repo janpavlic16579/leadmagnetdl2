@@ -4,6 +4,7 @@ import {
   emptyProfileFor,
   getSegmentContext,
   industryAverageBand,
+  industryAverageScaleBand,
   SEGMENT_CONTEXTS,
 } from '../config/contexts';
 import { resolveInputs } from './moduleEngine';
@@ -75,6 +76,28 @@ describe('buildComputeContextRange', () => {
 
     expect(contexts.low.operationalHourCostEUR).toBe(band.minEUR);
     expect(contexts.high.operationalHourCostEUR).toBe(band.maxEUR);
+  });
+
+  it('prevzeto povprečje da razpon tudi pri deležu, ne le pri urni postavki', () => {
+    /**
+     * Zrcalo testa zgoraj za velikostne predpostavke. Brez tega je ista poteza
+     * obiskovalca merjena z dvema natančnostma: klik "vzemi povprečje" pri urni
+     * postavki da razpon, pri marži pa navidezno natančno točko.
+     */
+    const band = industryAverageScaleBand(PROIZVODNJA.contributionMargin!)!;
+    const contexts = buildComputeContextRange(
+      profileWith({
+        contributionMargin: {
+          value: PROIZVODNJA.contributionMargin!.fallback,
+          estimated: true,
+          source: 'industryAverage',
+        },
+      }),
+      PROIZVODNJA,
+    )!;
+
+    expect(contexts.low.contributionMarginRate).toBe(band.min);
+    expect(contexts.high.contributionMarginRate).toBe(band.max);
   });
 });
 

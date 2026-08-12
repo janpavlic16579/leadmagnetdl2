@@ -265,6 +265,22 @@ export function industryAverageBand(question: CostQuestion): CostBand | undefine
   );
 }
 
+/**
+ * Isto za velikostne predpostavke (marža, strošek financiranja).
+ *
+ * Ločena funkcija in ne skupna generična: polja se pišejo drugače (`fallback`
+ * proti `fallbackEUR`), skupna pa bi zahtevala preslikavo ključev — več kode kot
+ * te tri vrstice.
+ *
+ * Prihodek pasu nima, ker ima `fallback: 0` — prometa si ne izmišljamo in
+ * povprečja panoge zanj ne ponudimo (glej hasIndustryAverage v StepCostBasis).
+ */
+export function industryAverageScaleBand(question: ScaleQuestion): ScaleBand | undefined {
+  return question.bands.find(
+    (band) => question.fallback >= band.min && question.fallback <= band.max,
+  );
+}
+
 /** Brez odgovora vzamemo srednji pas — nikoli najugodnejšega. */
 export const FALLBACK_IMPROVEMENT_BAND: ImprovementBand = { min: 0.15, max: 0.3 };
 
