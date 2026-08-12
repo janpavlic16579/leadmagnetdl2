@@ -20,9 +20,9 @@ import { resolveInputs } from '../../lib/moduleEngine';
  */
 
 const CONTEXT: ComputeContext = {
-  operationalHourCostEUR: 24,
-  adminHourCostEUR: 32,
-  chargeOutRateEUR: 75,
+  operationalHourCostEUR: 19,
+  adminHourCostEUR: 25,
+  chargeOutRateEUR: 55,
   // V osnovnem kontekstu 0: od modulov segmenta prihodek bere samo terjatve (ima
   // svoj kontekst spodaj) in vsak drug modul, ki bi ga tiho začel brati, test takoj izda.
   annualRevenueEUR: 0,

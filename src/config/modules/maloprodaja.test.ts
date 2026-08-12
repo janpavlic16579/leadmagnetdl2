@@ -23,9 +23,9 @@ import { resolveInputs } from '../../lib/moduleEngine';
 // cene, preklicana spletna naročila), zato tu ne smeta biti 0 — sicer bi testi
 // preverjali množenje z nič in ne izračuna.
 const CONTEXT: ComputeContext = {
-  operationalHourCostEUR: 24,
-  adminHourCostEUR: 32,
-  chargeOutRateEUR: 75,
+  operationalHourCostEUR: 20,
+  adminHourCostEUR: 25,
+  chargeOutRateEUR: 55,
   annualRevenueEUR: 3_000_000,
   contributionMarginRate: 0.25,
   capitalCostRate: 0.06,

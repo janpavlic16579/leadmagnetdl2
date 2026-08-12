@@ -55,14 +55,10 @@
   flex-shrink: 0;
 }
 
+/* Prilepljenost, ozadje in senco nosi skupni pas (StepShell .stickyFooter), vodoravni
+   odmik pa .stickyFooterInner — tu ostane le navpični razmik in postavitev vrstice. */
 .pinnedTotal {
-  position: sticky;
-  bottom: 0;
-  margin: var(--space-5) calc(-1 * var(--space-3)) 0;
-  padding: var(--space-3);
-  background: var(--color-surface);
-  border-top: 1px solid var(--color-border);
-  box-shadow: 0 -4px 12px rgba(16, 24, 40, 0.08);
+  padding: var(--space-3) 0 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -83,6 +79,14 @@
 
 .moduleSummary {
   margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+/* Isto besedilo, kadar nad njim ni h2 (glej ModuleSection.hideTitle) — brez
+   negativnega zgornjega odmika, ki je bil namenjen tesnejši postavitvi pod naslov. */
+.moduleSummaryStandalone {
+  margin: 0 0 var(--space-3);
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
 }

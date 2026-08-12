@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { FALLBACK_IMPROVEMENT_BAND, SEGMENT_CONTEXTS, emptyProfileFor } from './index';
+import {
+  FALLBACK_IMPROVEMENT_BAND,
+  SEGMENT_CONTEXTS,
+  emptyProfileFor,
+  industryAverageBand,
+} from './index';
 import { SEGMENTS } from '../segments';
-import type { ContextQuestion, CostQuestion, SegmentContext } from './contextTypes';
+import type { ContextQuestion, CostQuestion, ScaleQuestion, SegmentContext } from './contextTypes';
 
 /**
  * Varovala registra kontekstov.
@@ -32,6 +37,19 @@ function ratesOf(context: SegmentContext): [string, CostQuestion][] {
   ];
   if (context.chargeOutRate) rates.push(['chargeOutRate', context.chargeOutRate]);
   return rates;
+}
+
+/**
+ * Vsa vprašanja koraka Skupna finančna osnova — urne postavke in velikostne
+ * predpostavke skupaj. Uporabljajo ga preverbe, ki veljajo za oboje (pojasnilo
+ * gumba "?"); preverbe, ki poznajo `midpointEUR`, ostajajo pri ratesOf.
+ */
+function costBasisQuestionsOf(context: SegmentContext): [string, CostQuestion | ScaleQuestion][] {
+  const questions: [string, CostQuestion | ScaleQuestion][] = [...ratesOf(context)];
+  if (context.annualRevenue) questions.push(['annualRevenue', context.annualRevenue]);
+  if (context.contributionMargin) questions.push(['contributionMargin', context.contributionMargin]);
+  if (context.capitalCostRate) questions.push(['capitalCostRate', context.capitalCostRate]);
+  return questions;
 }
 
 describe('Register kontekstov dejavnosti', () => {
@@ -93,6 +111,19 @@ describe('Register kontekstov dejavnosti', () => {
     }
   });
 
+  it('vsaka dejavnost ponudi vlogo z lastnim vpisom, drugod vpisa ni', () => {
+    // Vloga je obvezno vprašanje: brez možnosti "Drugo" z lastnim vpisom obiskovalec,
+    // ki se v naštetem ne najde, ne more naprej drugače kot z napačnim odgovorom.
+    // Obratno pa vpis pri pretežnem delu ali sistemu ni predviden nikjer — "Nič od
+    // tega" v splosno.ts nosi isti id `drugo` in bi ga ujemanje po id-ju odprlo.
+    for (const [segmentId, context] of ENTRIES) {
+      for (const [name, question] of questionsOf(context)) {
+        const freeText = question.options.filter((option) => option.freeText);
+        expect(freeText.length, `${segmentId}/${name}`).toBe(name === 'role' ? 1 : 0);
+      }
+    }
+  });
+
   it('sredine stroškovnih pasov so znotraj vprašanja različne', () => {
     // StepCostBasis prepozna izbrani pas po `midpointEUR === value.valueEUR`.
     // Dva pasova z isto sredino bi označila dva radia hkrati.
@@ -100,6 +131,34 @@ describe('Register kontekstov dejavnosti', () => {
       for (const [name, rate] of ratesOf(context)) {
         const midpoints = rate.bands.map((band) => band.midpointEUR);
         expect(new Set(midpoints).size, `${segmentId}/${name}`).toBe(midpoints.length);
+      }
+    }
+  });
+
+  it('povprečje panoge leži v natanko enem pasu', () => {
+    /**
+     * Gumb "vzemi povprečje panoge" vpiše `fallbackEUR`, izračun pa se nato požene
+     * z mejama pasu, ki to povprečje vsebuje (industryAverageBand) — povprečje je
+     * ocena z razpršenostjo in ne meritev, zato mora rezultat priti kot razpon.
+     *
+     * Brez pasu bi gumb tiho vrnil točko in bi se naša ocena predstavila kot
+     * natančna. Dva pasova pa bi pomenila, da je izbira odvisna od vrstnega reda
+     * v konfiguraciji — povprečje ne sme pasti na mejo dveh pasov.
+     *
+     * Ta test je nadomestil prejšnjega ("privzetek se ne ujema z nobeno sredino
+     * pasu"). Tisti je varoval ugibanje pasu po sredini, ki ga od uvedbe polja
+     * `source` ni več nikjer.
+     */
+    for (const [segmentId, context] of ENTRIES) {
+      for (const [name, rate] of ratesOf(context)) {
+        const containing = rate.bands.filter(
+          (band) => rate.fallbackEUR >= band.minEUR && rate.fallbackEUR <= band.maxEUR,
+        );
+        expect(
+          containing.map((band) => band.id),
+          `${segmentId}/${name}: povprečje ${rate.fallbackEUR} EUR`,
+        ).toHaveLength(1);
+        expect(industryAverageBand(rate)?.id, `${segmentId}/${name}`).toBe(containing[0].id);
       }
     }
   });
@@ -130,5 +189,26 @@ describe('Register kontekstov dejavnosti', () => {
   it('zaračunano postavko vpraša samo dejavnost, ki prodaja ure', () => {
     const asking = ENTRIES.filter(([, context]) => context.chargeOutRate).map(([id]) => id);
     expect(asking).toEqual(['storitve']);
+  });
+
+  /**
+   * Pojasnila gumba "?". Tip drži samo to, da polje obstaja; da ni prazno, ni
+   * prepisano iz `help` in ne preraste v odstavek, ne more. Prav ta korak množi
+   * vse nadaljnje izračune — vprašanje, ki ga obiskovalec napačno razume, popači
+   * celoten rezultat, in to tiho.
+   */
+  it('vsako vprašanje finančne osnove ima uporabno pojasnilo', () => {
+    for (const [segmentId, context] of ENTRIES) {
+      for (const [name, question] of costBasisQuestionsOf(context)) {
+        const where = `${segmentId}/${name}`;
+        expect(question.explainer.trim().length, where).toBeGreaterThan(40);
+        // Zgornja meja lovi pojasnilo, ki se je razraslo v esej, in ne omejuje
+        // gostote podatkov: postavka z izpeljavo in virom je upravičeno daljša
+        // od tiste, ki potrebuje eno poved.
+        expect(question.explainer.length, where).toBeLessThanOrEqual(600);
+        // Kopija kratke razlage ne pove nič novega — gumb bi bil podvojen klik.
+        expect(question.explainer, where).not.toBe(question.help);
+      }
+    }
   });
 });

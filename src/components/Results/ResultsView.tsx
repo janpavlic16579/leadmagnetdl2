@@ -164,13 +164,17 @@ export function ResultsView({
         </div>
       ) : null}
 
-      <div className={styles.actions}>
-        <button type="button" className={buttonStyles.secondaryButton} onClick={onBack}>
-          Nazaj na vnos
-        </button>
-        <button type="button" className={buttonStyles.primaryButton} onClick={onProceedToEmail}>
-          Dobite PDF poročilo in akcijski načrt
-        </button>
+      <div className={styles.stickyFooter}>
+        <div className={styles.stickyFooterInner}>
+          <div className={styles.actions}>
+            <button type="button" className={buttonStyles.secondaryButton} onClick={onBack}>
+              Nazaj na vnos
+            </button>
+            <button type="button" className={buttonStyles.primaryButton} onClick={onProceedToEmail}>
+              Dobite PDF poročilo in akcijski načrt
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

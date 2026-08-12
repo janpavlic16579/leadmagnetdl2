@@ -15,6 +15,7 @@ import {
   improvementBandFor,
   isTechnicalRiskModuleVisible,
   type BusinessProfile,
+  type CostAssumption,
 } from '../config/contexts';
 import { SEGMENT_ORDER } from '../config/segments';
 import { napake } from '../config/modules/logistika';
@@ -38,9 +39,9 @@ const profileWith = (overrides: Partial<BusinessProfile>): BusinessProfile => ({
   ...overrides,
 });
 
-const EXACT_HOURS = {
-  operationalHour: { valueEUR: 50, estimated: false },
-  adminHour: { valueEUR: 35, estimated: false },
+const EXACT_HOURS: Partial<BusinessProfile> = {
+  operationalHour: { valueEUR: 50, estimated: false, source: 'entered' },
+  adminHour: { valueEUR: 35, estimated: false, source: 'entered' },
 };
 
 const STORITVE = getSegmentContext('storitve')!;
@@ -243,8 +244,8 @@ describe('assessConfidence', () => {
     const level = assess({
       context: PROIZVODNJA,
       profile: profileWith({
-        operationalHour: { valueEUR: 50, estimated: true },
-        adminHour: { valueEUR: 35, estimated: false },
+        operationalHour: { valueEUR: 50, estimated: true, source: 'none' },
+        adminHour: { valueEUR: 35, estimated: false, source: 'entered' },
       }),
       modules,
       values: valuesWith(allFilled),
@@ -389,7 +390,7 @@ describe('assessConfidence', () => {
         mainCause: 0,
       }),
     };
-    const exact = { valueEUR: 50, estimated: false };
+    const exact: CostAssumption = { valueEUR: 50, estimated: false, source: 'entered' };
 
     const oneGuessed = assess({
       context: STORITVE,
@@ -397,7 +398,7 @@ describe('assessConfidence', () => {
         ...emptyProfileFor(STORITVE),
         operationalHour: exact,
         adminHour: exact,
-        chargeOutRate: { valueEUR: 80, estimated: true },
+        chargeOutRate: { valueEUR: 80, estimated: true, source: 'none' },
       },
       modules: modulesSt,
       values,
@@ -410,7 +411,7 @@ describe('assessConfidence', () => {
         ...emptyProfileFor(STORITVE),
         operationalHour: exact,
         adminHour: exact,
-        chargeOutRate: { valueEUR: 80, estimated: false },
+        chargeOutRate: { valueEUR: 80, estimated: false, source: 'entered' },
       },
       modules: modulesSt,
       values,
@@ -460,12 +461,12 @@ describe('aggregateResults', () => {
       // Prihodek in marža v tem scenariju ne nastopata (planiranje in material ju ne
       // berete), zato 0 — izmišljen promet bi v vsoto vnesel znesek brez podlage.
       {
-        operationalHourCostEUR: 50,
-        adminHourCostEUR: 35,
-        chargeOutRateEUR: 75,
+        operationalHourCostEUR: 22,
+        adminHourCostEUR: 25,
+        chargeOutRateEUR: 55,
         annualRevenueEUR: 0,
         contributionMarginRate: 0,
-  capitalCostRate: 0.06,
+        capitalCostRate: 0.06,
       },
     );
 
@@ -517,7 +518,7 @@ describe('isRevenueMissing in oznaka ob manjkajočem prihodku', () => {
   it('vnesen prihodek pravila ne sproži', () => {
     expect(
       isRevenueMissing(
-        trgovinaProfile({ annualRevenue: { value: 5_000_000, estimated: false } }),
+        trgovinaProfile({ annualRevenue: { value: 5_000_000, estimated: false, source: 'entered' } }),
         [terjatveTrgovina],
         answeredTerjatve,
       ),

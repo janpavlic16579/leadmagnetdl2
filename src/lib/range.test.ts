@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { buildComputeContextRange, buildTotalsRange, displayRange } from './range';
-import { emptyProfileFor, getSegmentContext, SEGMENT_CONTEXTS } from '../config/contexts';
+import {
+  emptyProfileFor,
+  getSegmentContext,
+  industryAverageBand,
+  SEGMENT_CONTEXTS,
+} from '../config/contexts';
 import { resolveInputs } from './moduleEngine';
 import { planiranje } from '../config/modules/proizvodnja';
 import type { BusinessProfile } from '../config/contexts';
@@ -14,13 +19,14 @@ function profileWith(overrides: Partial<BusinessProfile>): BusinessProfile {
 describe('buildComputeContextRange', () => {
   it('vnesene vrednosti in privzetki ne dajo razpona', () => {
     // Privzetek dejavnosti se namenoma ne ujema z nobeno sredino pasu, zato zanj
-    // razpona ni; vnesena vrednost je točka po definiciji.
+    // razpona ni; vnesena vrednost je točka po definiciji. Invarianto za vse
+    // dejavnosti drži config/contexts/contexts.test.ts — tu je le njena posledica.
     expect(buildComputeContextRange(profileWith({}), PROIZVODNJA)).toBeNull();
     expect(
       buildComputeContextRange(
         profileWith({
-          operationalHour: { valueEUR: 42, estimated: false },
-          adminHour: { valueEUR: 33, estimated: false },
+          operationalHour: { valueEUR: 42, estimated: false, source: 'entered' },
+          adminHour: { valueEUR: 33, estimated: false, source: 'entered' },
         }),
         PROIZVODNJA,
       ),
@@ -28,15 +34,47 @@ describe('buildComputeContextRange', () => {
   });
 
   it('izbran pas da meji pasu, ostalo ostane točka', () => {
-    const band = PROIZVODNJA.operationalHour.bands[1]; // 30–45 EUR, sredina 37
+    const band = PROIZVODNJA.operationalHour.bands[1]; // 18–25 EUR, sredina 21
     const contexts = buildComputeContextRange(
-      profileWith({ operationalHour: { valueEUR: band.midpointEUR, estimated: true } }),
+      profileWith({
+        operationalHour: {
+          valueEUR: band.midpointEUR,
+          estimated: true,
+          source: 'band',
+          bandId: band.id,
+        },
+      }),
       PROIZVODNJA,
     )!;
     expect(contexts.low.operationalHourCostEUR).toBe(band.minEUR);
     expect(contexts.high.operationalHourCostEUR).toBe(band.maxEUR);
     // Neizbrana postavka ostane enaka v obeh kontekstih.
     expect(contexts.low.adminHourCostEUR).toBe(contexts.high.adminHourCostEUR);
+  });
+
+  it('prevzeto povprečje panoge da meji pasu, v katerem povprečje leži', () => {
+    /**
+     * Povprečje je točka, a točka z razpršenostjo — operater za 22 EUR/h je ocena
+     * za dejavnost in ne meritev tega podjetja. Zato mora tudi ta vir dati razpon;
+     * če bi dal točko, bi se naša ocena prikazala z natančnostjo, ki je nima.
+     *
+     * Vrednost je enaka privzetku dejavnosti, ki sam razpona NE da (test zgoraj) —
+     * razliko naredi izključno zapisani `source`.
+     */
+    const band = industryAverageBand(PROIZVODNJA.operationalHour)!;
+    const contexts = buildComputeContextRange(
+      profileWith({
+        operationalHour: {
+          valueEUR: PROIZVODNJA.operationalHour.fallbackEUR,
+          estimated: true,
+          source: 'industryAverage',
+        },
+      }),
+      PROIZVODNJA,
+    )!;
+
+    expect(contexts.low.operationalHourCostEUR).toBe(band.minEUR);
+    expect(contexts.high.operationalHourCostEUR).toBe(band.maxEUR);
   });
 });
 
@@ -55,12 +93,19 @@ describe('buildTotalsRange', () => {
     const range = buildTotalsRange({
       modules: [planiranje],
       values,
-      profile: profileWith({ operationalHour: { valueEUR: band.midpointEUR, estimated: true } }),
+      profile: profileWith({
+        operationalHour: {
+          valueEUR: band.midpointEUR,
+          estimated: true,
+          source: 'band',
+          bandId: band.id,
+        },
+      }),
       context: PROIZVODNJA,
       band: { min: 0.15, max: 0.3 },
     })!;
 
-    // 100 h × [30, 45] × 12 — sredina 37 je vmes.
+    // 100 h × [18, 25] × 12 — sredina 21 je vmes.
     expect(range.capacity.minEUR).toBe(100 * band.minEUR * 12);
     expect(range.capacity.maxEUR).toBe(100 * band.maxEUR * 12);
     expect(range.capacity.minEUR).toBeLessThan(100 * band.midpointEUR * 12);

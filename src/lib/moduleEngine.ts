@@ -15,9 +15,12 @@ import {
  * nihče (glej ComputeContext.annualRevenueEUR).
  */
 export const DEFAULT_COST_CONTEXT: ComputeContext = {
-  operationalHourCostEUR: 45,
-  adminHourCostEUR: 35,
-  chargeOutRateEUR: 75,
+  // Operativna ura je NIŽJA od administrativne — v Sloveniji je operater plačan
+  // pod povprečjem, pisarniško in vodstveno delo pa nad njim. Prejšnja privzetka
+  // (45 / 35) sta imela razmerje obrnjeno. Izpeljava: docs/urne-postavke.md.
+  operationalHourCostEUR: 22,
+  adminHourCostEUR: 25,
+  chargeOutRateEUR: 55,
   annualRevenueEUR: 0,
   contributionMarginRate: 0.25,
   capitalCostRate: 0.06,
@@ -247,4 +250,21 @@ export function resolveActiveModules(
   return definitions.filter(
     (definition) => definition.triage === undefined || selected.includes(definition.id),
   );
+}
+
+/**
+ * Razdelitev koraka z vnosi na strani: eno stroškovno področje na stran.
+ *
+ * Moduli brez triaže (diagnostika, E) si delijo zadnjo stran — nista stroškovni
+ * področji, ampak kratki dodatek, in vsak na svoji strani bi obiskovalcu obljubil
+ * dva koraka dela tam, kjer sta skupaj pet vprašanj.
+ *
+ * Vrstni red se ohrani sam: seznam prihaja urejen po registru, kjer sta diagnostika
+ * in E že na koncu.
+ */
+export function splitIntoInputPages(modules: ModuleDefinition[]): ModuleDefinition[][] {
+  const pages = modules.filter((definition) => definition.triage).map((definition) => [definition]);
+  const alwaysShown = modules.filter((definition) => !definition.triage);
+  if (alwaysShown.length) pages.push(alwaysShown);
+  return pages;
 }

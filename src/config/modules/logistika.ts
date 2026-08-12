@@ -3,6 +3,7 @@ import type { ModuleDefinition, RiskLevel } from './moduleTypes';
 import {
   ASSURANCE_CHOICES,
   MONTHS_PER_YEAR,
+  REDUCIBLE_STOCK_EXPLAINER,
   reducibleShareField,
   reducibleShareOf,
   riskLevelFromScore,
@@ -82,6 +83,10 @@ export const odprema: ModuleDefinition = {
       unit: 'km/mesec',
       default: 0,
       help: 'Če voznega parka nimate, vpišite 0. Nujne podnajeme prevoznikov meri področje Zamude.',
+      explainer:
+        'Kilometri brez tovora — vračanje praznega vozila, vožnja do naslednjega nakladalnega mesta. Če ' +
+        'deleža ne vodite, ocenite: skupni kilometri × ocenjen delež praznih voženj. Primer: 20.000 km × ' +
+        '20 % = 4.000 km na mesec.',
     },
     {
       key: 'costPerKmEUR',
@@ -93,6 +98,10 @@ export const odprema: ModuleDefinition = {
       unit: 'EUR/km',
       default: 0.75,
       help: 'Brez stroška voznika — njegove ure so zajete v naslednjem vprašanju.',
+      explainer:
+        'Samo stroški, ki nastanejo z vožnjo: gorivo, cestnine, gume, obraba, olja. Brez plače voznika, ' +
+        'zavarovanja in leasinga. Hiter izračun: letni strošek goriva in cestnin delite s prevoženimi ' +
+        'kilometri. Primer: 0,45 EUR/km.',
     },
     {
       key: 'waitingHoursPerMonth',
@@ -102,6 +111,10 @@ export const odprema: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Čakanja, ki ga stranki zaračunate kot stojnino, ne štejte — tega ne plačujete vi.',
+      explainer:
+        'Ure, ko vozilo in voznik stojita, ne da bi to kdo plačal — čakanje na rampi, na dokumente, na ' +
+        'nakladanje. Ocenite: koliko voženj na mesec × povprečno čakanje. Primer: 120 voženj × 30 min ≈ ' +
+        '60 ur.',
     },
     {
       key: 'dispatchHoursPerMonth',
@@ -199,6 +212,9 @@ export const napake: ModuleDefinition = {
       unit: 'EUR',
       default: 40,
       help: 'Ponovna dostava, prepakiranje, vračilo. Vrednost samega blaga vpišite v naslednje vprašanje.',
+      explainer:
+        'Kaj vas stane ena napaka brez vrednosti blaga: ponovna dostava, prepakiranje, dodatna ' +
+        'manipulacija, čas disponenta. Primer: ponovna dostava 60 EUR + 1 ura dela ≈ 90 EUR.',
     },
     {
       key: 'annualDamageCostEUR',
@@ -208,6 +224,9 @@ export const napake: ModuleDefinition = {
       unit: 'EUR/leto',
       default: 0,
       help: 'Samo del, ki ga ni pokrilo zavarovanje.',
+      explainer:
+        'Vrednost poškodovanega ali izgubljenega blaga, ki ste jo nosili vi — nad odbitno franšizo ' +
+        'oziroma tisto, česar zavarovalnica ni pokrila. Seštejte primere zadnjih 12 mesecev.',
     },
     {
       key: 'claimHoursPerMonth',
@@ -216,6 +235,9 @@ export const napake: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Obveščanje strank o zamudah sodi v področje Zamude, ne sem.',
+      explainer:
+        'Pisarniško reševanje: sprejem reklamacije, iskanje pošiljke, usklajevanje z voznikom in ' +
+        'stranko, papirologija. Primer: 15 primerov na mesec × 1 h ≈ 15 ur.',
     },
     mainCauseField(NAPAKE_CAUSES),
   ],
@@ -285,6 +307,9 @@ export const skladisce: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Čakanje vozil na rampi štejte v področju Planiranje prevozov, ne tukaj.',
+      explainer:
+        'Ure iskanja blaga, ki jih ne bi bilo, če bi sistem vedel, kje kaj leži. Ocenite: koliko ljudi × ' +
+        'koliko minut na izmeno × 21 dni. Primer: 4 ljudje × 15 min ≈ 21 ur na mesec.',
     },
     {
       key: 'inventoryValueEUR',
@@ -293,6 +318,9 @@ export const skladisce: ModuleDefinition = {
       unit: 'EUR',
       default: 0,
       help: 'Če skladiščite izključno tuje blago, vpišite 0 — tujega kapitala ne sproščate vi.',
+      explainer:
+        'Povprečna vrednost blaga, ki je VAŠA last, po nabavni vrednosti — ne vrednost tujega blaga v ' +
+        'hrambi. Vzemite postavko zaloge iz bilance ali povprečje nekaj mesečnih stanj.',
     },
     {
       key: 'annualWriteOffEUR',
@@ -304,6 +332,7 @@ export const skladisce: ModuleDefinition = {
     },
     reducibleShareField(
       'Kolikšen delež zaloge bi po vaši oceni lahko znižali brez večjega tveganja za oskrbo?',
+      { explainer: REDUCIBLE_STOCK_EXPLAINER },
     ),
     {
       key: 'stockVisibility',
@@ -393,6 +422,9 @@ export const dokumentacija: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Ne vključujte priprave listin iz prvega vprašanja.',
+      explainer:
+        'Isti podatek, vpisan drugič: iz naročila v prevozni nalog, iz naloga v Excel, s papirja v ' +
+        'sistem. Ocenite: koliko ljudi × koliko minut na dan × 21 dni. Primer: 2 osebi × 40 min ≈ 28 ur.',
     },
     {
       key: 'dataFixHoursPerMonth',
@@ -487,6 +519,7 @@ export const roki: ModuleDefinition = {
       default: 0,
       contextOnly: true,
       help: 'Podatek ne vstopa v izračun — služi za oceno obsega težave.',
+      explainer: 'Groba ocena zadostuje: koliko dostav na mesec ne pride v dogovorjenem terminu.',
     },
     {
       key: 'expediteCostEUR',
@@ -496,6 +529,10 @@ export const roki: ModuleDefinition = {
       unit: 'EUR/leto',
       default: 0,
       help: 'Samo dodatni strošek nad ceno običajnega prevoza.',
+      explainer:
+        'Samo doplačilo nad redno ceno: podizvajalec v zadnjem hipu, ekspresni prevoz, dodatna vožnja. ' +
+        'Primer: nujni prevoz 700 EUR namesto rednih 400 EUR → vpišite 300 EUR. Seštejte zadnjih 12 ' +
+        'mesecev.',
     },
     {
       key: 'penaltyCostEUR',
@@ -504,6 +541,10 @@ export const roki: ModuleDefinition = {
       unit: 'EUR/leto',
       default: 0,
       help: 'Stojnine, ki jih plačate vi (demurrage, detention), ne tiste, ki jih zaračunate stranki.',
+      explainer:
+        'Denar, ki ste ga plačali ali vam je bil odbit zaradi zamude: pogodbeni penali, stojnine ' +
+        '(demurrage, detention), popusti kot odškodnina. Seštejte zadnjih 12 mesecev iz računov in ' +
+        'dobropisov.',
     },
     {
       key: 'lostMarginEUR',
@@ -512,6 +553,9 @@ export const roki: ModuleDefinition = {
       unit: 'EUR/leto',
       default: 0,
       help: 'Ne vpisujte celotne vrednosti izgubljenega posla.',
+      explainer:
+        'Ne vrednost izgubljenega posla, ampak samo marža, ki bi vam ostala. Primer: izgubljena pogodba ' +
+        'za 80.000 EUR na leto pri 20 % marži → 16.000 EUR.',
     },
     {
       key: 'customerCommsHoursPerMonth',
@@ -520,6 +564,9 @@ export const roki: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Reklamacije zaradi napačnih ali poškodovanih pošiljk sodijo v področje Napačne dostave.',
+      explainer:
+        'Klici in e-pošta, ki jih ne bi bilo, če bi prevoz tekel po načrtu — obveščanje o zamudi, ' +
+        'iskanje novega termina, pojasnjevanje. Primer: 20 zamud × 45 min ≈ 15 ur na mesec.',
     },
     mainCauseField(ZAMUDE_CAUSES),
   ],

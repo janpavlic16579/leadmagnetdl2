@@ -105,18 +105,22 @@ export function StepTriage({
           : `Podrobno bomo izračunali ${selected.length} od ${modules.length} področij. Priporočamo ${numeral(recommendedCount)}, izberete pa lahko poljubno mnogo — neizmerjena področja ostanejo prazna in nobene številke si ne izmislimo.`}
       </p>
 
-      <div className={shellStyles.actions}>
-        <button type="button" className={buttonStyles.secondaryButton} onClick={onBack}>
-          Nazaj
-        </button>
-        <button
-          type="button"
-          className={buttonStyles.primaryButton}
-          onClick={onNext}
-          disabled={selected.length === 0}
-        >
-          Naprej na številke
-        </button>
+      <div className={shellStyles.stickyFooter}>
+        <div className={shellStyles.stickyFooterInner}>
+          <div className={shellStyles.actions}>
+            <button type="button" className={buttonStyles.secondaryButton} onClick={onBack}>
+              Nazaj
+            </button>
+            <button
+              type="button"
+              className={buttonStyles.primaryButton}
+              onClick={onNext}
+              disabled={selected.length === 0}
+            >
+              Naprej na številke
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

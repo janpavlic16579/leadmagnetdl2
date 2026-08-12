@@ -114,10 +114,14 @@ export function StepIndustry({ value, onChange, onNext }: StepIndustryProps) {
         odločite oddati obrazca za PDF poročilo.
       </p>
 
-      <div className={`${shellStyles.actions} ${shellStyles.actionsEnd}`}>
-        <button type="button" className={buttonStyles.primaryButton} disabled={!canProceed} onClick={onNext}>
-          Naprej
-        </button>
+      <div className={shellStyles.stickyFooter}>
+        <div className={shellStyles.stickyFooterInner}>
+          <div className={`${shellStyles.actions} ${shellStyles.actionsEnd}`}>
+            <button type="button" className={buttonStyles.primaryButton} disabled={!canProceed} onClick={onNext}>
+              Naprej
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

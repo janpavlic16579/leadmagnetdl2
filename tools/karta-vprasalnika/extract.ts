@@ -55,9 +55,9 @@ function serializeModule(def: ModuleDefinition) {
   try {
     buckets = def
       .compute(sampleInput(def), {
-        operationalHourCostEUR: 45,
-        adminHourCostEUR: 35,
-        chargeOutRateEUR: 75,
+        operationalHourCostEUR: 22,
+        adminHourCostEUR: 25,
+        chargeOutRateEUR: 55,
       })
       .map((o) => ({ bucket: o.bucket, label: o.label }));
   } catch (e) {

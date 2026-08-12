@@ -1,17 +1,27 @@
-import { ADMIN_HOUR_BANDS } from './shared';
+import {
+  ADMIN_HOUR_BANDS,
+  ADMIN_HOUR_EXPLAINER,
+  ANNUAL_REVENUE_EXPLAINER,
+  CONTRIBUTION_MARGIN_EXPLAINER,
+  HOURLY_COST_EXPLAINER,
+} from './shared';
 import type { CostBand, SegmentContext } from './contextTypes';
 
 /**
  * Voznik in skladiščnik sta cenejša ura od operaterja na stroju, zato logistika
- * ne sme podedovati proizvodnih razponov: privzeta sredina 45 EUR bi pri isti
- * vneseni uri prikazala skoraj dvakrat previsok znesek. To je edini razlog za
- * lasten nabor — vprašanje je isto, kalibracija ni.
+ * ne sme podedovati proizvodnih razponov. To je edini razlog za lasten nabor —
+ * vprašanje je isto, kalibracija ni.
+ *
+ * Sidro: voznik težkega tovornjaka 17,6 EUR/h, skladiščnik 20,0, komisionar 19,3;
+ * panožno povprečje prometa in skladiščenja 21,6. Zgornja pasova nista teoretična:
+ * mednarodni prevoz z dnevnicami uro dvigne bistveno nad plačilno listo.
+ * Izpeljava in viri: docs/urne-postavke.md.
  */
 const OPERATIONAL_HOUR_BANDS: CostBand[] = [
-  { id: 'do20', label: 'Do 20 EUR', midpointEUR: 17, minEUR: 14, maxEUR: 20 },
-  { id: '20do28', label: '20–28 EUR', midpointEUR: 24, minEUR: 20, maxEUR: 28 },
-  { id: '28do38', label: '28–38 EUR', midpointEUR: 33, minEUR: 28, maxEUR: 38 },
-  { id: 'nad38', label: 'Več kot 38 EUR', midpointEUR: 45, minEUR: 38, maxEUR: 52 },
+  { id: 'do17', label: 'Do 17 EUR', midpointEUR: 15, minEUR: 12, maxEUR: 17 },
+  { id: '17do23', label: '17–23 EUR', midpointEUR: 20, minEUR: 17, maxEUR: 23 },
+  { id: '23do31', label: '23–31 EUR', midpointEUR: 27, minEUR: 23, maxEUR: 31 },
+  { id: 'nad31', label: 'Več kot 31 EUR', midpointEUR: 36, minEUR: 31, maxEUR: 43 },
 ];
 
 /**
@@ -34,7 +44,7 @@ export const LOGISTIKA_CONTEXT: SegmentContext = {
   intro:
     'Tri vprašanja, ki ne sprašujejo po številkah. Iz njih izpeljemo, koliko od izmerjenega stroška je realno mogoče nasloviti — podjetje, ki namenski skladiščni ali transportni sistem že uporablja, je lažje izboljšave namreč večinoma že pobralo.',
   costBasisIntro:
-    'Štiri številke, ki veljajo za vsa področja. Polni strošek ure pomeni bruto plačo z vsemi prispevki in režijo, ne neto izplačila. Prihodek in maržo vprašamo enkrat — sta lastnost podjetja, ne posameznega področja.',
+    'Štiri številke, ki veljajo za vsa področja. Polni strošek ure pomeni bruto plačo s prispevki delodajalca ter regresom, malico in prevozom — ne neto izplačila in ne režije. Prihodek in maržo vprašamo enkrat — sta lastnost podjetja, ne posameznega področja.',
 
   businessType: {
     legend: 'Kaj pretežno izvajate?',
@@ -75,28 +85,31 @@ export const LOGISTIKA_CONTEXT: SegmentContext = {
       { id: 'vodjaLogistike', label: 'Vodja logistike ali disponent' },
       { id: 'finance', label: 'Finance ali računovodstvo' },
       { id: 'nabava', label: 'Nabava ali skladišče' },
-      { id: 'drugo', label: 'Drugo' },
+      { id: 'drugo', label: 'Drugo', freeText: true },
     ],
   },
 
   operationalHour: {
     label: 'Približen polni strošek operativne ure',
     help: 'Voznik, skladiščnik, komisionar — kdor pošiljko dejansko premakne.',
+    explainer: HOURLY_COST_EXPLAINER,
     bands: OPERATIONAL_HOUR_BANDS,
-    fallbackEUR: 28,
+    fallbackEUR: 19,
   },
 
   adminHour: {
     label: 'Približen polni strošek administrativne oziroma vodstvene ure',
     help: 'Disponent, prodaja, prevozna dokumentacija, vodja logistike.',
+    explainer: ADMIN_HOUR_EXPLAINER,
     bands: ADMIN_HOUR_BANDS,
-    fallbackEUR: 32,
+    fallbackEUR: 25,
   },
 
   /** KALIBRACIJA: sredine so geometrijske, preveriti po prvih ~50 vnosih. */
   annualRevenue: {
     label: 'Letni prihodki od prodaje storitev',
     help: 'Neto, brez DDV. Če razpona ne izberete, postavk, vezanih na prihodek, ne bomo ocenili — prihodka si ne izmišljamo.',
+    explainer: ANNUAL_REVENUE_EXPLAINER,
     bands: [
       { id: 'do1mio', label: 'Do 1 mio EUR', midpoint: 600_000, min: 200_000, max: 1_000_000 },
       { id: '1do3mio', label: '1–3 mio EUR', midpoint: 1_800_000, min: 1_000_000, max: 3_000_000 },
@@ -110,6 +123,7 @@ export const LOGISTIKA_CONTEXT: SegmentContext = {
   contributionMargin: {
     label: 'Povprečna prispevna marža',
     help: 'Kar od zaračunane cene ostane po neposrednih stroških izvedbe (gorivo, podizvajalci, cestnine).',
+    explainer: CONTRIBUTION_MARGIN_EXPLAINER,
     bands: [
       { id: 'do15', label: 'Do 15 %', midpoint: 0.12, min: 0.09, max: 0.15 },
       { id: '15do30', label: '15–30 %', midpoint: 0.22, min: 0.15, max: 0.3 },

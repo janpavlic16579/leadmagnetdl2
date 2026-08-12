@@ -1,16 +1,26 @@
-import { ADMIN_HOUR_BANDS } from './shared';
+import {
+  ADMIN_HOUR_BANDS,
+  ADMIN_HOUR_EXPLAINER,
+  ANNUAL_REVENUE_EXPLAINER,
+  CONTRIBUTION_MARGIN_EXPLAINER,
+  HOURLY_COST_EXPLAINER,
+} from './shared';
 import type { CostBand, SegmentContext } from './contextTypes';
 
 /**
- * Referent oziroma knjigovodja je cenejša ura od operaterja na stroju, zato
- * računovodstvo ne sme podedovati proizvodnih razponov: privzeta sredina 45 EUR
- * bi pri isti vneseni uri prikazala skoraj dvakrat previsok znesek.
+ * Referent oziroma knjigovodja je DRAŽJA ura od operaterja na stroju — ne cenejša,
+ * kot je trdil prejšnji komentar. Knjigovodja je v Sloveniji plačan približno na
+ * ravni povprečja vseh zaposlenih, operater pa pod njim.
+ *
+ * Sidro: knjigovodja 23,8 EUR/h, računovodski uradnik 23,3; panožno povprečje
+ * strokovnih dejavnosti 27,2. Edini nabor v kalkulatorju, ki je bil že prej
+ * približno pravilno umerjen. Izpeljava in viri: docs/urne-postavke.md.
  */
 const OPERATIONAL_HOUR_BANDS: CostBand[] = [
   { id: 'do20', label: 'Do 20 EUR', midpointEUR: 17, minEUR: 14, maxEUR: 20 },
-  { id: '20do28', label: '20–28 EUR', midpointEUR: 24, minEUR: 20, maxEUR: 28 },
-  { id: '28do36', label: '28–36 EUR', midpointEUR: 32, minEUR: 28, maxEUR: 36 },
-  { id: 'nad36', label: 'Več kot 36 EUR', midpointEUR: 42, minEUR: 36, maxEUR: 48 },
+  { id: '20do27', label: '20–27 EUR', midpointEUR: 23, minEUR: 20, maxEUR: 27 },
+  { id: '27do35', label: '27–35 EUR', midpointEUR: 31, minEUR: 27, maxEUR: 35 },
+  { id: 'nad35', label: 'Več kot 35 EUR', midpointEUR: 40, minEUR: 35, maxEUR: 48 },
 ];
 
 /**
@@ -37,7 +47,7 @@ export const RACUNOVODSTVO_CONTEXT: SegmentContext = {
   intro:
     'Tri vprašanja, ki ne sprašujejo po številkah. Iz njih izpeljemo, koliko od izmerjenega stroška je realno mogoče nasloviti — servis, ki listine že zajema samodejno, je lažje izboljšave namreč večinoma že pobral.',
   costBasisIntro:
-    'Štiri številke, ki veljajo za vsa področja. Polni strošek pomeni bruto plačo z vsemi prispevki in režijo, ne neto izplačila — in ne cene, ki jo za uro zaračunate stranki. Prihodek in maržo vprašamo enkrat — sta lastnost servisa, ne posameznega področja.',
+    'Štiri številke, ki veljajo za vsa področja. Polni strošek pomeni bruto plačo s prispevki delodajalca ter regresom, malico in prevozom — ne neto izplačila, ne režije in ne cene, ki jo za uro zaračunate stranki. Prihodek in maržo vprašamo enkrat — sta lastnost servisa, ne posameznega področja.',
 
   businessType: {
     legend: 'Kakšna je pretežna struktura vaših strank?',
@@ -82,30 +92,34 @@ export const RACUNOVODSTVO_CONTEXT: SegmentContext = {
       { id: 'vodjaRacunovodstva', label: 'Vodja računovodstva' },
       { id: 'racunovodja', label: 'Računovodja ali referent/-ka' },
       { id: 'davcni', label: 'Davčni svetovalec' },
-      { id: 'drugo', label: 'Drugo' },
+      { id: 'drugo', label: 'Drugo', freeText: true },
     ],
   },
 
   operationalHour: {
     label: 'Približen polni strošek računovodske ure',
     help: 'Računovodja, referent, knjigovodja — kdor obdeluje listine stranke.',
+    explainer: HOURLY_COST_EXPLAINER,
     bands: OPERATIONAL_HOUR_BANDS,
-    fallbackEUR: 26,
+    fallbackEUR: 24,
   },
 
   adminHour: {
     label: 'Približen polni strošek vodstvene oziroma strokovne ure',
     help: 'Vodja računovodstva, davčni svetovalec, pregled in podpis pred oddajo.',
+    explainer: ADMIN_HOUR_EXPLAINER,
     bands: ADMIN_HOUR_BANDS,
-    // Višje od proizvodne administrativne ure: podpis pod obračun nosi odgovornost,
-    // ki je referent ne more prevzeti, zato ta ura ni zamenljiva z operativno.
-    fallbackEUR: 38,
+    // Višje od administrativne ure v drugih dejavnostih: podpis pod obračun nosi
+    // odgovornost, ki je referent ne more prevzeti, zato ta ura ni zamenljiva z
+    // operativno. Sidro: računovodski strokovnjak 31,6 EUR/h.
+    fallbackEUR: 30,
   },
 
   /** KALIBRACIJA: sredine so geometrijske, preveriti po prvih ~50 vnosih. */
   annualRevenue: {
     label: 'Letni prihodki servisa',
     help: 'Neto, brez DDV. Če razpona ne izberete, postavk, vezanih na prihodek, ne bomo ocenili — prihodka si ne izmišljamo.',
+    explainer: ANNUAL_REVENUE_EXPLAINER,
     bands: [
       { id: 'do03mio', label: 'Do 0,3 mio EUR', midpoint: 200_000, min: 100_000, max: 300_000 },
       { id: '03do1mio', label: '0,3–1 mio EUR', midpoint: 600_000, min: 300_000, max: 1_000_000 },
@@ -119,13 +133,16 @@ export const RACUNOVODSTVO_CONTEXT: SegmentContext = {
   contributionMargin: {
     label: 'Povprečna prispevna marža',
     help: 'Kar od zaračunanega ostane po neposrednih stroških izvedbe (plače na strankah, licence, zunanji sodelavci).',
+    explainer: CONTRIBUTION_MARGIN_EXPLAINER,
     bands: [
       { id: 'do30', label: 'Do 30 %', midpoint: 0.25, min: 0.2, max: 0.3 },
       { id: '30do50', label: '30–50 %', midpoint: 0.4, min: 0.3, max: 0.5 },
       { id: '50do70', label: '50–70 %', midpoint: 0.6, min: 0.5, max: 0.7 },
       { id: 'nad70', label: 'Več kot 70 %', midpoint: 0.78, min: 0.7, max: 0.86 },
     ],
-    fallback: 0.25,
+    // Ne 0,25: to je sredina pasu "Do 30 %", zato bi bil radio označen že ob prvem
+    // izrisu in "ni odgovora" bi se prikazalo kot izbran razpon.
+    fallback: 0.3,
     unit: '%',
     asPercent: true,
   },

@@ -2,7 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { buildSalesReport, hourAssumptionSource, type BuildSalesReportParams } from './salesReport';
 import { computeModules, resolveActiveModules, resolveInputs } from './moduleEngine';
 import { aggregateResults, assessConfidence, buildComputeContext } from './potential';
-import { emptyProfileFor, getSegmentContext, improvementBandFor } from '../config/contexts';
+import {
+  emptyProfileFor,
+  getSegmentContext,
+  improvementBandFor,
+  industryAverageBand,
+} from '../config/contexts';
 import { getModules } from '../config/modules';
 import { SEGMENTS, SEGMENT_ORDER } from '../config/segments';
 import { INDUSTRIES } from '../config/industries';
@@ -21,7 +26,11 @@ interface ScenarioOptions {
   inputs?: Record<string, Record<string, number>>;
   currentSystem?: string | null;
   exactHours?: boolean;
+  /** Obiskovalec je prevzel našo oceno za dejavnost namesto lastne številke. */
+  industryAverageHours?: boolean;
   taxNumber?: string;
+  role?: string;
+  roleOther?: string;
 }
 
 /** Sestavi poročilo za dani segment po isti poti kot CalculatorFlow. */
@@ -33,11 +42,21 @@ function reportFor(segmentId: SegmentId, options: ScenarioOptions = {}) {
   const profile = emptyProfileFor(context);
   profile.currentSystem = options.currentSystem ?? context?.currentSystem.options[0].id ?? null;
   profile.businessType = context?.businessType.options[0].id ?? null;
-  profile.role = context?.role.options[0].id ?? null;
+  profile.role = options.role ?? context?.role.options[0].id ?? null;
+  profile.roleOther = options.roleOther ?? '';
   if (options.exactHours) {
-    profile.operationalHour = { valueEUR: 30, estimated: false };
-    profile.adminHour = { valueEUR: 40, estimated: false };
-    profile.chargeOutRate = { valueEUR: 90, estimated: false };
+    profile.operationalHour = { valueEUR: 30, estimated: false, source: 'entered' };
+    profile.adminHour = { valueEUR: 40, estimated: false, source: 'entered' };
+    profile.chargeOutRate = { valueEUR: 90, estimated: false, source: 'entered' };
+  }
+  if (options.industryAverageHours && context) {
+    // Vrednost je natanko privzetek dejavnosti — prav to je pri tem viru bistvo:
+    // po sami številki ga od neodgovora ni mogoče ločiti.
+    profile.operationalHour = {
+      valueEUR: context.operationalHour.fallbackEUR,
+      estimated: true,
+      source: 'industryAverage',
+    };
   }
 
   const triageable = segmentModules.filter((d) => d.triage).map((d) => d.id);
@@ -104,6 +123,18 @@ describe('Poročilo se sestavi za vsako dejavnost', () => {
     }
   });
 
+  it('vpisana vloga pripotuje v poročilo, oznaka ostane naštevna', () => {
+    // roleLabel ostane "Drugo", ker nad njim playbook išče "direktor|lastnik";
+    // vpisano besedilo živi ločeno in ga izrisovalca pripneta ob prikazu.
+    const report = reportFor('trgovina', { role: 'drugo', roleOther: '  Vodja IT  ' });
+    expect(report.qualification.roleLabel).toBe('Drugo');
+    expect(report.qualification.roleOther).toBe('Vodja IT');
+  });
+
+  it('brez vpisa vloge ostane polje prazno in ne prazen niz', () => {
+    expect(reportFor('trgovina').qualification.roleOther).toBeNull();
+  });
+
   it('velikostni razred se izpelje iz števila zaposlenih', () => {
     expect(reportFor('trgovina').qualification.sizeClass).toBe('10–49');
   });
@@ -166,11 +197,14 @@ describe('Poročilo se sestavi za vsako dejavnost', () => {
 
 describe('Kje so številke mehke', () => {
   it('neodgovorjena urna postavka se loči od izbranega razpona', () => {
-    // fallbackEUR se namenoma ne ujema z nobeno sredino razpona, zato je "ni odgovora"
-    // razpoznavno stanje in ne izgleda kot izbira. Prodajnik mora to ločiti.
+    // Vir je odslej zapisan (CostAssumption.source) in se ne ugiba iz vrednosti,
+    // zato je "ni odgovora" razpoznavno stanje ne glede na kalibracijo postavk.
+    // Prodajnik mora to ločiti — sicer bere izračun, kot da mu je stranka dala
+    // številke, ki jih ni.
     const untouched = reportFor('trgovina');
     for (const row of untouched.softness.hourAssumptions) {
       expect(row.estimated, row.label).toBe(true);
+      expect(row.source, row.label).toBe('none');
       expect(row.bandLabel, row.label).toBeNull();
       expect(hourAssumptionSource(row)).toBe('ni odgovora — privzetek dejavnosti');
     }
@@ -180,11 +214,33 @@ describe('Kje so številke mehke', () => {
     chosenBand.softness.hourAssumptions[1] = {
       ...chosenBand.softness.hourAssumptions[1],
       valueEUR: band.midpointEUR,
+      source: 'band',
       bandLabel: band.label,
     };
     expect(hourAssumptionSource(chosenBand.softness.hourAssumptions[1])).toBe(
       `izbran razpon ${band.label}`,
     );
+  });
+
+  it('prevzeto povprečje panoge ni ne vnos ne neodgovor', () => {
+    /**
+     * Trije viri se v tej vrstici stikajo in vsak pomeni nekaj drugega za prodajnika.
+     * Povprečje panoge je NAŠA ocena: vrednost je enaka privzetku dejavnosti, zato
+     * ga stari izračun po vrednosti ni mogel ločiti od "ni odgovora" — z zapisanim
+     * virom pa se izpiše kot svoj primer, skupaj s številko, ki jo je stranka videla.
+     */
+    const context = getSegmentContext('trgovina')!;
+    const report = reportFor('trgovina', { industryAverageHours: true });
+    const operational = report.softness.hourAssumptions[0];
+
+    expect(operational.source).toBe('industryAverage');
+    expect(operational.estimated).toBe(true);
+    expect(operational.valueEUR).toBe(context.operationalHour.fallbackEUR);
+    expect(hourAssumptionSource(operational)).toBe(
+      `povprečje panoge (${context.operationalHour.fallbackEUR} EUR/h)`,
+    );
+    // Razpon je pas, v katerem povprečje leži — izračun ni točka.
+    expect(operational.bandLabel).toBe(industryAverageBand(context.operationalHour)!.label);
   });
 
   it('vnesena urna postavka nima oznake razpona', () => {

@@ -19,6 +19,12 @@ export interface ContextOption {
   /** Zapiše se v izvozni zapis za CRM, zato naj ostane stabilen. */
   id: string;
   label: string;
+  /**
+   * Ob izbiri se odpre polje za lasten vpis. Zastavica visi na možnosti in ne na
+   * id-ju `drugo`, ker isti id nosi tudi "Nič od tega" pri vprašanju o pretežnem
+   * delu (splosno.ts) — tam vpisa nočemo.
+   */
+  freeText?: true;
 }
 
 /** Delež naslovljivega stroška, ki ga je realno mogoče odpraviti — vedno pas, ne točka. */
@@ -64,6 +70,16 @@ export interface CostBand {
 export interface CostQuestion {
   label: string;
   help: string;
+  /**
+   * Daljše pojasnilo za gumb "?" ob vprašanju: kaj številka pomeni po domače,
+   * konkreten primer in kaj storiti, kadar je obiskovalec ne pozna.
+   *
+   * Obvezno in ne neobvezno: ta korak množi vse nadaljnje izračune, zato tu ena
+   * napačno razumljena postavka popači celoten rezultat. Obvezno polje pomeni,
+   * da nove postavke brez pojasnila ni mogoče dodati — enako varovalo kot pas
+   * izboljšave pri SystemOption.
+   */
+  explainer: string;
   bands: CostBand[];
   /** Vrednost, na katero pade prazen vnos — nikoli 0. */
   fallbackEUR: number;
@@ -89,6 +105,8 @@ export interface ScaleBand {
 export interface ScaleQuestion {
   label: string;
   help: string;
+  /** Pojasnilo za gumb "?" — obvezno iz istega razloga kot pri CostQuestion. */
+  explainer: string;
   bands: ScaleBand[];
   /**
    * Vrednost ob praznem vnosu.
@@ -153,19 +171,50 @@ export interface SegmentContext {
 }
 
 /**
- * Vrednost skupne predpostavke in podatek, ali jo je uporabnik vnesel ali le izbral
- * razpon. Zastavica je nujna: "ne vem" ni isto kot 0 in mora znižati zanesljivost
- * rezultata, hraniti pa je v Record<string, number> ni mogoče.
+ * Od kod je vrednost skupne predpostavke.
+ *
+ * Doslej je bil edini nosilec izvora `estimated: boolean`, KATERI pas je izbran, pa
+ * se je rekonstruiral z ujemanjem sredine — neodvisno na treh mestih (StepCostBasis,
+ * lib/range.ts, lib/answerLabels.ts). Rekonstrukcija je bila napačna, kadar se je
+ * privzetek dejavnosti slučajno ujel s sredino pasu: nedotaknjeno polje je izgledalo
+ * kot izbira, radio je bil označen že ob prvem izrisu in izračun je vrnil razpon
+ * obiskovalcu, ki ni izbral ničesar.
+ *
+ * Zdaj se izvor zapiše. Rekonstrukcije ni več nikjer, s tem pa tudi ne tega razreda
+ * napake — in "povprečje panoge" postane predstavljivo, česar prej ni bilo:
+ * `estimated: true` bi ga zamenjal z neodgovorom, `estimated: false` pa razglasil
+ * za strankin podatek.
+ */
+export type AssumptionSource =
+  /** Obiskovalec je vpisal svojo številko. Edini vir, ki NI ocena. */
+  | 'entered'
+  /** Izbral je razpon; njegova presoja o lastnem podjetju, le manj natančna. */
+  | 'band'
+  /** Prevzel je našo oceno za dejavnost (docs/urne-postavke.md). Ni njegov podatek. */
+  | 'industryAverage'
+  /** Ni odgovoril; v veljavi je privzetek dejavnosti. Najšibkejši primer. */
+  | 'none';
+
+/**
+ * Vrednost skupne predpostavke z izvorom. `estimated` ostaja, ker ga bere pol
+ * kalkulatorja, a je odslej izpeljanka: `estimated === (source !== 'entered')`.
+ * "Ne vem" ni isto kot 0 in mora znižati zanesljivost rezultata, hraniti pa je v
+ * Record<string, number> ni mogoče.
  */
 export interface CostAssumption {
   valueEUR: number;
   estimated: boolean;
+  source: AssumptionSource;
+  /** Zapisan pri `source === 'band'` — brez njega bi se pas spet ugibal po sredini. */
+  bandId?: string;
 }
 
 /** Isto za velikostne predpostavke; `value` je EUR ali delež, odvisno od vprašanja. */
 export interface ScaleAssumption {
   value: number;
   estimated: boolean;
+  source: AssumptionSource;
+  bandId?: string;
 }
 
 /**
@@ -176,6 +225,12 @@ export interface BusinessProfile {
   businessType: string | null;
   currentSystem: string | null;
   role: string | null;
+  /**
+   * Vloga, ki jo je obiskovalec vpisal sam, kadar je izbral možnost s `freeText`.
+   * Prazen niz je "ni vpisal" — polje ni neobvezno iz istega razloga kot spodnja:
+   * `?? ''` po izrisovalcih in izvozu je vabilo, da ga eden pozabi.
+   */
+  roleOther: string;
   operationalHour: CostAssumption;
   adminHour: CostAssumption;
   /**
@@ -193,6 +248,23 @@ export interface BusinessProfile {
   capitalCostRate: ScaleAssumption;
 }
 
+/**
+ * Pas, v katerem leži povprečje panoge.
+ *
+ * Povprečje je točka, a točka z razpršenostjo: operater za 20 EUR/h je povprečje in
+ * ne meritev tega podjetja. Zato se ob prevzemu povprečja izračun požene z mejama
+ * pasu, ki povprečje vsebuje — rezultat se prikaže kot razpon in ne kot navidezno
+ * natančna številka. Nov razpon zato ni potreben: pasovi že opisujejo razpršenost.
+ *
+ * Da pas VEDNO obstaja, drži test v contexts.test.ts — brez njega bi gumb pri
+ * napačno umerjeni dejavnosti tiho vrnil točko.
+ */
+export function industryAverageBand(question: CostQuestion): CostBand | undefined {
+  return question.bands.find(
+    (band) => question.fallbackEUR >= band.minEUR && question.fallbackEUR <= band.maxEUR,
+  );
+}
+
 /** Brez odgovora vzamemo srednji pas — nikoli najugodnejšega. */
 export const FALLBACK_IMPROVEMENT_BAND: ImprovementBand = { min: 0.15, max: 0.3 };
 
@@ -206,13 +278,33 @@ export function emptyProfileFor(context: SegmentContext | undefined): BusinessPr
     businessType: null,
     currentSystem: null,
     role: null,
-    operationalHour: { valueEUR: context?.operationalHour.fallbackEUR ?? 45, estimated: true },
-    adminHour: { valueEUR: context?.adminHour.fallbackEUR ?? 35, estimated: true },
-    chargeOutRate: { valueEUR: context?.chargeOutRate?.fallbackEUR ?? 75, estimated: true },
+    roleOther: '',
+    // Vrednosti za `??` so iste kot DEFAULT_COST_CONTEXT (lib/moduleEngine.ts) —
+    // dva zapisa istega privzetka, ki morata ostati usklajena. Izpeljava:
+    // docs/urne-postavke.md.
+    operationalHour: {
+      valueEUR: context?.operationalHour.fallbackEUR ?? 22,
+      estimated: true,
+      source: 'none',
+    },
+    adminHour: { valueEUR: context?.adminHour.fallbackEUR ?? 25, estimated: true, source: 'none' },
+    chargeOutRate: {
+      valueEUR: context?.chargeOutRate?.fallbackEUR ?? 55,
+      estimated: true,
+      source: 'none',
+    },
     // Prihodek brez odgovora ostane 0: odstotkovna polja tedaj ne dajo nobenega
     // evra. To je namen — izmišljen promet bi ustvaril izmišljeno izgubo.
-    annualRevenue: { value: context?.annualRevenue?.fallback ?? 0, estimated: true },
-    contributionMargin: { value: context?.contributionMargin?.fallback ?? 0.25, estimated: true },
-    capitalCostRate: { value: context?.capitalCostRate?.fallback ?? 0.06, estimated: true },
+    annualRevenue: { value: context?.annualRevenue?.fallback ?? 0, estimated: true, source: 'none' },
+    contributionMargin: {
+      value: context?.contributionMargin?.fallback ?? 0.25,
+      estimated: true,
+      source: 'none',
+    },
+    capitalCostRate: {
+      value: context?.capitalCostRate?.fallback ?? 0.06,
+      estimated: true,
+      source: 'none',
+    },
   };
 }

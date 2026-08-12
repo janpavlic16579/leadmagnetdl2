@@ -48,6 +48,7 @@ const BASE: PlaybookInput = {
     sizeClass: '10–49',
     employeeCount: 30,
     roleLabel: 'Direktor/-ica',
+    roleOther: null,
     businessTypeLabel: 'Veleprodaja poslovnim kupcem',
     currentSystemLabel: 'Večinoma Excel, papir ali sprotni dogovor',
     isPantheonCustomer: false,

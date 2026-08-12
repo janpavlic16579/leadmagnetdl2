@@ -28,8 +28,8 @@ function retailReport() {
   profile.currentSystem = context?.currentSystem.options[0].id ?? null;
   profile.businessType = context?.businessType.options[0].id ?? null;
   profile.role = context?.role.options[0].id ?? null;
-  profile.annualRevenue = { value: 2_000_000, estimated: false };
-  profile.contributionMargin = { value: 0.3, estimated: false };
+  profile.annualRevenue = { value: 2_000_000, estimated: false, source: 'entered' };
+  profile.contributionMargin = { value: 0.3, estimated: false, source: 'entered' };
 
   const selected = ['razpolozljivostMp'];
   const activeModules = resolveActiveModules(segmentModules, selected);

@@ -2,6 +2,7 @@ import { addressableShareOf, mainCauseField, type CauseOption } from './addressa
 import {
   ASSURANCE_CHOICES,
   MONTHS_PER_YEAR,
+  REDUCIBLE_STOCK_EXPLAINER,
   reducibleShareField,
   reducibleShareOf,
   riskLevelFromScore,
@@ -85,6 +86,10 @@ export const narocilaTrgovina: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Ne vključujte komisioniranja in priprave blaga — te ure sodijo v področje Skladišče.',
+      explainer:
+        'Ure od prejema naročila do vnosa v sistem in izdelave ponudbe: branje e-pošte, tipkanje ' +
+        'postavk, preverjanje cen. Ocenite: koliko ljudi × koliko ur na dan × 21 dni. Primer: 2 ' +
+        'komercialista × 2 h ≈ 84 ur na mesec.',
     },
     {
       key: 'retypingHoursPerMonth',
@@ -94,6 +99,10 @@ export const narocilaTrgovina: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Ne vključujte ur iz prejšnjega vprašanja — tam je prvi vnos naročila, tu podvojen prenos istega podatka.',
+      explainer:
+        'Isti podatek, prenesen drugič: iz ERP-ja v Excel, iz Excela v spletno trgovino, iz e-pošte v ' +
+        'sistem. Prvi vnos naročila je že v prejšnjem vprašanju. Primer: 1 oseba × 1 h na dan ≈ 21 ur na ' +
+        'mesec.',
     },
     {
       key: 'priceFixHoursPerMonth',
@@ -111,6 +120,10 @@ export const narocilaTrgovina: ModuleDefinition = {
       unit: 'EUR/leto',
       default: 0,
       help: 'Samo razlika v marži, ne celotna vrednost računa. Dobropisi zaradi napačne pošiljke sodijo v področje Odprema.',
+      explainer:
+        'Marža, ki je zmanjkala zaradi napačne cene, pozabljenega rabata ali zastarelega cenika — samo ' +
+        'razlika, ne vrednost računa. Primer: 40 računov s po 250 EUR premalo zaračunane marže ≈ 10.000 ' +
+        'EUR na leto.',
     },
     mainCauseField(NAROCILA_CAUSES),
   ],
@@ -204,6 +217,10 @@ export const skladisceTrgovina: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Samo izgubljen čas iskanja, ne celotnega komisioniranja. Ponovno komisioniranje napačne pošiljke se namenoma ne šteje nikjer — raje podcenimo, kot da bi isto uro šteli dvakrat.',
+      explainer:
+        'Samo čas iskanja: hoja po skladišču, preverjanje, kje artikel je, klici sodelavcem. Ocenite: ' +
+        'koliko komisionarjev × koliko minut na izmeno × 21 dni. Primer: 3 ljudje × 20 min ≈ 21 ur na ' +
+        'mesec.',
     },
     {
       key: 'receivingHoursPerMonth',
@@ -212,6 +229,10 @@ export const skladisceTrgovina: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Reden prevzem brez odstopanj ne šteje — samo dodatno delo z neusklajenimi količinami in dokumenti.',
+      explainer:
+        'Dodatno delo, ko se količine ali dokumenti ne ujemajo: preštevanje, klici dobavitelju, ' +
+        'popravki. Reden prevzem brez odstopanj ne šteje. Primer: 15 spornih prevzemov × 1 h ≈ 15 ur na ' +
+        'mesec.',
     },
     {
       key: 'stockCountHoursPerYear',
@@ -220,6 +241,9 @@ export const skladisceTrgovina: ModuleDefinition = {
       unit: 'h/leto',
       default: 0,
       help: 'Letna vrednost, ker se inventura ne dogaja vsak mesec.',
+      explainer:
+        'Vse ure vseh ljudi skupaj, na leto. Primer: 10 ljudi × 8 h za letno inventuro + 4 vmesna ' +
+        'preštevanja × 6 h ≈ 104 ure.',
     },
     {
       key: 'warehouseOvertimeHoursPerMonth',
@@ -228,6 +252,9 @@ export const skladisceTrgovina: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Ne vključujte nadur, ki so reden del sezonske razporeditve dela.',
+      explainer:
+        'Samo nadure, ki nastanejo zaradi nereda: konica, ker prevzem zamuja, iskanje blaga, ' +
+        'popravljanje napak. Redne sezonske nadure ne štejejo. Primer: 3 ljudje × 4 h ≈ 12 ur na mesec.',
     },
     mainCauseField(SKLADISCE_CAUSES),
   ],
@@ -302,6 +329,9 @@ export const zalogeTrgovina: ModuleDefinition = {
       unit: 'EUR',
       default: 0,
       help: 'Vnesite nabavno vrednost blaga na zalogi, ne prodajne.',
+      explainer:
+        'Povprečno stanje med letom po NABAVNI vrednosti — ne prodajni in ne stanje na današnji dan. ' +
+        'Vzemite postavko zaloge iz bilance ali povprečje nekaj mesečnih stanj.',
     },
     {
       key: 'annualWriteOffEUR',
@@ -318,9 +348,14 @@ export const zalogeTrgovina: ModuleDefinition = {
       unit: 'EUR/leto',
       default: 0,
       help: 'Samo izgubljena marža, ne celotna vrednost naročila. Ure iskanja in nadure v skladišču sodijo v področje Skladišče.',
+      explainer:
+        'Samo marža, ki je niste zaslužili, ker blaga ni bilo — ne vrednost naročila. Primer: 60 ' +
+        'izgubljenih naročil × 800 EUR × 20 % marže ≈ 9.600 EUR na leto. Če ocene nimate, raje vpišite ' +
+        'manj.',
     },
     reducibleShareField(
       'Kolikšen delež zalog bi po vaši oceni lahko znižali brez izgube prodaje?',
+      { explainer: REDUCIBLE_STOCK_EXPLAINER },
     ),
     {
       key: 'stockVisibility',
@@ -402,6 +437,7 @@ export const odpremaTrgovina: ModuleDefinition = {
       default: 0,
       contextOnly: true,
       help: 'Podatek ne vstopa v izračun — služi za oceno obsega težave.',
+      explainer: 'Skupno število odpremljenih pošiljk na mesec; groba ocena zadostuje.',
     },
     {
       key: 'annualRedeliveryCostEUR',
@@ -411,6 +447,9 @@ export const odpremaTrgovina: ModuleDefinition = {
       unit: 'EUR/leto',
       default: 0,
       help: 'Samo dodatni prevozni in manipulativni strošek nad običajno dostavo.',
+      explainer:
+        'Samo doplačilo nad redno dostavo: ponovni prevoz, dodatna manipulacija, ekspresna pošiljka. ' +
+        'Primer: 50 ponovnih dostav × 45 EUR ≈ 2.250 EUR na leto.',
     },
     {
       key: 'annualCreditNoteEUR',
@@ -419,6 +458,9 @@ export const odpremaTrgovina: ModuleDefinition = {
       unit: 'EUR/leto',
       default: 0,
       help: 'Ne vpisujte dobropisov zaradi napačno zaračunane cene — ti sodijo v področje Naročila.',
+      explainer:
+        'Vrednost dobropisov in popustov, izdanih zato, ker je bila pošiljka napačna, nepopolna ali ' +
+        'poškodovana. Seštejte izdane dobropise zadnjih 12 mesecev.',
     },
     {
       key: 'annualReturnedGoodsLossEUR',
@@ -428,6 +470,9 @@ export const odpremaTrgovina: ModuleDefinition = {
       unit: 'EUR/leto',
       default: 0,
       help: 'Samo izguba vrednosti vrnjenega blaga. Ležeča zaloga brez vračila sodi v področje Zaloge.',
+      explainer:
+        'Koliko vrednosti blago izgubi, ko se vrne: poškodovana embalaža, odprt artikel, znižanje ob ' +
+        'nadaljnji prodaji. Ne celotna vrednost vrnjenega blaga, samo izguba vrednosti.',
     },
     {
       key: 'claimHandlingHoursPerMonth',
@@ -437,6 +482,9 @@ export const odpremaTrgovina: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Samo pisarniške ure. Ur skladišča tu ne štejte — izračun jih raje izpusti, kot da bi jih štel dvakrat.',
+      explainer:
+        'Pisarniške ure: sprejem reklamacije, dogovor s kupcem, izdaja dobropisa, usklajevanje z ' +
+        'dobaviteljem. Primer: 25 reklamacij × 40 min ≈ 17 ur na mesec.',
     },
     mainCauseField(ODPREMA_CAUSES),
   ],
@@ -514,6 +562,9 @@ export const terjatveTrgovina: ModuleDefinition = {
       default: 0,
       contextOnly: true,
       help: 'Podatek ne vstopa v izračun — služi za primerjavo z dogovorjenim rokom.',
+      explainer:
+        'Povprečno število dni od izdaje računa do plačila. Hiter izračun: odprte terjatve ÷ letni ' +
+        'prihodek × 365. Primer: 900.000 ÷ 6.000.000 × 365 ≈ 55 dni.',
     },
     // Prihodek pride iz skupne finančne osnove (contexts/trgovina.ts) — je lastnost
     // podjetja, ne področja, in mora obstajati tudi, kadar to področje ni izbrano.
@@ -524,6 +575,9 @@ export const terjatveTrgovina: ModuleDefinition = {
       unit: 'dni',
       default: 0,
       help: 'Samo prekoračitev NAD dogovorjenim rokom. Financiranje dogovorjenega roka je normalno poslovanje in ni strošek napake.',
+      explainer:
+        'Samo dnevi NAD dogovorjenim rokom. Primer: dogovorjeno 30 dni, kupci plačajo v 45 → vpišite 15. ' +
+        'Če poznate DSO, od njega odštejte povprečen dogovorjen rok.',
     },
     {
       key: 'dunningHoursPerMonth',
@@ -532,6 +586,9 @@ export const terjatveTrgovina: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Ne vključujte reševanja reklamacij in dobropisov — ti sodijo v področje Odprema.',
+      explainer:
+        'Ure za opominjanje, usklajevanje odprtih postavk in izterjavo. Ocenite: koliko ljudi × koliko ' +
+        'ur na teden × 4,3. Primer: 1 oseba × 4 h na teden ≈ 17 ur na mesec.',
     },
     {
       key: 'annualBadDebtEUR',

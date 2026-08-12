@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import { roleDisplay } from './answerLabels';
 import { formatEUR, formatEURRange, formatHours, formatPercent } from './format';
 import { displayRange, type EURRange } from './range';
 import { slugify, type DownloadFile } from './download';
@@ -126,7 +127,7 @@ function drawQualification(doc: jsPDF, report: SalesReport, startY: number): num
     ['Dejavnost', q.industryLabel],
     ['Vprašalnik', q.segmentName],
     ['Velikost', `${q.sizeClass} zaposlenih (vneseno: ${q.employeeCount})`],
-    ['Vlogo navaja kot', q.roleLabel ?? '—'],
+    ['Vlogo navaja kot', roleDisplay(q.roleLabel, q.roleOther)],
     ['Pretežno dela', q.businessTypeLabel ?? '—'],
     ['Sedanji sistem', q.currentSystemLabel ?? '—'],
     ['Obstoječi uporabnik PANTHEON', q.isPantheonCustomer ? 'Da' : 'Ne'],

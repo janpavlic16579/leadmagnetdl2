@@ -8,6 +8,7 @@ import {
   resolveActiveModules,
   resolveInputs,
   selectTopModules,
+  splitIntoInputPages,
 } from './moduleEngine';
 import { calculateTotalAnnualLoss } from './calculations';
 import { ALL_MODULES, getModules, MODULE_REGISTRY } from '../config/modules';
@@ -299,6 +300,40 @@ describe('resolveActiveModules', () => {
     // dobila skupaj s svojimi moduli.
     const definitions = getModules(SEGMENTS.splosno.moduleIds);
     expect(resolveActiveModules(definitions, null)).toHaveLength(definitions.length);
+  });
+});
+
+describe('splitIntoInputPages', () => {
+  it('vsako izbrano področje dobi svojo stran, diagnostika in E pa skupno zadnjo', () => {
+    const definitions = getModules(SEGMENTS.proizvodnja.moduleIds);
+    const active = resolveActiveModules(definitions, ['planiranje', 'material', 'zaloge']);
+    const pages = splitIntoInputPages(active);
+
+    expect(pages.map((page) => page.map((d) => d.id))).toEqual([
+      ['planiranje'],
+      ['material'],
+      ['zaloge'],
+      ['diagnostika', 'E'],
+    ]);
+  });
+
+  it('noben modul se med stranmi ne izgubi in noben ne podvoji', () => {
+    const definitions = getModules(SEGMENTS.trgovina.moduleIds);
+    const active = resolveActiveModules(definitions, ['narocila_trgovina', 'zaloge_trgovina']);
+    const paged = splitIntoInputPages(active).flat();
+
+    expect(paged.map((d) => d.id)).toEqual(active.map((d) => d.id));
+  });
+
+  it('vsaka dejavnost ima modul brez triaže, zato zadnja stran ni nikoli prazna', () => {
+    // Zadnja stran je skupna stran diagnostike in tveganih stroškov. Segment brez
+    // takega modula bi jo tiho izpustil — kar je legitimno, a bi ga bilo treba
+    // opaziti tu in ne šele kot izginulo vprašanje v vprašalniku.
+    for (const segmentId of SEGMENT_ORDER) {
+      const definitions = getModules(SEGMENTS[segmentId].moduleIds);
+      const alwaysShown = definitions.filter((definition) => !definition.triage);
+      expect(alwaysShown.length, segmentId).toBeGreaterThan(0);
+    }
   });
 });
 

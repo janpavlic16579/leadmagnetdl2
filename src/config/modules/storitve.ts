@@ -79,6 +79,9 @@ export const projekti: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Ne vključujte opravljenih ur, ki niso bile zaračunane — te sodijo v področje Evidenca dela in zaračunavanje.',
+      explainer:
+        'Ure plačanih ljudi, ki niso delali na ničemer za naročnika, ker dela ni bilo ali ni bilo jasno, ' +
+        'kaj je prioriteta. Primer: 5 ljudi × 3 h na teden ≈ 65 ur na mesec.',
     },
     {
       key: 'overtimeHoursPerMonth',
@@ -156,6 +159,9 @@ export const obracun: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Samo ure, opravljene za naročnika, ki niso prišle na noben račun. Interne, administrativne in prodajne ure tu ne štejejo — te po naravi niso zaračunljive.',
+      explainer:
+        'Ure, ki ste jih delali za naročnika, a niso prišle na noben račun: pozabljena evidenca, "to smo ' +
+        'naredili kar tako", nedokazljive ure. Primer: 8 ljudi × 2 h na teden ≈ 69 ur na mesec.',
     },
     {
       key: 'timesheetHoursPerMonth',
@@ -258,6 +264,8 @@ export const obseg: ModuleDefinition = {
       default: 0.5,
       contextOnly: true,
       help: 'Podatek ne vstopa v izračun — pri fiksni ceni presežen obseg nosi izvajalec, pri delu po porabi naročnik.',
+      explainer:
+        'Delež poslov, sklenjenih po fiksni ceni in ne po dejanski porabi; groba ocena zadostuje.',
     },
     {
       key: 'overrunHoursPerMonth',
@@ -266,6 +274,9 @@ export const obseg: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Ure, ki niso bile zaračunane zaradi pomanjkljive evidence, sodijo v področje Evidenca dela — sicer bi bila ista ura šteta dvakrat.',
+      explainer:
+        'Ure nad dogovorjenim obsegom, ki jih ne morete zaračunati, ker je cena fiksna ali dodatek ni ' +
+        'bil potrjen. Primer: 3 projekti na mesec × 8 ur preseganja ≈ 24 ure.',
     },
     {
       key: 'reworkHoursPerMonth',
@@ -274,6 +285,9 @@ export const obseg: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Popravki med izvedbo projekta. Servis in garancijska popravila po predaji sodijo v področje Reklamacije in poprodajni servis.',
+      explainer:
+        'Ure za popravke po pripombah naročnika med izvedbo: novi krogi usklajevanja, predelava že ' +
+        'narejenega. Primer: 4 projekti × 6 h ≈ 24 ure na mesec.',
     },
     {
       key: 'writeOffEUR',
@@ -282,6 +296,9 @@ export const obseg: ModuleDefinition = {
       unit: 'EUR/leto',
       default: 0,
       help: 'Samo tisto, kar še ni zajeto v nezaračunanih urah ali v urah nad obsegom iz zgornjih vprašanj.',
+      explainer:
+        'Postavke, ki ste jih ob obračunu prečrtali ali znižali, da je račun šel skozi. Seštejte zadnjih ' +
+        '12 mesecev.',
     },
     mainCauseField(OBSEG_CAUSES),
   ],
@@ -357,6 +374,9 @@ export const administracija: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Ne vključujte urejanja evidence ur — to meri področje Evidenca dela in zaračunavanje.',
+      explainer:
+        'Isti podatek, vpisan drugič: iz orodja za projekte v Excel, iz Excela v obračun, iz e-pošte v ' +
+        'sistem. Primer: 2 osebi × 2 h na teden ≈ 17 ur na mesec.',
     },
     {
       key: 'dataFixHoursPerMonth',
@@ -455,6 +475,9 @@ export const terjatve: ModuleDefinition = {
       unit: 'EUR/leto',
       default: 0,
       help: 'Ne vpisujte celotne vrednosti izgubljenega posla.',
+      explainer:
+        'Ne vrednost izgubljenega projekta, ampak samo marža, ki bi vam ostala. Primer: odpovedan ' +
+        'projekt za 40.000 EUR pri 40 % marži → 16.000 EUR.',
     },
     {
       key: 'clientCommsHoursPerMonth',
@@ -463,6 +486,9 @@ export const terjatve: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Ne vključujte prerazporejanja ekipe — to meri področje Plan, prioritete in zasedenost.',
+      explainer:
+        'Klici in e-pošta zaradi zamud: obveščanje naročnika, dogovarjanje novih rokov, pojasnjevanje. ' +
+        'Primer: 10 zamud × 1,5 h ≈ 15 ur na mesec.',
     },
     {
       key: 'unbilledWipEUR',
@@ -474,7 +500,13 @@ export const terjatve: ModuleDefinition = {
     },
     reducibleShareField(
       'Kolikšen delež tega bi po vaši oceni lahko sprostili s hitrejšim obračunom in izterjavo?',
-      'Brez večjega tveganja za odnos z naročnikom.',
+      {
+        help: 'Brez večjega tveganja za odnos z naročnikom.',
+        explainer:
+          'Ne koliko denarja imate v terjatvah, ampak koliko bi ga lahko trajno bilo manj — če bi račun ' +
+          'odšel prej, opomin pravočasno in nesporne postavke ne bi čakale na sporne. Groba ocena ' +
+          'zadostuje; če niste prepričani, izberite nižji razpon.',
+      },
     ),
     mainCauseField(TERJATVE_CAUSES),
   ],

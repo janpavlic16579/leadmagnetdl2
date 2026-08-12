@@ -11,15 +11,11 @@
   margin-bottom: 0;
 }
 
+/* Vrstična, da gumb "?" (HelpTip) teče za zadnjo besedo naslova tudi tedaj, ko
+   se naslov prelomi čez dve vrstici. */
 .label {
-  display: block;
+  display: inline;
   font-weight: 600;
-}
-
-.help {
-  margin: var(--space-1) 0 var(--space-2);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
 }
 
 .inputRow {
@@ -40,6 +36,47 @@
 }
 
 .unit {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+/* Povprečje panoge stoji med vnosom in razponi, ker je po natančnosti tam: manj
+   od lastne številke, več od "nekje v tem pasu". Vizualno tiho iz istega razloga
+   kot razponi — ponujena pomoč, ne enakovredna možnost. */
+.average {
+  margin-top: var(--space-2);
+}
+
+.averageButton {
+  min-height: 44px;
+  padding: var(--space-1) var(--space-3);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.averageButton:hover {
+  border-color: var(--color-primary-text);
+  color: var(--color-text);
+}
+
+/* Prevzeto povprečje je polna črta in ne črtkana: takrat ni več ponudba, ampak
+   odgovor — enako kot izbran razpon. */
+.averageButtonActive {
+  border-style: solid;
+  border-color: var(--color-primary-text);
+  background: var(--color-accent);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.averageNote {
+  margin: var(--space-1) 0 0;
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
 }

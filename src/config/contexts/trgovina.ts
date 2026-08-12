@@ -1,17 +1,28 @@
-import { ADMIN_HOUR_BANDS } from './shared';
+import {
+  ADMIN_HOUR_BANDS,
+  ADMIN_HOUR_EXPLAINER,
+  ANNUAL_REVENUE_EXPLAINER,
+  CAPITAL_COST_EXPLAINER,
+  CONTRIBUTION_MARGIN_EXPLAINER,
+  HOURLY_COST_EXPLAINER,
+} from './shared';
 import type { CostBand, SegmentContext } from './contextTypes';
 
 /**
  * Ura komisionarja je cenejša od proizvodne in dražja od ure v poslovalnici.
- * Če bi veleprodaja podedovala proizvodne razpone (sredina 45 EUR), bi vsak
- * kapacitetni znesek pretiraval za približno faktor dve — in prav pretiravanje je
- * tisto, kar skeptičen direktor najprej opazi in zaradi česar zavrne cel izračun.
+ * Če bi veleprodaja podedovala proizvodne razpone, bi vsak kapacitetni znesek
+ * pretiraval — in prav pretiravanje je tisto, kar skeptičen direktor najprej opazi
+ * in zaradi česar zavrne cel izračun.
+ *
+ * Sidro: skladiščnik in komisionar 20,0 EUR/h; panožno povprečje trgovine 22,7.
+ * Enak nabor kot v logistiki — isti poklici, ista kalibracija.
+ * Izpeljava in viri: docs/urne-postavke.md.
  */
 const WHOLESALE_HOUR_BANDS: CostBand[] = [
-  { id: 'do20', label: 'Do 20 EUR', midpointEUR: 17, minEUR: 14, maxEUR: 20 },
-  { id: '20do28', label: '20–28 EUR', midpointEUR: 24, minEUR: 20, maxEUR: 28 },
-  { id: '28do38', label: '28–38 EUR', midpointEUR: 33, minEUR: 28, maxEUR: 38 },
-  { id: 'nad38', label: 'Več kot 38 EUR', midpointEUR: 45, minEUR: 38, maxEUR: 52 },
+  { id: 'do17', label: 'Do 17 EUR', midpointEUR: 15, minEUR: 12, maxEUR: 17 },
+  { id: '17do23', label: '17–23 EUR', midpointEUR: 20, minEUR: 17, maxEUR: 23 },
+  { id: '23do31', label: '23–31 EUR', midpointEUR: 27, minEUR: 23, maxEUR: 31 },
+  { id: 'nad31', label: 'Več kot 31 EUR', midpointEUR: 36, minEUR: 31, maxEUR: 43 },
 ];
 
 /**
@@ -30,7 +41,7 @@ export const TRGOVINA_CONTEXT: SegmentContext = {
   intro:
     'Tri vprašanja, ki ne sprašujejo po številkah. Iz njih izpeljemo, koliko od izmerjenega stroška je realno mogoče nasloviti — podjetje, ki skladišče že vodi po lokacijah in s terminali, je lažje izboljšave namreč večinoma že pobralo.',
   costBasisIntro:
-    'Pet številk, ki veljajo za vsa področja. Polni strošek ure pomeni bruto plačo z vsemi prispevki in režijo, ne neto izplačila. Prihodek in maržo vprašamo enkrat — iz prihodka se med drugim izračuna strošek plačilnih zamud.',
+    'Pet številk, ki veljajo za vsa področja. Polni strošek ure pomeni bruto plačo s prispevki delodajalca ter regresom, malico in prevozom — ne neto izplačila in ne režije. Prihodek in maržo vprašamo enkrat — iz prihodka se med drugim izračuna strošek plačilnih zamud.',
 
   businessType: {
     legend: 'Kaj pretežno prodajate?',
@@ -71,22 +82,24 @@ export const TRGOVINA_CONTEXT: SegmentContext = {
       { id: 'vodjaProdaje', label: 'Vodja prodaje ali komerciale' },
       { id: 'vodjaSkladisca', label: 'Vodja skladišča ali logistike' },
       { id: 'finance', label: 'Finance ali računovodstvo' },
-      { id: 'drugo', label: 'Drugo' },
+      { id: 'drugo', label: 'Drugo', freeText: true },
     ],
   },
 
   operationalHour: {
     label: 'Približen polni strošek ure v skladišču',
     help: 'Skladiščnik, komisionar, viličarist — kdor blago dejansko premakne.',
+    explainer: HOURLY_COST_EXPLAINER,
     bands: WHOLESALE_HOUR_BANDS,
-    fallbackEUR: 24,
+    fallbackEUR: 19,
   },
 
   adminHour: {
     label: 'Približen polni strošek administrativne oziroma vodstvene ure',
     help: 'Komercialist, vodja prodaje, nabava, finance, reklamacije.',
+    explainer: ADMIN_HOUR_EXPLAINER,
     bands: ADMIN_HOUR_BANDS,
-    fallbackEUR: 32,
+    fallbackEUR: 25,
   },
 
   /**
@@ -96,6 +109,7 @@ export const TRGOVINA_CONTEXT: SegmentContext = {
   annualRevenue: {
     label: 'Letni prihodki od prodaje blaga',
     help: 'Neto, brez DDV. Če razpona ne izberete, postavk, vezanih na prihodek (npr. strošek plačilnih zamud), ne bomo ocenili — prihodka si ne izmišljamo.',
+    explainer: ANNUAL_REVENUE_EXPLAINER,
     bands: [
       { id: 'do2mio', label: 'Do 2 mio EUR', midpoint: 1_200_000, min: 400_000, max: 2_000_000 },
       { id: '2do5mio', label: '2–5 mio EUR', midpoint: 3_200_000, min: 2_000_000, max: 5_000_000 },
@@ -109,13 +123,16 @@ export const TRGOVINA_CONTEXT: SegmentContext = {
   contributionMargin: {
     label: 'Povprečna prispevna marža',
     help: 'Kar od prodajne cene ostane po nabavni vrednosti in neposrednih stroških (prevoz, provizije). Ni pribitek na nabavno ceno.',
+    explainer: CONTRIBUTION_MARGIN_EXPLAINER,
     bands: [
       { id: 'do10', label: 'Do 10 %', midpoint: 0.08, min: 0.06, max: 0.1 },
       { id: '10do20', label: '10–20 %', midpoint: 0.15, min: 0.1, max: 0.2 },
       { id: '20do30', label: '20–30 %', midpoint: 0.25, min: 0.2, max: 0.3 },
       { id: 'nad30', label: 'Več kot 30 %', midpoint: 0.35, min: 0.3, max: 0.4 },
     ],
-    fallback: 0.25,
+    // Ne 0,25: to je sredina pasu "20–30 %", zato bi bil radio označen že ob prvem
+    // izrisu in "ni odgovora" bi se prikazalo kot izbran razpon.
+    fallback: 0.2,
     unit: '%',
     asPercent: true,
   },
@@ -127,6 +144,7 @@ export const TRGOVINA_CONTEXT: SegmentContext = {
   capitalCostRate: {
     label: 'Letni strošek financiranja obratnega kapitala',
     help: 'Obrestna mera posojila oziroma donos, ki bi ga denar prinesel drugje. Množi denar, vezan v terjatvah in zalogah.',
+    explainer: CAPITAL_COST_EXPLAINER,
     bands: [
       { id: 'do5', label: 'Do 5 %', midpoint: 0.04, min: 0.03, max: 0.05 },
       { id: '5do8', label: '5–8 %', midpoint: 0.065, min: 0.05, max: 0.08 },

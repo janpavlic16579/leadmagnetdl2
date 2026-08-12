@@ -149,6 +149,15 @@ export interface ModuleField {
   /** Pojasnilo pod poljem, npr. opozorilo, česa naj uporabnik ne šteje. */
   help?: string;
   /**
+   * Daljše pojasnilo za gumb "?" ob polju: kaj vprašanje pomeni po domače,
+   * konkreten primer in kako do ocene, kadar podatka nihče ne vodi.
+   *
+   * Neobvezno, ker ga polje brez `help` ne potrebuje — vprašanja tipa "koliko ur
+   * mesečno" so razumljiva sama po sebi. Da ga nobeno polje s `help` ne izgubi,
+   * skrbi test (modules/explainers.test.ts); tip tega ne more izraziti.
+   */
+  explainer?: string;
+  /**
    * Polje sme dobiti odgovor "ne vem" (glej UNKNOWN_ANSWER). Smiselno pri zneskih,
    * ki jih podjetje bodisi vodi bodisi ne — odpis, manko, neizterjani rabati.
    *

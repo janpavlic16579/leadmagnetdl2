@@ -18,6 +18,7 @@ import {
   resolveActiveModules,
   resolveInputs,
   selectTopModules,
+  splitIntoInputPages,
   type TriageScores,
 } from '../../lib/moduleEngine';
 import { aggregateResults, assessConfidence, buildComputeContext } from '../../lib/potential';
@@ -74,6 +75,12 @@ export function CalculatorFlow({
   const [triageScores, setTriageScores] = useState<TriageScores>({});
   /** null = uporabnik še ni bil v triaži; takrat velja samodejni predlog. */
   const [triageSelection, setTriageSelection] = useState<string[] | null>(null);
+  /**
+   * Katero področje je na vrsti v koraku z vnosi. Hranjen kot id modula in ne kot
+   * indeks: gumb "izmeri to področje" na rezultatih doda modul v izbiro, zato bi
+   * indeks meril po seznamu, ki v naslednjem izrisu ne velja več. null = prva stran.
+   */
+  const [inputsModuleId, setInputsModuleId] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   /** Pripravljeno poročilo za svetovalca — hranimo ga, da ga je mogoče prenesti znova. */
   const [salesReport, setSalesReport] = useState<SalesReport | null>(null);
@@ -99,6 +106,17 @@ export function CalculatorFlow({
   }, [activeSegmentId, onActiveSegmentChange]);
 
   /**
+   * Vsak korak je svoja stran, zato se začne na vrhu. Brskalnik ob zamenjavi
+   * vsebine odmik ohrani — na daljšem koraku je obiskovalec naslednjega zagledal
+   * nekje na sredini, pod naslovom in uvodnim besedilom, ki mu povesta, kaj se od
+   * njega pričakuje. 'instant' namenoma: drsenje čez cel zaslon bi bil prehod,
+   * kakršnega menjava strani nima.
+   */
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [step, inputsModuleId]);
+
+  /**
    * Zaporedje korakov je izpeljano iz konfiguracije segmenta, ne iz verige ternarjev.
    * Dodajanje koraka pomeni en vnos tu — številčenje in navigacija se prilagodita sama.
    */
@@ -110,11 +128,6 @@ export function CalculatorFlow({
     order.push('inputs', 'results');
     return order;
   }, [segment, context]);
-
-  const stepLabel = (current: FlowStep) =>
-    `Korak ${stepOrder.indexOf(current) + 1} od ${stepOrder.length}`;
-  const goNext = (current: FlowStep) => () => setStep(stepOrder[stepOrder.indexOf(current) + 1]);
-  const goBack = (current: FlowStep) => () => setStep(stepOrder[stepOrder.indexOf(current) - 1]);
 
   const segmentModules = useMemo(() => getModules(segment.moduleIds), [segment]);
   /** Samo moduli s triažo se lahko izločijo; diagnostični in E se prikažejo vedno. */
@@ -143,6 +156,45 @@ export function CalculatorFlow({
         definition.id !== 'E' || isTechnicalRiskModuleVisible(segment.id, profile.currentSystem),
     );
   }, [segmentModules, segment.triage, segment.id, selectedIds, profile.currentSystem]);
+
+  /** Korak z vnosi ni ena stran, ampak ena stran na področje (glej splitIntoInputPages). */
+  const inputPages = useMemo(() => splitIntoInputPages(activeModules), [activeModules]);
+  const inputsPageIndex = Math.max(
+    0,
+    inputPages.findIndex((page) => page.some((definition) => definition.id === inputsModuleId)),
+  );
+
+  /**
+   * Številčenje korakov. stepOrder šteje vnose kot EN korak, obiskovalec pa jih
+   * prehodi toliko, kolikor je področij — zato se skupno število razširi in vsaka
+   * stran vnosov dobi svojo številko. Ena funkcija, da aritmetika ne zaide v JSX.
+   */
+  const inputsAt = stepOrder.indexOf('inputs');
+  const totalSteps = stepOrder.length - 1 + inputPages.length;
+  const stepNumber = (current: FlowStep, pageIndex = 0) => {
+    const index = stepOrder.indexOf(current);
+    if (index < inputsAt) return index + 1;
+    if (current === 'inputs') return inputsAt + 1 + pageIndex;
+    // Rezultati in vse za njimi: vnosi so pojedli inputPages.length mest namesto enega.
+    return index + inputPages.length;
+  };
+
+  const stepLabel = (current: FlowStep, pageIndex = 0) =>
+    `Korak ${stepNumber(current, pageIndex)} od ${totalSteps}`;
+  const goNext = (current: FlowStep) => () => {
+    const next = stepOrder[stepOrder.indexOf(current) + 1];
+    // Naprej v vnose se vedno začne na prvem področju — ne glede na to, kateri korak
+    // je pred njimi (dejavnost brez konteksta pride iz triaže, ne iz osnove).
+    if (next === 'inputs') setInputsModuleId(null);
+    setStep(next);
+  };
+  const goBack = (current: FlowStep) => () => setStep(stepOrder[stepOrder.indexOf(current) - 1]);
+
+  /** Vstop v vnose od zadaj (z rezultatov) pristane na zadnji strani — pravi inverz. */
+  const openInputsAt = (moduleId: string | null) => {
+    setInputsModuleId(moduleId);
+    setStep('inputs');
+  };
 
   /** Vrednosti, dopolnjene s privzetimi — modul nikoli ne dobi delnega vnosa. */
   const resolvedValues = useMemo(() => {
@@ -466,18 +518,34 @@ export function CalculatorFlow({
   }
 
   if (step === 'inputs') {
+    const isLastPage = inputsPageIndex === inputPages.length - 1;
+    const pageModules = inputPages[inputsPageIndex] ?? [];
     return (
       <StepInputs
         segment={segment}
-        modules={activeModules}
+        modules={pageModules}
+        // Ime strani je ime področja — na zadnji strani z dvema modula spoj obeh,
+        // ne izmišljen nadnaslov ("Dodatno" ipd.). Isti niz kot legenda v triaži.
+        pageTitle={pageModules.map((definition) => definition.title).join(' in ')}
         values={resolvedValues}
         raw={moduleInputs}
         onChange={setModuleInputs}
         liveTotalEUR={totals.directLossEUR + totals.lostMarginEUR + totals.capacityEUR}
         plausibilityWarning={plausibilityWarning}
-        stepLabel={stepLabel('inputs')}
-        onNext={goNext('inputs')}
-        onBack={goBack('inputs')}
+        stepLabel={stepLabel('inputs', inputsPageIndex)}
+        isLastPage={isLastPage}
+        // Na robovih koraka gre navigacija ven po stepOrder, vmes pa le na sosednje
+        // področje — prvi modul strani je njen ključ.
+        onNext={
+          isLastPage
+            ? goNext('inputs')
+            : () => setInputsModuleId(inputPages[inputsPageIndex + 1][0].id)
+        }
+        onBack={
+          inputsPageIndex === 0
+            ? goBack('inputs')
+            : () => setInputsModuleId(inputPages[inputsPageIndex - 1][0].id)
+        }
         // Vprašalnik določa dejavnost, zato je popravek tam in ne na ločenem zaslonu
         // z drugim besednjakom. 'industry' je prvi člen stepOrder — ista navigacija
         // kot "Nazaj" s Koraka 2, brez skoka na sredino toka.
@@ -501,10 +569,12 @@ export function CalculatorFlow({
           // Odkar je "neizmerjeno" izpeljano iz podatkov, se gumb prikaže tudi pri
           // področju, ki JE izbrano, a prazno — brez Set bi id podvojili.
           setTriageSelection([...new Set([...selectedIds, id])]);
-          setStep('inputs');
+          // Naravnost na stran tega področja: sicer bi obiskovalec pristal na prvem
+          // in moral do svojega priklikati skozi vsa vmesna.
+          openInputsAt(id);
         }}
         onProceedToEmail={() => setStep('emailGate')}
-        onBack={() => setStep('inputs')}
+        onBack={() => openInputsAt(inputPages.at(-1)?.[0].id ?? null)}
       />
     );
   }

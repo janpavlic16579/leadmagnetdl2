@@ -9,8 +9,10 @@ import styles from './StepInputs.module.css';
 
 interface StepInputsProps {
   segment: SegmentConfig;
-  /** Že razrešeni moduli: izbrani v triaži plus tisti, ki se prikažejo vedno. */
+  /** Moduli TE strani — eno področje, na zadnji strani diagnostika in tvegani stroški. */
   modules: ModuleDefinition[];
+  /** Naslov strani: ime področja, na zadnji strani spoj imen njenih modulov. */
+  pageTitle: string;
   /** Vrednosti po modulu, dopolnjene s privzetimi (glej resolveInputs). */
   values: Record<string, Record<string, number>>;
   onChange: (value: ModuleInputsState) => void;
@@ -19,6 +21,8 @@ interface StepInputsProps {
   /** Mehko opozorilo o verjetnosti vnesenih ur — nikoli ne blokira (lib/plausibility). */
   plausibilityWarning?: string | null;
   stepLabel: string;
+  /** Zadnja stran vnosov — od tod naprej gre na rezultate in ne na novo področje. */
+  isLastPage: boolean;
   onNext: () => void;
   onBack: () => void;
   onChangeSegment: () => void;
@@ -27,12 +31,14 @@ interface StepInputsProps {
 export function StepInputs({
   segment,
   modules,
+  pageTitle,
   values,
   onChange,
   raw,
   liveTotalEUR,
   plausibilityWarning,
   stepLabel,
+  isLastPage,
   onNext,
   onBack,
   onChangeSegment,
@@ -44,7 +50,7 @@ export function StepInputs({
   return (
     <div className={shellStyles.wrap}>
       <p className={shellStyles.stepLabel}>{stepLabel}</p>
-      <h1 className={shellStyles.title}>Vaše številke</h1>
+      <h1 className={shellStyles.title}>{pageTitle}</h1>
 
       <div className={styles.profileBanner}>
         <span>
@@ -63,6 +69,10 @@ export function StepInputs({
             definition={definition}
             values={values[definition.id] ?? {}}
             onChange={(key, value) => handleFieldChange(definition.id, key, value)}
+            // Ime področja že nosi h1 zgoraj; na enomodulni strani bi lasten naslov
+            // modula tik pod njim samo podvojil isto besedilo. Na strani z dvema
+            // modula (zadnja) h1 združuje obe imeni, zato tu ostaneta ločena.
+            hideTitle={modules.length === 1}
           />
         ))}
         <p className={styles.moduleFootnote}>
@@ -80,22 +90,31 @@ export function StepInputs({
       ) : null}
 
       {/*
-        Vsota neposrednih izgub IN kapacitete: področji Plan in Delovni nalogi ne
-        prispevata nobene neposredne izgube, zato bi obiskovalec, ki izbere prav
-        ti dve, ves čas vnašanja gledal 0 EUR.
+        Tekoča vsota in navigacija sta v istem prilepljenem pasu: kot dva ločena
+        sticky elementa na bottom: 0 bi se prekrivala, tako pa sta oba ves čas v
+        dosegu — vsota nad gumboma, ker se med vnašanjem bere, ne klika.
       */}
-      <div className={styles.pinnedTotal}>
-        <span className={styles.pinnedLabel}>Trenutni letni strošek izbranih področij</span>
-        <span className={styles.pinnedValue}>{formatEUR(liveTotalEUR)}</span>
-      </div>
+      <div className={shellStyles.stickyFooter}>
+        <div className={shellStyles.stickyFooterInner}>
+          {/*
+            Vsota neposrednih izgub IN kapacitete: področji Plan in Delovni nalogi ne
+            prispevata nobene neposredne izgube, zato bi obiskovalec, ki izbere prav
+            ti dve, ves čas vnašanja gledal 0 EUR.
+          */}
+          <div className={styles.pinnedTotal}>
+            <span className={styles.pinnedLabel}>Trenutni letni strošek izbranih področij</span>
+            <span className={styles.pinnedValue}>{formatEUR(liveTotalEUR)}</span>
+          </div>
 
-      <div className={shellStyles.actions}>
-        <button type="button" className={buttonStyles.secondaryButton} onClick={onBack}>
-          Nazaj
-        </button>
-        <button type="button" className={buttonStyles.primaryButton} onClick={onNext}>
-          Poglej rezultat
-        </button>
+          <div className={shellStyles.actions}>
+            <button type="button" className={buttonStyles.secondaryButton} onClick={onBack}>
+              Nazaj
+            </button>
+            <button type="button" className={buttonStyles.primaryButton} onClick={onNext}>
+              {isLastPage ? 'Poglej rezultat' : 'Naprej'}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

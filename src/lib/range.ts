@@ -1,3 +1,4 @@
+import { industryAverageBand } from '../config/contexts';
 import type {
   BusinessProfile,
   CostAssumption,
@@ -22,6 +23,8 @@ import { computePotentialRange } from './potential';
  * Rešitev: izračun se požene še dvakrat — enkrat s spodnjimi in enkrat z zgornjimi
  * mejami vseh IZBRANIH pasov. Vnesena vrednost ostane točka (low = high = vnos),
  * privzetek dejavnosti prav tako (zanj razpona ni, ker ga uporabnik ni izbral).
+ * Prevzeto povprečje panoge šteje kot pas: obiskovalec je izbral NAŠO oceno, ta pa
+ * ima razpršenost, ki je ena sama pika ne pokaže.
  * Moduli se ne spreminjajo — spremeni se samo kontekst, s katerim se pokličejo.
  *
  * Kadar nič ni ocenjeno s pasom, funkcija vrne null in prikaz ostane točka —
@@ -47,18 +50,31 @@ interface ValueRange {
   high: number;
 }
 
-/** Pas prepoznamo po sredini — ista pot kot StepCostBasis in answerLabels. */
+/**
+ * Razpon postavke izhaja iz zapisanega izvora, ne več iz ujemanja sredine.
+ *
+ * Izbran pas da svoji meji. Prevzeto povprečje panoge da meji pasu, ki povprečje
+ * vsebuje — je ocena z razpršenostjo in ne meritev. Vneseno število in neodgovor
+ * ostaneta točka: prvo, ker je podatek, drugo, ker si razpona okoli privzetka, ki
+ * ga obiskovalec ni izbral, ne smemo pripisati.
+ */
 function costRange(question: CostQuestion | undefined, assumption: CostAssumption): ValueRange {
-  if (question && assumption.estimated) {
-    const band = question.bands.find((candidate) => candidate.midpointEUR === assumption.valueEUR);
-    if (band) return { low: band.minEUR, high: band.maxEUR };
+  if (question) {
+    if (assumption.source === 'band') {
+      const band = question.bands.find((candidate) => candidate.id === assumption.bandId);
+      if (band) return { low: band.minEUR, high: band.maxEUR };
+    }
+    if (assumption.source === 'industryAverage') {
+      const band = industryAverageBand(question);
+      if (band) return { low: band.minEUR, high: band.maxEUR };
+    }
   }
   return { low: assumption.valueEUR, high: assumption.valueEUR };
 }
 
 function scaleRange(question: ScaleQuestion | undefined, assumption: ScaleAssumption): ValueRange {
-  if (question && assumption.estimated) {
-    const band = question.bands.find((candidate) => candidate.midpoint === assumption.value);
+  if (question && assumption.source === 'band') {
+    const band = question.bands.find((candidate) => candidate.id === assumption.bandId);
     if (band) return { low: band.min, high: band.max };
   }
   return { low: assumption.value, high: assumption.value };

@@ -18,10 +18,10 @@ import { resolveInputs } from '../../lib/moduleEngine';
  */
 
 // Postavki sta namenoma taki, da ena ni večkratnik druge: če bi compute() zamenjal
-// neposredno (30) in administrativno (35) uro, se to v izidu takoj pozna.
+// neposredno (22) in administrativno (25) uro, se to v izidu takoj pozna.
 const CONTEXT: ComputeContext = {
-  operationalHourCostEUR: 30,
-  adminHourCostEUR: 35,
+  operationalHourCostEUR: 22,
+  adminHourCostEUR: 25,
   // Splošni segment ur ne prodaja po ceniku — postavka je tu samo zato, ker je v
   // ComputeContext obvezna. Noben izid je ne sme uporabiti.
   chargeOutRateEUR: 90,

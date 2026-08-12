@@ -118,6 +118,11 @@ dodajanje nove vloge v kontekst ne podre ocene.
 | vodja* | 0,60 | Pozna problem, o nakupu pa praviloma ne odloča sam. |
 | ni podatka / "Drugo" | 0,35 | Kdo odloča, ni znano. |
 
+Kdor izbere "Drugo", svojo funkcijo vpiše sam. Vpis **ocene namenoma ne dvigne**: ugibanje po
+ključnih besedah ("direktor IT" ni direktor podjetja) bi bilo manj zanesljivo od 0,35. Besedilo
+je namenjeno človeku — vidi ga v prodajnem poročilu (vrstica "Vlogo navaja kot") in v stolpcu
+`roleOther` izvoznega zapisa.
+
 ### 3.5 Nujnost zaradi rokov (utež 0,10)
 
 Edina dimenzija z **zunanjim, od stranke neodvisnim rokom** — tehnični roki (`warningDate`)
