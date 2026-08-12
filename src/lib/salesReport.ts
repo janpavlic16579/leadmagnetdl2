@@ -1,4 +1,9 @@
-import type { SegmentContext, BusinessProfile, ImprovementBand } from '../config/contexts';
+import type {
+  AssumptionSource,
+  SegmentContext,
+  BusinessProfile,
+  ImprovementBand,
+} from '../config/contexts';
 import { improvementBandFor, isTechnicalRiskModuleVisible } from '../config/contexts';
 import { getIndustryLabel } from '../config/industries';
 import type { ModuleDefinition, ModuleOutput } from '../config/modules/moduleTypes';
@@ -71,8 +76,15 @@ export interface SalesReportQualification {
   segmentName: string;
   sizeClass: string;
   employeeCount: number;
-  /** Oznaka, ne id — "Vodja skladišča ali logistike" in ne "vodjaSkladisca". */
+  /**
+   * Oznaka, ne id — "Vodja skladišča ali logistike" in ne "vodjaSkladisca".
+   * Ostane čista naštevna oznaka: playbook nad njo išče "direktor|lastnik" in
+   * zlit prosti vnos bi ugovor "o tem ne odločam jaz" izklopil vsakemu, ki bi si
+   * v polje napisal "direktor IT".
+   */
   roleLabel: string | null;
+  /** Vloga, ki si jo je obiskovalec vpisal sam ob možnosti "Drugo". */
+  roleOther: string | null;
   businessTypeLabel: string | null;
   currentSystemLabel: string | null;
   /** Od tega je odvisno, ali so tehnična opozorila (ZIERDED, SQL Server) sploh smiselna. */
@@ -106,21 +118,26 @@ export interface HourAssumptionRow {
   valueEUR: number;
   estimated: boolean;
   /**
-   * Izbrani razpon, kadar postavka ni vnesena — sicer null.
+   * Od kod je številka. Štirje primeri, ki jih mora prodajnik ločiti, ker vsak pove
+   * nekaj drugega o tem, koliko je izračun vreden:
    *
-   * Trije primeri, ki jih je treba razlikovati, ker vsak pove nekaj drugega:
-   * `estimated === false` je strankin podatek; `estimated` z oznako razpona pomeni,
-   * da je stranka razpon vsaj izbrala; `estimated` brez oznake pa, da ni odgovorila
-   * nič in je v veljavi privzetek dejavnosti (fallbackEUR se namenoma ne ujema z
-   * nobeno sredino razpona, sicer bi izgledal kot izbira). Zadnji primer je najšibkejši
-   * in prodajnik mora to vedeti.
+   * `entered` je strankin podatek; `band` pomeni, da je razpon vsaj izbrala — to je
+   * njena presoja o lastnem podjetju; `industryAverage` pomeni, da je prevzela NAŠO
+   * oceno za dejavnost, torej o svojem podjetju ni povedala nič; `none` pa, da ni
+   * odgovorila nič in je v veljavi privzetek. Zadnja dva sta po vsebini enako šibka,
+   * a ne enako povedna: kdor je povprečje kliknil, je vprašanje vsaj videl.
    */
+  source: AssumptionSource;
+  /** Razpon, v katerem se izračun giblje — pri `entered` in `none` null. */
   bandLabel: string | null;
 }
 
 /** Besedilo, ki ga za urno postavko vidi bralec poročila. */
 export function hourAssumptionSource(row: HourAssumptionRow): string {
-  if (!row.estimated) return 'vneseno';
+  if (row.source === 'entered') return 'vneseno';
+  if (row.source === 'industryAverage') {
+    return `povprečje panoge (${row.valueEUR} EUR/h)`;
+  }
   return row.bandLabel ? `izbran razpon ${row.bandLabel}` : 'ni odgovora — privzetek dejavnosti';
 }
 
@@ -266,6 +283,7 @@ export function buildSalesReport(params: BuildSalesReportParams): SalesReport {
       sizeClass: getSizeClass(params.employeeCount),
       employeeCount: params.employeeCount,
       roleLabel: contextOptionLabel(context?.role, profile.role),
+      roleOther: profile.roleOther.trim() || null,
       businessTypeLabel: contextOptionLabel(context?.businessType, profile.businessType),
       currentSystemLabel: contextOptionLabel(context?.currentSystem, profile.currentSystem),
       isPantheonCustomer: isPantheonCustomer(context, profile.currentSystem),
@@ -410,12 +428,14 @@ function buildHourAssumptions(
       label: context.operationalHour.label,
       valueEUR: profile.operationalHour.valueEUR,
       estimated: profile.operationalHour.estimated,
+      source: profile.operationalHour.source,
       bandLabel: costBandLabel(context.operationalHour, profile.operationalHour),
     });
     rows.push({
       label: context.adminHour.label,
       valueEUR: profile.adminHour.valueEUR,
       estimated: profile.adminHour.estimated,
+      source: profile.adminHour.source,
       bandLabel: costBandLabel(context.adminHour, profile.adminHour),
     });
     // Zaračunano postavko vpraša samo dejavnost, ki prodaja ure. Drugod je v profilu
@@ -426,6 +446,7 @@ function buildHourAssumptions(
         label: context.chargeOutRate.label,
         valueEUR: profile.chargeOutRate.valueEUR,
         estimated: profile.chargeOutRate.estimated,
+        source: profile.chargeOutRate.source,
         bandLabel: costBandLabel(context.chargeOutRate, profile.chargeOutRate),
       });
     }

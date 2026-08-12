@@ -1,3 +1,4 @@
+import { industryAverageBand } from '../config/contexts';
 import type {
   ContextOption,
   ContextQuestion,
@@ -31,6 +32,17 @@ export function contextOptionLabel(
   return question.options.find((option) => option.id === id)?.label ?? null;
 }
 
+/**
+ * Vloga, kot jo prebere svetovalec: "Drugo — vodja IT", kadar si jo je obiskovalec
+ * vpisal sam. Skupna za HTML poročilo in PDF, ker morata vrstici ostati enaki —
+ * dvakrat sestavljen niz bi se prej ali slej razšel v presledku ali pomišljaju.
+ */
+export function roleDisplay(roleLabel: string | null, roleOther: string | null): string {
+  const own = roleOther?.trim();
+  if (!roleLabel) return own || '—';
+  return own ? `${roleLabel} — ${own}` : roleLabel;
+}
+
 /** Je izbrani sistem obstoječi PANTHEON — od tega je odvisna vidnost modula E. */
 export function isPantheonCustomer(
   context: SegmentContext | undefined,
@@ -43,26 +55,29 @@ export function isPantheonCustomer(
 }
 
 /**
- * Oznaka izbranega razpona urne postavke, kadar je vrednost le ocena.
+ * Oznaka razpona urne postavke, kadar vrednost ni vnesena številka.
  *
- * Ujame se po `midpointEUR` in ne po id-ju, ker se izbrani pas nikjer ne shrani —
- * profil hrani samo sredino. Enako počne StepCostBasis pri ponovnem prikazu koraka.
+ * Pas se najde po zapisanem `bandId`. Prej se je ugibal z ujemanjem `midpointEUR`,
+ * kar je terjalo posebno varovalo: vrednost, enaka privzetku dejavnosti, se ni
+ * priznala za izbiro, ker nedotaknjenega polja ni bilo mogoče ločiti od izbranega
+ * pasu z isto sredino. Varovalo je odpadlo skupaj z ugibanjem — in je moralo, ker
+ * je povprečje panoge NATANKO privzetek dejavnosti: z njim bi izrecno izbiro
+ * obiskovalca razglasili za neodgovor.
  *
- * Vrednost, enaka privzetku dejavnosti, se NE prizna za izbran razpon. CostAssumption
- * hrani le `{ valueEUR, estimated }` in nedotaknjenega polja od izbire ne loči; pri
- * nekaterih dejavnostih pa se privzetek slučajno ujema s sredino enega od razponov
- * (veleprodaja: privzetih 24 EUR je hkrati sredina razpona 20–28). Brez tega pogoja
- * bi poročilo trdilo, da je stranka nekaj izbrala, česar se ni dotaknila. Kdor tak
- * razpon res izbere, je prikazan konservativno — smer napake je vedno ista: raje
- * priznamo manj podatka, kot da bi si ga izmislili.
+ * Povprečje panoge dobi oznako pasu, v katerem leži. Da je to NAŠA ocena in ne
+ * obiskovalčeva, pove `source` v prodajni pripravi (hourAssumptionSource) — tu se
+ * imenuje samo razpon, v katerem se izračun giblje.
  */
 export function costBandLabel(
   question: CostQuestion | undefined,
   assumption: CostAssumption,
 ): string | null {
-  if (!question || !assumption.estimated) return null;
-  if (assumption.valueEUR === question.fallbackEUR) return null;
-  return question.bands.find((band) => band.midpointEUR === assumption.valueEUR)?.label ?? null;
+  if (!question) return null;
+  if (assumption.source === 'band') {
+    return question.bands.find((band) => band.id === assumption.bandId)?.label ?? null;
+  }
+  if (assumption.source === 'industryAverage') return industryAverageBand(question)?.label ?? null;
+  return null;
 }
 
 /** Polje z glavnim vzrokom, če ga modul ima (diagnostični in E ga nimata). */

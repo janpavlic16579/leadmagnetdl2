@@ -48,8 +48,8 @@
     Arial,
     sans-serif;
 
-  /* Privzeta je svetla tema — tudi če ima obiskovalec v sistemu vklopljen temni
-     način. Temno dobi šele, ko jo sam izbere z gumbom v glavi (data-theme="dark"),
+  /* Sistemska nastavitev odloči, dokler obiskovalec teme ne izbere sam z gumbom
+     v glavi — a oboje gre skozi isti kanal, data-theme="dark" (lib/theme.ts),
      zato tu ni @media (prefers-color-scheme: dark) bloka. */
   color-scheme: light;
 }

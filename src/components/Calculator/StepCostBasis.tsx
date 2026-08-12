@@ -8,6 +8,8 @@ import type {
   SegmentContext,
 } from '../../config/contexts';
 import buttonStyles from '../../styles/buttons.module.css';
+import { HelpTip } from './HelpTip';
+import helpStyles from './HelpTip.module.css';
 import shellStyles from './StepShell.module.css';
 import styles from './StepCostBasis.module.css';
 
@@ -91,17 +93,21 @@ export function StepCostBasis({
       </div>
 
       <p className={styles.note}>
-        Če katere od postavk ne poznate, izberite razpon. Izračun bo tekel naprej, rezultat pa bo označen z
-        nižjo zanesljivostjo — raje to kot navidezno natančen znesek.
+        Če katere od postavk ne poznate, prevzemite povprečje panoge ali izberite razpon. Izračun bo tekel
+        naprej, rezultat pa bo označen z nižjo zanesljivostjo — raje to kot navidezno natančen znesek.
       </p>
 
-      <div className={shellStyles.actions}>
-        <button type="button" className={buttonStyles.secondaryButton} onClick={onBack}>
-          Nazaj
-        </button>
-        <button type="button" className={buttonStyles.primaryButton} onClick={onNext}>
-          Naprej na številke
-        </button>
+      <div className={shellStyles.stickyFooter}>
+        <div className={shellStyles.stickyFooterInner}>
+          <div className={shellStyles.actions}>
+            <button type="button" className={buttonStyles.secondaryButton} onClick={onBack}>
+              Nazaj
+            </button>
+            <button type="button" className={buttonStyles.primaryButton} onClick={onNext}>
+              Naprej na številke
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -115,17 +121,23 @@ interface CostFieldProps {
 
 function CostField({ question, value, onChange }: CostFieldProps) {
   const groupId = useId();
-  // Sredine pasov so različne, zato izbrani pas prepoznamo po vrednosti.
-  const selectedBand = value.estimated
-    ? question.bands.find((band) => band.midpointEUR === value.valueEUR)
-    : undefined;
+  const fromAverage = value.source === 'industryAverage';
+  /**
+   * Povprečje panoge se izpiše v polje, čeprav ni uporabnikov podatek — prav to je
+   * namen gumba: številka mora biti vidna tam, kjer jo obiskovalec pričakuje, in
+   * popravljiva. Da je naša in ne njegova, pove opomba pod poljem; brez nje bi bila
+   * v polju videti kot vnos.
+   */
+  const shown = value.source === 'entered' || fromAverage ? value.valueEUR : '';
 
   return (
     <div className={styles.field}>
-      <label className={styles.label} htmlFor={`${groupId}-input`}>
-        {question.label}
-      </label>
-      <p className={styles.help}>{question.help}</p>
+      <div className={helpStyles.questionRow}>
+        <label className={styles.label} htmlFor={`${groupId}-input`}>
+          {question.label}
+        </label>
+        <HelpTip label={question.label} help={question.help} explainer={question.explainer} />
+      </div>
 
       <div className={styles.inputRow}>
         <input
@@ -135,17 +147,41 @@ function CostField({ question, value, onChange }: CostFieldProps) {
           min={0}
           inputMode="numeric"
           placeholder={`npr. ${question.fallbackEUR}`}
-          // Ocenjena vrednost se namenoma ne izpiše kot vnos — ni uporabnikov podatek.
-          value={value.estimated || !value.valueEUR ? '' : value.valueEUR}
+          value={shown || ''}
           onChange={(event) =>
             onChange(
               event.target.value === ''
-                ? { valueEUR: question.fallbackEUR, estimated: true }
-                : { valueEUR: Number(event.target.value), estimated: false },
+                ? { valueEUR: question.fallbackEUR, estimated: true, source: 'none' }
+                : { valueEUR: Number(event.target.value), estimated: false, source: 'entered' },
             )
           }
         />
         <span className={styles.unit}>EUR/h</span>
+      </div>
+
+      <div className={styles.average}>
+        <button
+          type="button"
+          className={`${styles.averageButton} ${fromAverage ? styles.averageButtonActive : ''}`}
+          aria-pressed={fromAverage}
+          onClick={() =>
+            onChange(
+              fromAverage
+                ? { valueEUR: question.fallbackEUR, estimated: true, source: 'none' }
+                : { valueEUR: question.fallbackEUR, estimated: true, source: 'industryAverage' },
+            )
+          }
+        >
+          {fromAverage
+            ? `Povprečje panoge — ${question.fallbackEUR} EUR/h`
+            : `Ne vem — vzemi povprečje panoge (${question.fallbackEUR} EUR/h)`}
+        </button>
+        {fromAverage && (
+          <p className={styles.averageNote}>
+            Naša ocena za to dejavnost, ne vaš podatek. Izračun bo tekel z razponom te ocene;
+            popravite jo, če veste bolje.
+          </p>
+        )}
       </div>
 
       <fieldset className={styles.bands}>
@@ -154,13 +190,22 @@ function CostField({ question, value, onChange }: CostFieldProps) {
           {question.bands.map((band) => (
             <label
               key={band.id}
-              className={`${styles.band} ${selectedBand?.id === band.id ? styles.bandActive : ''}`}
+              className={`${styles.band} ${
+                value.source === 'band' && value.bandId === band.id ? styles.bandActive : ''
+              }`}
             >
               <input
                 type="radio"
                 name={groupId}
-                checked={selectedBand?.id === band.id}
-                onChange={() => onChange({ valueEUR: band.midpointEUR, estimated: true })}
+                checked={value.source === 'band' && value.bandId === band.id}
+                onChange={() =>
+                  onChange({
+                    valueEUR: band.midpointEUR,
+                    estimated: true,
+                    source: 'band',
+                    bandId: band.id,
+                  })
+                }
               />
               <span>{band.label}</span>
             </label>
@@ -184,19 +229,18 @@ interface ScaleFieldProps {
  */
 function ScaleField({ question, value, onChange }: ScaleFieldProps) {
   const groupId = useId();
-  const selectedBand = value.estimated
-    ? question.bands.find((band) => band.midpoint === value.value)
-    : undefined;
 
   const toDisplay = (raw: number) => (question.asPercent ? Math.round(raw * 1000) / 10 : raw);
   const fromDisplay = (shown: number) => (question.asPercent ? shown / 100 : shown);
 
   return (
     <div className={styles.field}>
-      <label className={styles.label} htmlFor={`${groupId}-input`}>
-        {question.label}
-      </label>
-      <p className={styles.help}>{question.help}</p>
+      <div className={helpStyles.questionRow}>
+        <label className={styles.label} htmlFor={`${groupId}-input`}>
+          {question.label}
+        </label>
+        <HelpTip label={question.label} help={question.help} explainer={question.explainer} />
+      </div>
 
       <div className={styles.inputRow}>
         <input
@@ -206,12 +250,17 @@ function ScaleField({ question, value, onChange }: ScaleFieldProps) {
           min={0}
           inputMode="numeric"
           placeholder={question.asPercent ? 'npr. 25' : 'npr. 2000000'}
-          value={value.estimated || !value.value ? '' : toDisplay(value.value)}
+          // Ocenjena vrednost se namenoma ne izpiše kot vnos — ni uporabnikov podatek.
+          value={value.source === 'entered' && value.value ? toDisplay(value.value) : ''}
           onChange={(event) =>
             onChange(
               event.target.value === ''
-                ? { value: question.fallback, estimated: true }
-                : { value: fromDisplay(Number(event.target.value)), estimated: false },
+                ? { value: question.fallback, estimated: true, source: 'none' }
+                : {
+                    value: fromDisplay(Number(event.target.value)),
+                    estimated: false,
+                    source: 'entered',
+                  },
             )
           }
         />
@@ -224,13 +273,22 @@ function ScaleField({ question, value, onChange }: ScaleFieldProps) {
           {question.bands.map((band) => (
             <label
               key={band.id}
-              className={`${styles.band} ${selectedBand?.id === band.id ? styles.bandActive : ''}`}
+              className={`${styles.band} ${
+                value.source === 'band' && value.bandId === band.id ? styles.bandActive : ''
+              }`}
             >
               <input
                 type="radio"
                 name={groupId}
-                checked={selectedBand?.id === band.id}
-                onChange={() => onChange({ value: band.midpoint, estimated: true })}
+                checked={value.source === 'band' && value.bandId === band.id}
+                onChange={() =>
+                  onChange({
+                    value: band.midpoint,
+                    estimated: true,
+                    source: 'band',
+                    bandId: band.id,
+                  })
+                }
               />
               <span>{band.label}</span>
             </label>

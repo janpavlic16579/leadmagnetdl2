@@ -186,6 +186,16 @@ export const CSV_COLUMNS = [
   'consentContent',
   // Nezaslužena marža (korak 0 prenove) — na koncu, ker so preslikave pozicijske.
   'lostMarginEUR',
+  // Vloga, vpisana ob možnosti "Drugo". Ločen stolpec in ne zlito v 'role': tam je
+  // id, po katerem CRM filtrira, tu prosto besedilo obiskovalca.
+  'roleOther',
+  // Izvor obeh urnih postavk. 'hourCostsEstimated' zgoraj je ena sama logična ALI
+  // vrednost čez obe in ne pove, KATERI od štirih poti je številka prišla — odkar
+  // je mogoče prevzeti povprečje panoge, je razlika bistvena: "prevzel našo oceno"
+  // ni isto kot "izbral razpon". Stolpca sta ločena, ker se postavki lahko
+  // razlikujeta (vnesena operativna, prevzeta administrativna).
+  'operationalHourSource',
+  'adminHourSource',
 ] as const;
 
 /** Prazna celica namesto "0" — segment brez te vrednosti je ni izračunal, ni je izmeril kot nič. */
@@ -248,6 +258,9 @@ export function buildCsvRow(record: LeadExportRecord): string[] {
     String(record.consentOffers),
     String(record.consentContent),
     String(Math.round(record.totals.lostMarginEUR)),
+    record.profile?.roleOther ?? '',
+    record.profile?.operationalHour.source ?? '',
+    record.profile?.adminHour.source ?? '',
   ].map((value) => csvEscape(value));
 }
 

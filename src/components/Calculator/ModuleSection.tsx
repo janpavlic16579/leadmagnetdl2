@@ -7,6 +7,8 @@ interface ModuleSectionProps {
   /** Že razrešene vrednosti (privzete, prekrite z uporabnikovimi) — nikoli delne. */
   values: Record<string, number>;
   onChange: (key: string, value: number) => void;
+  /** Stran nosi ime področja že v svojem h1 — tu bi se sicer podvojilo. */
+  hideTitle?: boolean;
 }
 
 /**
@@ -16,11 +18,13 @@ interface ModuleSectionProps {
  * računajo kot ulomek (0,015), widget pa prikaže 1,5. Doslej je bila ta pretvorba
  * raztresena po JSX-u za vsak modul posebej, z različno natančnostjo zaokroževanja.
  */
-export function ModuleSection({ definition, values, onChange }: ModuleSectionProps) {
+export function ModuleSection({ definition, values, onChange, hideTitle }: ModuleSectionProps) {
   return (
     <section className={styles.moduleSection}>
-      <h2 className={styles.moduleHeading}>{definition.title}</h2>
-      <p className={styles.moduleSummary}>{definition.summary}</p>
+      {hideTitle ? null : <h2 className={styles.moduleHeading}>{definition.title}</h2>}
+      <p className={hideTitle ? styles.moduleSummaryStandalone : styles.moduleSummary}>
+        {definition.summary}
+      </p>
       {definition.fields.map((field) => (
         <Field key={field.key} field={field} value={values[field.key]} onChange={onChange} />
       ))}
@@ -50,6 +54,7 @@ function Field({
           mode="checkbox"
           label={field.label}
           helpText={field.help}
+          explainer={field.explainer}
           value={value}
           onChange={(next) => onChange(field.key, next)}
         />
@@ -61,6 +66,7 @@ function Field({
           mode="choice"
           label={field.label}
           helpText={field.help}
+          explainer={field.explainer}
           value={value}
           choices={field.choices ?? []}
           onChange={(next) => onChange(field.key, next)}
@@ -74,6 +80,7 @@ function Field({
           mode="slider"
           label={field.label}
           helpText={field.help}
+          explainer={field.explainer}
           value={Math.round(value * 100 * factor) / factor}
           min={(field.min ?? 0) * 100}
           max={(field.max ?? 1) * 100}
@@ -90,6 +97,7 @@ function Field({
           mode="slider"
           label={field.label}
           helpText={field.help}
+          explainer={field.explainer}
           value={value}
           min={field.min ?? 0}
           max={field.max ?? 100}
@@ -105,6 +113,7 @@ function Field({
           mode="number"
           label={field.label}
           helpText={field.help}
+          explainer={field.explainer}
           value={value}
           unit={field.unit}
           allowUnknown={field.allowUnknown}

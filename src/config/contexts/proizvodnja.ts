@@ -1,11 +1,22 @@
-import { ADMIN_HOUR_BANDS } from './shared';
+import {
+  ADMIN_HOUR_BANDS,
+  ADMIN_HOUR_EXPLAINER,
+  ANNUAL_REVENUE_EXPLAINER,
+  CONTRIBUTION_MARGIN_EXPLAINER,
+  HOURLY_COST_EXPLAINER,
+} from './shared';
 import type { CostBand, SegmentContext } from './contextTypes';
 
+/**
+ * Sidro: operater na stroju 19,9 EUR/h, panožno povprečje predelovalnih dejavnosti 23,6.
+ * Zgornja pasova pokrijeta izmenske in nevarnostne dodatke ter specializirane profile
+ * (CNC, varilec z atestom). Izpeljava in viri: docs/urne-postavke.md.
+ */
 const PRODUCTION_HOUR_BANDS: CostBand[] = [
-  { id: 'do30', label: 'Do 30 EUR', midpointEUR: 25, minEUR: 20, maxEUR: 30 },
-  { id: '30do45', label: '30–45 EUR', midpointEUR: 37, minEUR: 30, maxEUR: 45 },
-  { id: '45do60', label: '45–60 EUR', midpointEUR: 52, minEUR: 45, maxEUR: 60 },
-  { id: 'nad60', label: 'Več kot 60 EUR', midpointEUR: 70, minEUR: 60, maxEUR: 80 },
+  { id: 'do18', label: 'Do 18 EUR', midpointEUR: 16, minEUR: 13, maxEUR: 18 },
+  { id: '18do25', label: '18–25 EUR', midpointEUR: 21, minEUR: 18, maxEUR: 25 },
+  { id: '25do33', label: '25–33 EUR', midpointEUR: 29, minEUR: 25, maxEUR: 33 },
+  { id: 'nad33', label: 'Več kot 33 EUR', midpointEUR: 38, minEUR: 33, maxEUR: 46 },
 ];
 
 export const PROIZVODNJA_CONTEXT: SegmentContext = {
@@ -13,7 +24,7 @@ export const PROIZVODNJA_CONTEXT: SegmentContext = {
   intro:
     'Tri vprašanja, ki ne sprašujejo po številkah. Iz njih izpeljemo, koliko od izmerjenega stroška je realno mogoče nasloviti — podjetje, ki že uporablja proizvodni modul, je lažje izboljšave namreč večinoma že pobralo.',
   costBasisIntro:
-    'Štiri številke, ki veljajo za vsa področja. Polni strošek ure pomeni bruto plačo z vsemi prispevki in režijo, ne neto izplačila. Prihodek in maržo vprašamo enkrat — sta lastnost podjetja, ne posameznega področja.',
+    'Štiri številke, ki veljajo za vsa področja. Polni strošek ure pomeni bruto plačo s prispevki delodajalca ter regresom, malico in prevozom — ne neto izplačila in ne režije. Prihodek in maržo vprašamo enkrat — sta lastnost podjetja, ne posameznega področja.',
 
   businessType: {
     legend: 'Kako pretežno proizvajate?',
@@ -44,22 +55,24 @@ export const PROIZVODNJA_CONTEXT: SegmentContext = {
       { id: 'vodjaProizvodnje', label: 'Vodja proizvodnje' },
       { id: 'finance', label: 'Finance ali računovodstvo' },
       { id: 'nabava', label: 'Nabava ali logistika' },
-      { id: 'drugo', label: 'Drugo' },
+      { id: 'drugo', label: 'Drugo', freeText: true },
     ],
   },
 
   operationalHour: {
     label: 'Približen polni strošek neposredne proizvodne ure',
     help: 'Operater, varilec, monter — kdor dela na delovnem nalogu.',
+    explainer: HOURLY_COST_EXPLAINER,
     bands: PRODUCTION_HOUR_BANDS,
-    fallbackEUR: 45,
+    fallbackEUR: 22,
   },
 
   adminHour: {
     label: 'Približen polni strošek administrativne oziroma vodstvene ure',
     help: 'Planer, vodja proizvodnje, nabava, priprava dela.',
+    explainer: ADMIN_HOUR_EXPLAINER,
     bands: ADMIN_HOUR_BANDS,
-    fallbackEUR: 35,
+    fallbackEUR: 25,
   },
 
   /**
@@ -69,6 +82,7 @@ export const PROIZVODNJA_CONTEXT: SegmentContext = {
   annualRevenue: {
     label: 'Letni prihodki od prodaje',
     help: 'Neto, brez DDV. Če razpona ne izberete, postavk, vezanih na prihodek, ne bomo ocenili — prihodka si ne izmišljamo.',
+    explainer: ANNUAL_REVENUE_EXPLAINER,
     bands: [
       { id: 'do2mio', label: 'Do 2 mio EUR', midpoint: 1_200_000, min: 400_000, max: 2_000_000 },
       { id: '2do5mio', label: '2–5 mio EUR', midpoint: 3_200_000, min: 2_000_000, max: 5_000_000 },
@@ -82,6 +96,7 @@ export const PROIZVODNJA_CONTEXT: SegmentContext = {
   contributionMargin: {
     label: 'Povprečna prispevna marža',
     help: 'Kar od prodajne cene ostane po materialu in neposrednih stroških izdelave. Ni razlika v ceniku, ampak dejanski ostanek.',
+    explainer: CONTRIBUTION_MARGIN_EXPLAINER,
     bands: [
       { id: 'do20', label: 'Do 20 %', midpoint: 0.15, min: 0.1, max: 0.2 },
       { id: '20do35', label: '20–35 %', midpoint: 0.28, min: 0.2, max: 0.35 },

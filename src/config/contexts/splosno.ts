@@ -1,16 +1,26 @@
-import { ADMIN_HOUR_BANDS } from './shared';
+import {
+  ADMIN_HOUR_BANDS,
+  ADMIN_HOUR_EXPLAINER,
+  ANNUAL_REVENUE_EXPLAINER,
+  CAPITAL_COST_EXPLAINER,
+  CONTRIBUTION_MARGIN_EXPLAINER,
+  HOURLY_COST_EXPLAINER,
+} from './shared';
 import type { CostBand, SegmentContext } from './contextTypes';
 
 /**
  * Neposredna ura v neznani dejavnosti: nekje operater, drugje monter, tehnik ali
  * terenski delavec. Razponi so zato širši od proizvodnih in nižje zasidrani —
  * privzetek naj raje podceni kot preceni, ker podjetja ne poznamo.
+ *
+ * Sidro: povprečje vseh zaposlenih 24,3 EUR/h, neposredno delo pod njim (~20).
+ * Izpeljava in viri: docs/urne-postavke.md.
  */
 const OPERATIONAL_HOUR_BANDS: CostBand[] = [
-  { id: 'do25', label: 'Do 25 EUR', midpointEUR: 21, minEUR: 17, maxEUR: 25 },
+  { id: 'do18', label: 'Do 18 EUR', midpointEUR: 15, minEUR: 12, maxEUR: 18 },
+  { id: '18do25', label: '18–25 EUR', midpointEUR: 21, minEUR: 18, maxEUR: 25 },
   { id: '25do35', label: '25–35 EUR', midpointEUR: 30, minEUR: 25, maxEUR: 35 },
-  { id: '35do50', label: '35–50 EUR', midpointEUR: 42, minEUR: 35, maxEUR: 50 },
-  { id: 'nad50', label: 'Več kot 50 EUR', midpointEUR: 58, minEUR: 50, maxEUR: 66 },
+  { id: 'nad35', label: 'Več kot 35 EUR', midpointEUR: 42, minEUR: 35, maxEUR: 50 },
 ];
 
 /**
@@ -37,7 +47,7 @@ export const SPLOSNO_CONTEXT: SegmentContext = {
   intro:
     'Tri vprašanja, ki ne sprašujejo po številkah. Ker vaše dejavnosti nismo mogli natančneje opredeliti, so naslednja vprašanja splošna — izračun bo zato bolj zadržan kot pri panožno prilagojenem vprašalniku.',
   costBasisIntro:
-    'Pet številk, ki veljajo za vsa področja. Polni strošek ure pomeni bruto plačo z vsemi prispevki in režijo, ne neto izplačila. Prihodek in maržo vprašamo enkrat — iz prihodka se med drugim izračuna strošek plačilnih zamud.',
+    'Pet številk, ki veljajo za vsa področja. Polni strošek ure pomeni bruto plačo s prispevki delodajalca ter regresom, malico in prevozom — ne neto izplačila in ne režije. Prihodek in maržo vprašamo enkrat — iz prihodka se med drugim izračuna strošek plačilnih zamud.',
 
   businessType: {
     legend: 'Kaj najbolje opiše vaše poslovanje?',
@@ -82,22 +92,24 @@ export const SPLOSNO_CONTEXT: SegmentContext = {
       { id: 'lastnik', label: 'Lastnik/-ica' },
       { id: 'finance', label: 'Finance ali računovodstvo' },
       { id: 'vodjaOddelka', label: 'Vodja oddelka' },
-      { id: 'drugo', label: 'Drugo' },
+      { id: 'drugo', label: 'Drugo', freeText: true },
     ],
   },
 
   operationalHour: {
     label: 'Približen polni strošek neposredne ure',
     help: 'Kdor dela na izdelku, blagu ali pri stranki — ne pisarniško oziroma vodstveno delo.',
+    explainer: HOURLY_COST_EXPLAINER,
     bands: OPERATIONAL_HOUR_BANDS,
-    fallbackEUR: 30,
+    fallbackEUR: 22,
   },
 
   adminHour: {
     label: 'Približen polni strošek administrativne oziroma vodstvene ure',
     help: 'Uprava, finance, nabava, prodaja, priprava dela.',
+    explainer: ADMIN_HOUR_EXPLAINER,
     bands: ADMIN_HOUR_BANDS,
-    fallbackEUR: 35,
+    fallbackEUR: 25,
   },
 
   /**
@@ -107,6 +119,7 @@ export const SPLOSNO_CONTEXT: SegmentContext = {
   annualRevenue: {
     label: 'Letni prihodki',
     help: 'Neto, brez DDV. Če razpona ne izberete, postavk, vezanih na prihodek (npr. strošek plačilnih zamud), ne bomo ocenili — prihodka si ne izmišljamo.',
+    explainer: ANNUAL_REVENUE_EXPLAINER,
     bands: [
       { id: 'do1mio', label: 'Do 1 mio EUR', midpoint: 600_000, min: 200_000, max: 1_000_000 },
       { id: '1do3mio', label: '1–3 mio EUR', midpoint: 1_800_000, min: 1_000_000, max: 3_000_000 },
@@ -120,6 +133,7 @@ export const SPLOSNO_CONTEXT: SegmentContext = {
   contributionMargin: {
     label: 'Povprečna prispevna marža',
     help: 'Kar od prodajne cene ostane po neposrednih stroških (material, blago ali izvedba).',
+    explainer: CONTRIBUTION_MARGIN_EXPLAINER,
     bands: [
       { id: 'do15', label: 'Do 15 %', midpoint: 0.12, min: 0.09, max: 0.15 },
       { id: '15do25', label: '15–25 %', midpoint: 0.2, min: 0.15, max: 0.25 },
@@ -138,6 +152,7 @@ export const SPLOSNO_CONTEXT: SegmentContext = {
   capitalCostRate: {
     label: 'Letni strošek financiranja obratnega kapitala',
     help: 'Obrestna mera posojila oziroma donos, ki bi ga denar prinesel drugje. Množi denar, vezan v terjatvah in zalogah.',
+    explainer: CAPITAL_COST_EXPLAINER,
     bands: [
       { id: 'do5', label: 'Do 5 %', midpoint: 0.04, min: 0.03, max: 0.05 },
       { id: '5do8', label: '5–8 %', midpoint: 0.065, min: 0.05, max: 0.08 },

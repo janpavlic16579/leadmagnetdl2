@@ -1,11 +1,14 @@
 import { useId } from 'react';
 import { UNKNOWN_ANSWER } from '../../config/modules';
+import { HelpTip } from './HelpTip';
+import helpStyles from './HelpTip.module.css';
 import styles from './ModuleInput.module.css';
 
 interface SliderFieldProps {
   mode: 'slider';
   label: string;
   helpText?: string;
+  explainer?: string;
   value: number;
   min: number;
   max: number;
@@ -18,6 +21,7 @@ interface NumberFieldProps {
   mode: 'number';
   label: string;
   helpText?: string;
+  explainer?: string;
   value: number;
   unit?: string;
   /** Prikaže stikalo "Ne vem". Vrednost je tedaj UNKNOWN_ANSWER in ne 0. */
@@ -29,6 +33,7 @@ interface ChoiceFieldProps {
   mode: 'choice';
   label: string;
   helpText?: string;
+  explainer?: string;
   value: number;
   choices: { value: number; label: string }[];
   onChange: (value: number) => void;
@@ -38,6 +43,7 @@ interface CheckboxFieldProps {
   mode: 'checkbox';
   label: string;
   helpText?: string;
+  explainer?: string;
   value: number;
   onChange: (value: number) => void;
 }
@@ -45,7 +51,7 @@ interface CheckboxFieldProps {
 type ModuleInputProps = SliderFieldProps | NumberFieldProps | ChoiceFieldProps | CheckboxFieldProps;
 
 export function ModuleInput(props: ModuleInputProps) {
-  const { label, helpText, value, onChange } = props;
+  const { label, helpText, explainer, value, onChange } = props;
   const groupId = useId();
 
   if (props.mode === 'checkbox') {
@@ -60,8 +66,12 @@ export function ModuleInput(props: ModuleInputProps) {
   if (props.mode === 'choice') {
     return (
       <fieldset className={styles.field}>
-        <legend className={styles.label}>{label}</legend>
-        {helpText ? <p className={styles.helpText}>{helpText}</p> : null}
+        {/* Legenda je hkrati ovoj vprašanja: `<legend>` mora ostati prvi otrok
+            `<fieldset>`, zato je ni dovoljeno oviti v .questionRow. */}
+        <legend className={`${styles.label} ${helpStyles.questionRow}`}>
+          {label}
+          <HelpTip label={label} help={helpText} explainer={explainer} />
+        </legend>
         <div className={styles.choices}>
           {props.choices.map((choice) => (
             <label key={choice.value} className={styles.choice}>
@@ -97,8 +107,10 @@ export function ModuleInput(props: ModuleInputProps) {
 
   return (
     <div className={styles.field}>
-      <label className={styles.label}>{label}</label>
-      {helpText ? <p className={styles.helpText}>{helpText}</p> : null}
+      <div className={helpStyles.questionRow}>
+        <label className={styles.label}>{label}</label>
+        <HelpTip label={label} help={helpText} explainer={explainer} />
+      </div>
       <div className={styles.row}>
         {props.mode === 'slider' ? (
           <input

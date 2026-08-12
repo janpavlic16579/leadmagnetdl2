@@ -6,19 +6,27 @@ export type Theme = 'light' | 'dark';
  */
 export const THEME_STORAGE_KEY = 'datalab-kalkulator-tema';
 
-/**
- * Privzeto je svetla tema, tudi če ima obiskovalec v sistemu vklopljen temni način.
- * Temno dobi šele, ko jo sam izbere — to je zavestna odločitev, ne opustitev.
- */
+/** Zadnja varovalka, kadar sistemske nastavitve ni mogoče prebrati (starejši brskalnik). */
 export const DEFAULT_THEME: Theme = 'light';
+
+/** Sistemska nastavitev — privzetek, dokler obiskovalec teme ne izbere sam. */
+function systemTheme(): Theme {
+  try {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  } catch {
+    return DEFAULT_THEME;
+  }
+}
 
 export function readStoredTheme(): Theme {
   try {
-    return localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : DEFAULT_THEME;
+    const stored = localStorage.getItem(THEME_STORAGE_KEY);
+    // Shranjena vrednost je ročna izbira in ima vedno prednost pred sistemsko.
+    if (stored === 'dark' || stored === 'light') return stored;
   } catch {
-    // Zasebno brskanje ali blokiran localStorage — tiho pademo na privzeto temo.
-    return DEFAULT_THEME;
+    // Zasebno brskanje ali blokiran localStorage — sistemska nastavitev odloči namesto tega.
   }
+  return systemTheme();
 }
 
 export function applyTheme(theme: Theme): void {

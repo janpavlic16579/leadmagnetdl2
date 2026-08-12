@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CSV_COLUMNS, buildCsvRow, type LeadExportRecord } from './exportRecord';
+import { emptyProfileFor, getSegmentContext } from '../config/contexts';
 
 /**
  * Modul še ni ožičen, a glava CSV je namenoma fiksna in preslikave v CRM so
@@ -51,7 +52,7 @@ describe('Izvozni zapis za CRM', () => {
   it('novi stolpci gredo na konec, za obstoječimi', () => {
     // Vrivanje na vsebinsko "pravo" mesto bi premaknilo vse pozicijske preslikave,
     // ki so bile narejene pred spremembo.
-    const tail = CSV_COLUMNS.slice(-7);
+    const tail = CSV_COLUMNS.slice(-10);
     expect(tail).toEqual([
       'firstName',
       'lastName',
@@ -60,7 +61,20 @@ describe('Izvozni zapis za CRM', () => {
       'consentOffers',
       'consentContent',
       'lostMarginEUR',
+      'roleOther',
+      'operationalHourSource',
+      'adminHourSource',
     ]);
+  });
+
+  it('vpisana vloga pristane pod svojim stolpcem', () => {
+    const record: LeadExportRecord = {
+      ...RECORD,
+      profile: { ...emptyProfileFor(getSegmentContext('trgovina')), role: 'drugo', roleOther: 'Vodja IT' },
+    };
+    const row = buildCsvRow(record);
+    expect(row[CSV_COLUMNS.indexOf('role')]).toBe('drugo');
+    expect(row[CSV_COLUMNS.indexOf('roleOther')]).toBe('Vodja IT');
   });
 
   it('nezaslužena marža pristane pod svojim stolpcem', () => {

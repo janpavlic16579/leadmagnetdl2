@@ -16,10 +16,10 @@ import { resolveInputs } from '../../lib/moduleEngine';
  */
 
 // Postavke so namenoma različne, da test loči, katera je bila uporabljena:
-// zaračunana (90) ni večkratnik ne izvedbene (50) ne administrativne (35).
+// zaračunana (90) ni večkratnik ne izvedbene (30) ne administrativne (25).
 const CONTEXT: ComputeContext = {
-  operationalHourCostEUR: 50,
-  adminHourCostEUR: 35,
+  operationalHourCostEUR: 30,
+  adminHourCostEUR: 25,
   chargeOutRateEUR: 90,
   // Prihodek in marža sta obvezna v ComputeContext, moduli tega segmenta pa ju iz
   // konteksta ne berejo. 0 in ne izmišljena vrednost: promet, ki ga ni, ne sme

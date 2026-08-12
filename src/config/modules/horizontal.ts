@@ -54,6 +54,10 @@ export const analitikaHz: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Ure, ki ste jih že vpisali v drugem področju, tu ne ponavljajte.',
+      explainer:
+        'Ročno sestavljanje poročil: izvoz v Excel, lepljenje, oblikovanje, usklajevanje številk pred ' +
+        'sestankom. Ocenite: koliko poročil na mesec × koliko ur na poročilo. Primer: 4 poročila × 3 h ≈ ' +
+        '12 ur na mesec.',
     },
     {
       key: 'adHocAnalysisHoursPerMonth',
@@ -155,6 +159,10 @@ export const financeHz: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Ure, ki ste jih že vpisali v drugem področju, tu ne ponavljajte.',
+      explainer:
+        'Ročno knjiženje in priprava dokumentov zanj — vnos računov, priprava plačil, urejanje prilog. ' +
+        'Ocenite: koliko ljudi × koliko ur na teden × 4,3. Primer: 1 oseba × 6 h na teden ≈ 26 ur na ' +
+        'mesec.',
     },
     {
       key: 'reconciliationHoursPerMonth',
@@ -164,6 +172,10 @@ export const financeHz: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Štejte samo usklajevanje evidenc, ne opominjanja kupcev.',
+      explainer:
+        'Ure, ko primerjate dve evidenci, ki se ne ujemata: banka proti odprtim postavkam, saldakonti ' +
+        'proti dobaviteljem, zaloga proti knjigovodstvu. Primer: 2 osebi × 3 h ob koncu meseca + 4 h med ' +
+        'mesecem ≈ 10 ur.',
     },
     {
       key: 'closingHoursPerMonth',
@@ -254,6 +266,10 @@ export const kadriHz: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Ure, ki ste jih že vpisali v drugem področju, tu ne ponavljajte.',
+      explainer:
+        'Zbiranje in urejanje evidenc: prepisovanje listov, lovljenje manjkajočih vnosov, popravki pred ' +
+        'obračunom plač. Ocenite: koliko ur ob koncu meseca × koliko oseb to dela. Primer: 2 osebi × 5 h ' +
+        '≈ 10 ur.',
     },
     {
       key: 'payrollPrepHoursPerMonth',
@@ -354,6 +370,10 @@ export const dokumentiHz: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Ure, ki ste jih že vpisali v drugem področju, tu ne ponavljajte.',
+      explainer:
+        'Čas za lovljenje podpisov in potrditev: pošiljanje v podpis, opominjanje, iskanje, kje se je ' +
+        'dokument ustavil. Ocenite: koliko dokumentov na mesec × koliko minut na dokument. Primer: 60 ' +
+        'dokumentov × 10 min ≈ 10 ur.',
     },
     {
       key: 'searchArchiveHoursPerMonth',
@@ -460,6 +480,9 @@ export const servisHz: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Ure, ki ste jih že vpisali v drugem področju, tu ne ponavljajte.',
+      explainer:
+        'Ure tehnikov in serviserjev za garancijske ter servisne posege po predaji. Ocenite: koliko ' +
+        'primerov na mesec × koliko ur na primer. Primer: 10 primerov × 2,5 h ≈ 25 ur.',
     },
     {
       key: 'rmaAdminHoursPerMonth',
@@ -469,6 +492,9 @@ export const servisHz: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Štejte samo garancijske in servisne primere, ne urejanja običajnih vračil in dobropisov.',
+      explainer:
+        'Pisarniški del reklamacije: sprejem prijave, dokumentacija, usklajevanje z dobaviteljem, ' +
+        'obveščanje stranke. Primer: 20 primerov × 45 min ≈ 15 ur na mesec.',
     },
     {
       key: 'annualServiceCostEUR',
@@ -478,6 +504,9 @@ export const servisHz: ModuleDefinition = {
       unit: 'EUR/leto',
       default: 0,
       help: 'Samo stroški, ki še niso zajeti drugje — dobropisi, vračila kupnine in poškodovano blago sem ne sodijo.',
+      explainer:
+        'Denar, ki odteče poleg porabljenih ur: nadomestni deli, prevozi na teren, zunanji servis, ' +
+        'odškodnine. Če tega ne vodite ločeno, vzemite povprečen primer × število primerov na leto.',
     },
     {
       key: 'caseTracking',

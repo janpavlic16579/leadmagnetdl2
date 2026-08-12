@@ -46,13 +46,17 @@ export function StepEmployeeCount({ value, onChange, stepLabel, onNext, onBack }
         poročilu.
       </p>
 
-      <div className={styles.actions}>
-        <button type="button" className={buttonStyles.secondaryButton} onClick={onBack}>
-          Nazaj
-        </button>
-        <button type="button" className={buttonStyles.primaryButton} disabled={!canProceed} onClick={onNext}>
-          Naprej
-        </button>
+      <div className={styles.stickyFooter}>
+        <div className={styles.stickyFooterInner}>
+          <div className={styles.actions}>
+            <button type="button" className={buttonStyles.secondaryButton} onClick={onBack}>
+              Nazaj
+            </button>
+            <button type="button" className={buttonStyles.primaryButton} disabled={!canProceed} onClick={onNext}>
+              Naprej
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

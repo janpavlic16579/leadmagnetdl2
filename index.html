@@ -12,14 +12,18 @@
     />
     <title>Koliko vas stane sedanji način dela? — Datalab</title>
     <script>
-      // Tema se postavi še pred izrisom, sicer bi ob nalaganju bliskala svetla
-      // različica, preden se React zažene. Ključ mora ostati enak kot v lib/theme.ts.
+      // Tema se postavi še pred izrisom, sicer bi ob nalaganju bliskala napačna
+      // različica, preden se React zažene. Logika mora ostati enaka kot v
+      // lib/theme.ts (readStoredTheme): shranjena ročna izbira ima prednost,
+      // sicer odloči sistemska nastavitev.
       try {
-        if (localStorage.getItem('datalab-kalkulator-tema') === 'dark') {
+        var stored = localStorage.getItem('datalab-kalkulator-tema');
+        var dark = stored === 'dark' || (stored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (dark) {
           document.documentElement.dataset.theme = 'dark';
         }
       } catch (e) {
-        /* zasebno brskanje — ostane privzeta svetla tema */
+        /* zasebno brskanje ali blokiran localStorage — ostane privzeta svetla tema */
       }
     </script>
   </head>

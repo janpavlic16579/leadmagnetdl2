@@ -1,0 +1,122 @@
+/*
+ * Ovoj gumba "?", kratke razlage in plavajočega oknca s pojasnilom — vse, kar
+ * izriše HelpTip. `display: inline`, da gumb teče v besedilu naslova in se
+ * prelomi skupaj z njim — kot flex element bi ob dolgem naslovu, ki se prelomi
+ * čez dve vrstici (na telefonu skoraj vsakem), padel v svojo prazno vrstico
+ * pod vprašanje.
+ *
+ * Brez position: relative — sidro za oknce je .anchor spodaj, ne ta ovoj (ta
+ * poleg gumba nosi tudi .help, zato bi "top: 100%" oknca merilo glede na
+ * skupno višino obeh, ne glede na 24px gumba samega).
+ */
+.wrapper {
+  display: inline;
+}
+
+/* Tesen ovoj natanko velikosti gumba — sidro za .panel (glej komentar zgoraj). */
+.anchor {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-left: var(--space-2);
+}
+
+/*
+ * Ovoj naslova/legende IN HelpTip pri klicatelju (StepCostBasis, ModuleInput) —
+ * blok, znotraj katerega naslov in HelpTip tečeta v istem vrstičnem toku.
+ */
+.questionRow {
+  display: block;
+}
+
+/*
+ * Vidni krogec meri 24px, klikalna površina pa 44px kot vse ostale tarče v
+ * vprašalniku. Tarčo razširi nevidni ::after in NE padding: padding je znotraj
+ * obrobe, zato bi narisal 44px velik krog, ki bi ob prelomljenem naslovu segal
+ * čez vrstico nad seboj.
+ */
+.button {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Nevidna razširitev klikalne tarče na 44px; krogec ostane 24px. */
+.button::after {
+  content: '';
+  position: absolute;
+  inset: -10px;
+}
+
+/*
+ * Sivo v vseh stanjih — namenoma brez znamčne barve (--color-primary-text): to
+ * je drobna pomožna ikona in ne sme izstopati bolj kot vprašanje, ob katerem
+ * stoji. Hover/fokus dobita samo nevtralno ozadje kot povratno informacijo.
+ */
+.button:hover,
+.anchor:focus-within .button {
+  background: var(--color-accent);
+}
+
+/* Kratka razlaga pod vprašanjem — blokovna, da naslov z gumbom ostane v svoji vrstici. */
+.help {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--font-size-sm);
+  /* Razlaga stoji tudi v legendi in oznaki, ki sta krepki — besedilo ne sme biti. */
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+/*
+ * Plavajoče oknce, sredinsko sidrano na .anchor (torej tik pod 24px gumbom,
+ * ne glede na to, kaj sledi v .wrapper) — ne blok v toku, ki bi postavitev
+ * premikal navzdol. Privzeto nevidno; pokaže ga .anchor:hover ali
+ * .anchor:focus-within spodaj. `max-width` prepreči prelivanje čez rob ozkega
+ * zaslona, `z-index` ga dvigne nad prilepljen spodnji pas vprašalnika
+ * (StepShell .stickyFooter uporablja z-index: 10).
+ */
+.panel {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  width: max-content;
+  max-width: min(300px, calc(100vw - 2 * var(--space-3)));
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  /* Pojasnilo stoji v legendi ali oznaki, ki sta krepki — besedilo ne sme biti. */
+  font-weight: 400;
+  line-height: 1.5;
+
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.anchor:hover .panel,
+.anchor:focus-within .panel {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}

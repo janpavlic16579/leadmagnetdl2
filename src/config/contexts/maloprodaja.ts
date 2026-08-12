@@ -1,16 +1,28 @@
-import { ADMIN_HOUR_BANDS } from './shared';
+import {
+  ADMIN_HOUR_BANDS,
+  ADMIN_HOUR_EXPLAINER,
+  ANNUAL_REVENUE_EXPLAINER,
+  CAPITAL_COST_EXPLAINER,
+  CONTRIBUTION_MARGIN_EXPLAINER,
+  HOURLY_COST_EXPLAINER,
+} from './shared';
 import type { CostBand, ScaleBand, SegmentContext } from './contextTypes';
 
 /**
  * Ura v poslovalnici je bistveno cenejša od proizvodne, zato ima svoje razpone.
  * Če bi maloprodaja podedovala proizvodne, bi vsak kapacitetni znesek pretiraval
  * za faktor dve — in prav pretiravanje je tisto, kar direktor najprej opazi.
+ *
+ * Sidro: prodajalec in blagajnik 17,6 EUR/h, skladiščnik 20,0. Spodnji pas je
+ * namenoma nad golo izpeljavo iz plače: poslovalnica dela ob sobotah, praznikih in
+ * v izmenah, dodatki pa to uro sistematično dvignejo.
+ * Izpeljava in viri: docs/urne-postavke.md.
  */
 const SHOP_HOUR_BANDS: CostBand[] = [
-  { id: 'do18', label: 'Do 18 EUR', midpointEUR: 15, minEUR: 12, maxEUR: 18 },
-  { id: '18do25', label: '18–25 EUR', midpointEUR: 21, minEUR: 18, maxEUR: 25 },
-  { id: '25do32', label: '25–32 EUR', midpointEUR: 28, minEUR: 25, maxEUR: 32 },
-  { id: 'nad32', label: 'Več kot 32 EUR', midpointEUR: 38, minEUR: 32, maxEUR: 44 },
+  { id: 'do17', label: 'Do 17 EUR', midpointEUR: 15, minEUR: 12, maxEUR: 17 },
+  { id: '17do22', label: '17–22 EUR', midpointEUR: 19, minEUR: 17, maxEUR: 22 },
+  { id: '22do29', label: '22–29 EUR', midpointEUR: 25, minEUR: 22, maxEUR: 29 },
+  { id: 'nad29', label: 'Več kot 29 EUR', midpointEUR: 33, minEUR: 29, maxEUR: 40 },
 ];
 
 /**
@@ -47,7 +59,7 @@ export const MALOPRODAJA_CONTEXT: SegmentContext = {
   intro:
     'Tri vprašanja, ki ne sprašujejo po številkah. Iz njih izpeljemo, koliko od izmerjenega stroška je realno mogoče nasloviti — trgovec, ki ima blagajno že povezano z zalogami, je lažje izboljšave namreč večinoma že pobral.',
   costBasisIntro:
-    'Pet številk, ki veljajo za vsa področja. Polni strošek ure pomeni bruto plačo z vsemi prispevki in režijo, ne neto izplačila. Prihodek in maržo vprašamo enkrat, ker se iz njiju računa vsak odstotek v nadaljevanju.',
+    'Pet številk, ki veljajo za vsa področja. Polni strošek ure pomeni bruto plačo s prispevki delodajalca ter regresom, malico in prevozom — ne neto izplačila in ne režije. Prihodek in maržo vprašamo enkrat, ker se iz njiju računa vsak odstotek v nadaljevanju.',
 
   businessType: {
     legend: 'Kako pretežno prodajate?',
@@ -93,27 +105,30 @@ export const MALOPRODAJA_CONTEXT: SegmentContext = {
       { id: 'vodjaTrgovine', label: 'Vodja trgovine ali poslovalnice' },
       { id: 'nabava', label: 'Nabava ali kategorijski vodja' },
       { id: 'finance', label: 'Finance ali računovodstvo' },
-      { id: 'drugo', label: 'Drugo' },
+      { id: 'drugo', label: 'Drugo', freeText: true },
     ],
   },
 
   operationalHour: {
     label: 'Približen polni strošek ure v poslovalnici ali skladišču',
     help: 'Prodajalec, blagajnik, skladiščnik — kdor dela z blagom in kupci.',
+    explainer: HOURLY_COST_EXPLAINER,
     bands: SHOP_HOUR_BANDS,
-    fallbackEUR: 24,
+    fallbackEUR: 20,
   },
 
   adminHour: {
     label: 'Približen polni strošek administrativne oziroma vodstvene ure',
     help: 'Vodja poslovalnice, nabava, kategorijski vodja, priprava cen in akcij.',
+    explainer: ADMIN_HOUR_EXPLAINER,
     bands: ADMIN_HOUR_BANDS,
-    fallbackEUR: 32,
+    fallbackEUR: 25,
   },
 
   annualRevenue: {
     label: 'Letni prihodek od prodaje blaga',
     help: 'Neto, brez DDV, vse poslovalnice in kanali skupaj. Če razpona ne izberete, odstotkovnih izgub ne bomo ocenili — prometa si ne izmišljamo.',
+    explainer: ANNUAL_REVENUE_EXPLAINER,
     bands: REVENUE_BANDS,
     fallback: 0,
     unit: 'EUR/leto',
@@ -122,6 +137,7 @@ export const MALOPRODAJA_CONTEXT: SegmentContext = {
   contributionMargin: {
     label: 'Povprečna prispevna marža',
     help: 'Kar ostane od prodajne cene po nabavni vrednosti in neposrednih stroških kanala (provizije, kartice, dostava). Ni pribitek na nabavno ceno.',
+    explainer: CONTRIBUTION_MARGIN_EXPLAINER,
     bands: MARGIN_BANDS,
     fallback: 0.25,
     unit: '%',
@@ -135,6 +151,7 @@ export const MALOPRODAJA_CONTEXT: SegmentContext = {
   capitalCostRate: {
     label: 'Letni strošek financiranja obratnega kapitala',
     help: 'Obrestna mera posojila oziroma donos, ki bi ga denar prinesel drugje. Množi denar, vezan v terjatvah in zalogah.',
+    explainer: CAPITAL_COST_EXPLAINER,
     bands: [
       { id: 'do5', label: 'Do 5 %', midpoint: 0.04, min: 0.03, max: 0.05 },
       { id: '5do8', label: '5–8 %', midpoint: 0.065, min: 0.05, max: 0.08 },

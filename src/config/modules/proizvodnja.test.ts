@@ -11,9 +11,9 @@ import { resolveInputs } from '../../lib/moduleEngine';
  */
 
 const CONTEXT: ComputeContext = {
-  operationalHourCostEUR: 50,
-  adminHourCostEUR: 35,
-  chargeOutRateEUR: 75,
+  operationalHourCostEUR: 22,
+  adminHourCostEUR: 25,
+  chargeOutRateEUR: 55,
   // Prihodek in marža sta obvezna v ComputeContext, moduli tega segmenta pa ju iz
   // konteksta ne berejo. 0 in ne izmišljena vrednost: promet, ki ga ni, ne sme
   // ustvariti zneska, če ga kak izid vseeno uporabi.

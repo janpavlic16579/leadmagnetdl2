@@ -28,6 +28,7 @@ const BASE: SalesReport = {
     sizeClass: '10–49',
     employeeCount: 30,
     roleLabel: 'Direktor/-ica',
+    roleOther: null,
     businessTypeLabel: 'Veleprodaja poslovnim kupcem',
     currentSystemLabel: 'Večinoma Excel, papir ali sprotni dogovor',
     isPantheonCustomer: false,
@@ -171,6 +172,29 @@ describe('buildSalesReportHtml', () => {
     expect(html).toContain('Privolitev — obdelava osebnih podatkov');
     expect(html).toContain('Privolitev — ponudbe PANTHEON');
     expect(html).toContain('Privolitev — vsebine in dogodki');
+  });
+
+  it('vlogi "Drugo" pripne, kar si je obiskovalec vpisal sam', () => {
+    const html = buildSalesReportHtml({
+      ...BASE,
+      qualification: { ...BASE.qualification, roleLabel: 'Drugo', roleOther: 'Vodja IT' },
+    });
+    expect(html).toContain('Drugo — Vodja IT');
+  });
+
+  it('ubeži tudi vlogo, vpisano na roko', () => {
+    // Prosti vnos je sedmo obiskovalčevo polje, a ne živi v meta, zato ga zanka
+    // nad meta polji ne ujame.
+    const html = buildSalesReportHtml({
+      ...BASE,
+      qualification: {
+        ...BASE.qualification,
+        roleLabel: 'Drugo',
+        roleOther: '<img src=x onerror=alert(1)>',
+      },
+    });
+    expect(html).not.toContain('<img');
+    expect(html).toContain('&lt;img src=x');
   });
 
   it('sumljivo davčno označi, namesto da bi jo pokazal kot verodostojno', () => {

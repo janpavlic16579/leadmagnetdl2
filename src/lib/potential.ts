@@ -144,6 +144,14 @@ export function assessConfidence({
   // množi: odkar ju vprašajo vse dejavnosti, bi sicer proizvajalec, ki je vnesel
   // vse svoje številke, izgubil oznako "visoka" zaradi predpostavke, ki v njegov
   // rezultat sploh ne vstopa.
+  //
+  // Merilo ostaja `estimated` in ne `source`: prevzeto povprečje panoge šteje
+  // enako kot izbran razpon in kot neodgovor. To je zavestno — po vseh treh poteh
+  // gre v izračun številka, ki je stranka ni izmerila, in razlika med "izbral je
+  // razpon" ter "prevzel je našo oceno" je razlika v tem, KDO je ocenil, ne v
+  // tem, kako trden je podatek. Kdor prevzame povprečje pri vseh postavkah, dobi
+  // "nizko" — enako kot kdor ne odgovori nič. Vir se vseeno zapiše: v prodajni
+  // pripravi in izvozu ga prodajnik potrebuje, tu pa ne spremeni ničesar.
   const revenueRelevant = anyAnsweredModuleUses('usesRevenue', modules, values);
   const marginRelevant = anyAnsweredModuleUses('usesMargin', modules, values);
   const asked: (boolean | undefined)[] = [

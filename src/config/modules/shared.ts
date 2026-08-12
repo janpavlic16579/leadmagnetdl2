@@ -60,13 +60,29 @@ const REDUCIBLE_SHARES = [0.05, 0.08, 0.15, 0.22, 0.05];
 
 export const REDUCIBLE_SHARE_KEY = 'reducibleShare';
 
-export function reducibleShareField(label: string, help?: string): ModuleField {
+/**
+ * Pojasnilo za gumb "?" pri različici vprašanja, ki meri zalogo. Pet dejavnosti
+ * vpraša isto z drugimi besedami, zato pojasnilo stoji tu in ne petkrat.
+ * Terjatvena različica (storitve) ima svoje — tam ne gre za blago.
+ */
+export const REDUCIBLE_STOCK_EXPLAINER =
+  'Ne gre za to, koliko zaloge imate, ampak koliko bi je lahko trajno bilo manj, ne da bi kdaj zmanjkalo. ' +
+  'Mišljena je zaloga, ki leži zaradi previdnosti, podvojenih naročil ali slabega pregleda. ' +
+  'Groba ocena zadostuje; če niste prepričani, izberite nižji razpon.';
+
+export function reducibleShareField(
+  label: string,
+  /** Neobvezni besedili pod vprašanjem in za gumbom "?" — glej ModuleField. */
+  texts: { help?: string; explainer?: string } = {},
+): ModuleField {
+  const { help, explainer } = texts;
   return {
     key: REDUCIBLE_SHARE_KEY,
     label,
     kind: 'choice',
     default: 4,
     ...(help ? { help } : {}),
+    ...(explainer ? { explainer } : {}),
     choices: [
       { value: 0, label: 'Do 5 %' },
       { value: 1, label: '6–10 %' },

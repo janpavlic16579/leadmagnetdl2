@@ -1,7 +1,12 @@
+/*
+ * Spodnji odmik naredi prostor za pas gumbov (.stickyFooter), ki je fiksen na dno
+ * okna in bi sicer prekril zadnjo vsebino. 160px = izmerjena višina najvišje
+ * različice pasu (Korak s številkami, vsota + gumbi ≈ 128px) plus varnostni razmik.
+ */
 .wrap {
   max-width: 720px;
   margin: 0 auto;
-  padding: var(--space-5) var(--space-3) var(--space-6);
+  padding: var(--space-5) var(--space-3) 160px;
 }
 
 .stepLabel {
@@ -65,12 +70,40 @@
   color: var(--color-text);
 }
 
+/*
+ * Navigacija je pripeta na resnično dno OKNA (position: fixed), ne le na dno
+ * vsebine — po vzoru glave strani (Header), ki je prav tako čezrobni pas. Prej je
+ * bil ta pas "position: sticky", kar na kratkih korakih (npr. "Koliko ljudi
+ * zaposlujete?") pusti gumbe na njihovem naravnem mestu tik pod vsebino, pod njimi
+ * pa v visokem oknu ostane nepojasnjen prazen pas do resničnega dna — fixed to
+ * odpravi, gumbi so vedno tik ob dnu okna, brez lebdenja sredi strani.
+ */
+.stickyFooter {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  box-shadow: 0 -4px 12px rgba(16, 24, 40, 0.08);
+  /* Varnostni rob na iPhone z gibom za domov namesto fizičnega gumba. */
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+/* Poravna vsebino pasu s kartico zgoraj — enak max-width in vodoravni odmik kot .wrap. */
+.stickyFooterInner {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 var(--space-3);
+}
+
 .actions {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: var(--space-5);
   gap: var(--space-3);
+  padding: var(--space-3) 0;
 }
 
 /* Uvodni korak nima gumba "Nazaj", zato edini gumb potisnemo na desno. */

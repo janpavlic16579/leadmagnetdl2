@@ -99,7 +99,8 @@ tega, zato dodajanje koraka ne pomeni urejanja verige pogojev.
 
 Kontekst določa tudi besedila: "Kako pretežno proizvajate?" prevozniku ne pomeni ničesar, zato ima vsaka
 dejavnost svoja vprašanja, svoje možnosti sistema (in s tem pasove izboljšave) ter svoje razpone urnih
-postavk — voznikova ura ni operaterjeva.
+postavk — voznikova ura ni operaterjeva. Od kod so številke v teh razponih, pove
+[`docs/urne-postavke.md`](docs/urne-postavke.md): izpeljane so iz plač po poklicih (SURS), ne ocenjene.
 
 ## Moduli
 
@@ -383,6 +384,11 @@ Kdor urne postavke ne pozna, izbere razpon; vrednost tedaj ni 0, ampak sredina r
 oznako zanesljivosti (`src/lib/potential.ts`), pri nizki pa se zneski izpišejo kot "najmanj X EUR" namesto
 navidezno natančnega zneska.
 
+Postavka pomeni **strošek dela in ne strošek dela z režijo**: bruto plača s prispevki delodajalca ter
+regresom, malico in prevozom, deljeno s približno 1.700 produktivnimi urami na leto. Sproščena ura prihrani
+plačo, ne najemnine — in strošek dela je edina od obeh številk, ki jo je mogoče preveriti pri javnem viru.
+Izpeljava, sidra in datumi poizvedb: [`docs/urne-postavke.md`](docs/urne-postavke.md).
+
 ## Kje kaj urejati
 
 | Kaj | Datoteka |
@@ -393,6 +399,7 @@ navidezno natančnega zneska.
 | Dejavnost → segment (spustni seznam) | `src/config/industries.ts` |
 | Naslovljivi deleži po vzroku | `src/config/modules/addressableShare.ts` |
 | Kontekstna vprašanja, pasovi izboljšave, razponi urnih postavk, vidnost modula E | `src/config/contexts/` |
+| Izpeljava in viri urnih postavk (preden jih spreminjate) | [`docs/urne-postavke.md`](docs/urne-postavke.md) |
 | Potencial in ocena zanesljivosti | `src/lib/potential.ts` |
 | Razlage metodologije | `content/methodology.ts` |
 | "3 ukrepi ta teden" | `content/actions/actions.ts` |
@@ -538,10 +545,12 @@ ni bil uporabljen nikjer — prikazovalo se je le besedilo opozorila.
 
 Ostalo je vgrajeno namenoma:
 
-- **Razlikovanje med "vneseno", "izbran razpon" in "ni odgovora".** `CostAssumption` hrani le
-  `{ valueEUR, estimated }` in nedotaknjenega polja od izbire ne loči, pri nekaterih dejavnostih pa se
-  privzetek slučajno ujema s sredino razpona (veleprodaja: 24 EUR je oboje). `costBandLabel()` zato
-  vrednosti, enake privzetku, ne prizna za izbiro — raje priznamo manj podatka, kot da bi si ga izmislili.
+- **Razlikovanje med "vneseno", "izbran razpon", "povprečje panoge" in "ni odgovora".** Vir hrani
+  `CostAssumption.source`, izbrani pas pa `bandId`. Prej je bil edini nosilec `estimated: boolean`, pas
+  se je rekonstruiral z ujemanjem `midpointEUR`, in kadar se je privzetek ujel s sredino razpona, je bil
+  radio označen že ob prvem izrisu — "ni odgovora" se je predstavilo kot odgovor. Zapisani vir je to
+  odpravil in šele omogočil četrto pot: povprečje panoge ima natanko vrednost privzetka, zato ga po
+  številki od neodgovora ni mogoče ločiti.
 
 Preslikavo shranjenega id-ja nazaj v slovensko oznako (`pantheonWms` → „PANTHEON s skladiščnim modulom
 in lokacijami") dela `src/lib/answerLabels.ts`; pred tem je ni bilo nikjer, ker odgovorov nismo nikoli

@@ -3,6 +3,7 @@ import type { ModuleDefinition, RiskLevel } from './moduleTypes';
 import {
   ASSURANCE_CHOICES,
   MONTHS_PER_YEAR,
+  REDUCIBLE_STOCK_EXPLAINER,
   reducibleShareField,
   reducibleShareOf,
   riskLevelFromScore,
@@ -72,6 +73,10 @@ export const planiranje: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Ne vključujte čakanja na material ali okvar strojev — čakanje na material sodi v področje Zaloge.',
+      explainer:
+        'Ure, ko ljudje ali stroji stojijo, ker ni jasno, kaj delati naprej — čakanje na plan, navodilo, ' +
+        'risbo ali potrditev. Ocenite: koliko ljudi × koliko minut na izmeno × število delovnih dni. ' +
+        'Primer: 5 ljudi × 20 min × 21 dni ≈ 35 ur na mesec.',
     },
     {
       key: 'overtimeHoursPerMonth',
@@ -171,6 +176,10 @@ export const material: ModuleDefinition = {
       unit: 'EUR/leto',
       default: 0,
       help: 'Vnesite samo stroške, ki še niso vključeni v izmet ali dodelave.',
+      explainer:
+        'Denar, ki je odtekel zaradi reklamacij kupcev: prevozi, nadomestna dobava, odškodnine, ' +
+        'dobropisi. Če jih ne vodite ločeno, vzemite nekaj primerov in jih pomnožite s številom ' +
+        'reklamacij. Primer: 12 reklamacij × 400 EUR ≈ 4.800 EUR na leto.',
     },
     mainCauseField(MATERIAL_CAUSES),
   ],
@@ -239,6 +248,10 @@ export const zaloge: ModuleDefinition = {
       unit: 'EUR',
       default: 0,
       help: 'Vključite surovine, nedokončano proizvodnjo in končne izdelke.',
+      explainer:
+        'Povprečno stanje med letom, ne stanje na današnji dan in ne letna poraba materiala. Vzemite ' +
+        'postavko zaloge iz bilance ali povprečje nekaj mesečnih stanj, po nabavni vrednosti. Primer: če ' +
+        'zaloga niha med 300.000 in 500.000 EUR, vpišite okoli 400.000.',
     },
     {
       key: 'annualWriteOffEUR',
@@ -255,9 +268,13 @@ export const zaloge: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Zastoje zaradi nejasnega plana štejte v področju Plan, ne tukaj.',
+      explainer:
+        'Samo zastoji, ko delo stoji, ker materiala ni na voljo. Ocenite: koliko takih zastojev na mesec ' +
+        '× koliko ljudi stoji × koliko ur. Primer: 4 zastoji × 3 ljudje × 2 h ≈ 24 ur na mesec.',
     },
     reducibleShareField(
       'Kolikšen delež zalog bi po vaši oceni lahko zmanjšali brez večjega tveganja za oskrbo?',
+      { explainer: REDUCIBLE_STOCK_EXPLAINER },
     ),
     {
       key: 'stockVisibility',
@@ -345,6 +362,10 @@ export const nalogi: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Ne vključujte priprave in zaključevanja nalogov iz prvega vprašanja.',
+      explainer:
+        'Isti podatek, vpisan drugič: z naloga v Excel, iz Excela v ERP, s papirja v sistem. Ocenite: ' +
+        'koliko ljudi × koliko minut na dan × 21 delovnih dni. Primer: 3 ljudje × 30 min ≈ 32 ur na ' +
+        'mesec.',
     },
     {
       key: 'dataFixHoursPerMonth',
@@ -437,6 +458,9 @@ export const zamude: ModuleDefinition = {
       default: 0,
       contextOnly: true,
       help: 'Podatek ne vstopa v izračun — služi za oceno obsega težave.',
+      explainer:
+        'Groba ocena zadostuje: koliko naročil na mesec ne odide v roku, ki ste ga potrdili kupcu. Če ' +
+        'vodite dobavno točnost, vzemite delež zamud × število naročil.',
     },
     {
       key: 'expediteCostEUR',
@@ -445,6 +469,10 @@ export const zamude: ModuleDefinition = {
       unit: 'EUR/leto',
       default: 0,
       help: 'Samo dodatni strošek nad običajno nabavo oziroma dostavo.',
+      explainer:
+        'Samo doplačilo, ne celotna cena: razlika med tem, kar ste plačali v naglici, in tem, kar bi ' +
+        'stalo redno. Primer: nujna dostava 900 EUR namesto rednih 300 EUR → vpišite 600 EUR. Seštejte ' +
+        'take primere zadnjih 12 mesecev.',
     },
     {
       key: 'penaltyCostEUR',
@@ -460,6 +488,9 @@ export const zamude: ModuleDefinition = {
       unit: 'EUR/leto',
       default: 0,
       help: 'Ne vpisujte celotne vrednosti izgubljenega naročila.',
+      explainer:
+        'Ne vrednost naročila, ampak samo marža, ki bi vam od njega ostala. Primer: odpovedano naročilo ' +
+        'za 50.000 EUR pri 25 % marži → 12.500 EUR. Če ocene nimate, raje vpišite manj kot več.',
     },
     {
       key: 'customerCommsHoursPerMonth',
@@ -468,6 +499,10 @@ export const zamude: ModuleDefinition = {
       unit: 'h/mesec',
       default: 0,
       help: 'Ne vključujte ponovnega planiranja proizvodnje iz področja Plan.',
+      explainer:
+        'Klici, e-pošta in sestanki, ki jih ne bi bilo, če bi rok držal — obveščanje kupca, iskanje ' +
+        'novega termina, pojasnjevanje. Ocenite: koliko zamud na mesec × koliko ur na primer. Primer: 8 ' +
+        'zamud × 1,5 h ≈ 12 ur.',
     },
     mainCauseField(ZAMUDE_CAUSES),
   ],

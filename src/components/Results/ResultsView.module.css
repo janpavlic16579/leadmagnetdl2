@@ -1,7 +1,12 @@
+/*
+ * Spodnji odmik naredi prostor za pas gumbov (.stickyFooter), ki je fiksen na dno
+ * okna kot na ostalih korakih vprašalnika (glej StepShell.module.css) — enaka
+ * 160px vrednost za dosleden videz po celotnem toku.
+ */
 .wrap {
   max-width: 720px;
   margin: 0 auto;
-  padding: var(--space-5) var(--space-3) var(--space-6);
+  padding: var(--space-5) var(--space-3) 160px;
 }
 
 .stepLabel {
@@ -40,12 +45,35 @@
   margin: 0 0 var(--space-3);
 }
 
+/*
+ * Isti pripet pas kot na ostalih korakih vprašalnika (StepShell.module.css
+ * .stickyFooter/.stickyFooterInner) — gumba na dnu rezultatov morata biti vizualno
+ * enaka "Nazaj"/"Naprej" prej v toku, ne le po funkciji.
+ */
+.stickyFooter {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  box-shadow: 0 -4px 12px rgba(16, 24, 40, 0.08);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.stickyFooterInner {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 var(--space-3);
+}
+
 .actions {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: var(--space-5);
   gap: var(--space-3);
+  padding: var(--space-3) 0;
 }
 
 .headlineNote {
