@@ -58,7 +58,42 @@ export function buildComputeContext(profile: BusinessProfile): ComputeContext {
     chargeOutRateEUR: profile.chargeOutRate.valueEUR,
     annualRevenueEUR: profile.annualRevenue.value,
     contributionMarginRate: profile.contributionMargin.value,
+    capitalCostRate: profile.capitalCostRate.value,
   };
+}
+
+/**
+ * Prihodek manjka, čeprav ga izpolnjeno področje potrebuje.
+ *
+ * Prihodek brez odgovora je namenoma 0 (izmišljen promet bi ustvaril izmišljeno
+ * izgubo) — a tedaj postavke, vezane na prihodek, tiho izpadejo iz rezultata.
+ * Neizpolnjeno področje ne šteje: prispeva 0 EUR ne glede na prihodek.
+ * Uporabljata jo ocena zanesljivosti in razlaga v prodajni pripravi — ista logika
+ * na enem mestu, da se razlaga in ocena ne moreta razili.
+ */
+export function isRevenueMissing(
+  profile: BusinessProfile,
+  modules: ModuleDefinition[],
+  values: Record<string, Record<string, number>>,
+): boolean {
+  if (profile.annualRevenue.value > 0) return false;
+  return anyAnsweredModuleUses('usesRevenue', modules, values);
+}
+
+/**
+ * Ali kateri IZPOLNJEN modul uporablja dano skupno predpostavko. Neizpolnjeno
+ * področje prispeva 0 EUR, zato predpostavka zanj ne pomeni nič.
+ */
+function anyAnsweredModuleUses(
+  flag: 'usesRevenue' | 'usesMargin',
+  modules: ModuleDefinition[],
+  values: Record<string, Record<string, number>>,
+): boolean {
+  return modules.some(
+    (definition) =>
+      definition[flag] === true &&
+      (definition.triage === undefined || isModuleAnswered(definition, values[definition.id])),
+  );
 }
 
 export interface AssessConfidenceParams {
@@ -105,12 +140,18 @@ export function assessConfidence({
   // (storitve tri, proizvodnja dve). Trdi "=== 2" bi storitveno podjetje, ki je
   // vneslo dve pravi postavki in eno ugibalo, kaznoval huje kot proizvodno z
   // enim ugibanjem od dveh.
+  // Prihodek in marža štejeta samo, kadar ju kateri od IZPOLNJENIH modulov res
+  // množi: odkar ju vprašajo vse dejavnosti, bi sicer proizvajalec, ki je vnesel
+  // vse svoje številke, izgubil oznako "visoka" zaradi predpostavke, ki v njegov
+  // rezultat sploh ne vstopa.
+  const revenueRelevant = anyAnsweredModuleUses('usesRevenue', modules, values);
+  const marginRelevant = anyAnsweredModuleUses('usesMargin', modules, values);
   const asked: (boolean | undefined)[] = [
     profile.operationalHour.estimated,
     profile.adminHour.estimated,
     context?.chargeOutRate ? profile.chargeOutRate.estimated : undefined,
-    context?.annualRevenue ? profile.annualRevenue.estimated : undefined,
-    context?.contributionMargin ? profile.contributionMargin.estimated : undefined,
+    context?.annualRevenue && revenueRelevant ? profile.annualRevenue.estimated : undefined,
+    context?.contributionMargin && marginRelevant ? profile.contributionMargin.estimated : undefined,
   ];
   const askedCount = asked.filter((estimated) => estimated !== undefined).length;
   const estimatedCount = asked.filter((estimated) => estimated === true).length;
@@ -180,6 +221,10 @@ export function assessConfidence({
       : totalNumeric === 0
         ? 0
         : filledNumeric / totalNumeric;
+
+  // Manjkajoč prihodek izniči cele postavke, ne posameznega polja — nobena količina
+  // izpolnjenih odgovorov tega ne odtehta, zato pravilo prebije obe spodnji veji.
+  if (isRevenueMissing(profile, modules, values)) return 'low';
 
   if (filledRatio <= 0.5 || allEstimated) return 'low';
   if (noneEstimated && unknownAnswers === 0 && filledRatio >= 0.8) return 'high';

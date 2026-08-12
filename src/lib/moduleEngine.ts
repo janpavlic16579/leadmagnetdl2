@@ -20,6 +20,7 @@ export const DEFAULT_COST_CONTEXT: ComputeContext = {
   chargeOutRateEUR: 75,
   annualRevenueEUR: 0,
   contributionMarginRate: 0.25,
+  capitalCostRate: 0.06,
 };
 
 /**

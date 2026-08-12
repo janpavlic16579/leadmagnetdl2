@@ -30,6 +30,7 @@ const CONTEXT: ComputeContext = {
   // ustvariti zneska, če ga kak izid vseeno uporabi.
   annualRevenueEUR: 0,
   contributionMarginRate: 0,
+  capitalCostRate: 0.06,
 };
 const MONTHS = 12;
 

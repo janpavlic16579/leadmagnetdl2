@@ -80,6 +80,14 @@ export function StepCostBasis({
             onChange={(contributionMargin) => onChange({ ...profile, contributionMargin })}
           />
         )}
+        {/* Samo dejavnosti, katerih moduli množijo denar v terjatvah ali zalogah. */}
+        {context.capitalCostRate && (
+          <ScaleField
+            question={context.capitalCostRate}
+            value={profile.capitalCostRate}
+            onChange={(capitalCostRate) => onChange({ ...profile, capitalCostRate })}
+          />
+        )}
       </div>
 
       <p className={styles.note}>

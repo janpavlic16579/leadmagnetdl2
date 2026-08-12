@@ -13,11 +13,13 @@ import type { FieldChoice, ModuleField, RiskLevel } from './moduleTypes';
 export const MONTHS_PER_YEAR = 12;
 
 /**
- * Letni oportunitetni strošek denarja, ki obtiči v zapadlih terjatvah.
+ * Privzeti letni strošek kapitala, kadar obiskovalec vprašanja ne odgovori.
  *
- * Konstanta in ne vprašanje: strošek kapitala je lastnost podjetja, ne področja,
- * omejitev na šest polj na modul pa je ostrejša od koristi tega vprašanja — večina
- * obiskovalcev nanj tako ali tako odgovori z ugibanjem.
+ * Ni več konstanta v formulah: strošek kapitala je od koraka 5 prenove del skupne
+ * finančne osnove (ComputeContext.capitalCostRate) in ga vprašajo dejavnosti,
+ * katerih moduli množijo denar v terjatvah ali zalogah. Ta vrednost je samo še
+ * privzetek (contextTypes.emptyProfileFor in DEFAULT_COST_CONTEXT) — prej je bila
+ * fiksna tu, legacy modul pa je isti koncept spraševal z 10 %.
  *
  * KALIBRACIJA: začetna ocena, ne empirija. Po prvih ~50 vnosih jo je treba preveriti
  * na realnih podatkih — enako kot naslovljive deleže in pasove izboljšave.

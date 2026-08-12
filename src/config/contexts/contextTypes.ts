@@ -51,6 +51,14 @@ export interface CostBand {
   label: string;
   /** Sredina razpona — nikoli 0, da manjkajoč podatek ne izniči formule. */
   midpointEUR: number;
+  /**
+   * Meji razpona za izračun rezultata kot razpona (lib/range.ts): izbran pas je
+   * približek in rezultat iz njega mora to pokazati, ne skriti v eni številki.
+   * Pri notranjih pasovih sta meji kar meji iz oznake; odprta pasova ("Do X",
+   * "Več kot X") imata manjkajočo mejo simetrično okoli sredine.
+   */
+  minEUR: number;
+  maxEUR: number;
 }
 
 export interface CostQuestion {
@@ -73,6 +81,9 @@ export interface ScaleBand {
   label: string;
   /** Sredina razpona; pri deležih ulomek (0,235), ne odstotek. */
   midpoint: number;
+  /** Meji razpona — ista pravila kot pri CostBand (glej tam). */
+  min: number;
+  max: number;
 }
 
 export interface ScaleQuestion {
@@ -133,6 +144,12 @@ export interface SegmentContext {
    * strošku ure. Proizvodnja in logistika je ne vprašata — tam se ure ne prodajajo.
    */
   chargeOutRate?: CostQuestion;
+  /**
+   * Letni strošek financiranja kot delež. Vprašajo ga samo dejavnosti, katerih
+   * moduli množijo denar v terjatvah ali zalogah (trgovina, maloprodaja, splošno) —
+   * drugod bi bilo vprašanje brez učinka na rezultat. Brez odgovora obvelja 6 %.
+   */
+  capitalCostRate?: ScaleQuestion;
 }
 
 /**
@@ -173,6 +190,7 @@ export interface BusinessProfile {
    */
   annualRevenue: ScaleAssumption;
   contributionMargin: ScaleAssumption;
+  capitalCostRate: ScaleAssumption;
 }
 
 /** Brez odgovora vzamemo srednji pas — nikoli najugodnejšega. */
@@ -195,5 +213,6 @@ export function emptyProfileFor(context: SegmentContext | undefined): BusinessPr
     // evra. To je namen — izmišljen promet bi ustvaril izmišljeno izgubo.
     annualRevenue: { value: context?.annualRevenue?.fallback ?? 0, estimated: true },
     contributionMargin: { value: context?.contributionMargin?.fallback ?? 0.25, estimated: true },
+    capitalCostRate: { value: context?.capitalCostRate?.fallback ?? 0.06, estimated: true },
   };
 }

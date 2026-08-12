@@ -130,7 +130,7 @@ export const MODULE_METHODOLOGY: Record<string, ModuleMethodology> = {
   },
   terjatve_trgovina: {
     formula:
-      '(letni prihodki / 365) × dni prekoračitve roka × 6 % letnega stroška kapitala; + odpisane terjatve; opominjanje × strošek administrativne ure × 12',
+      '(letni prihodki / 365) × dni prekoračitve roka × letni strošek kapitala (vprašan v finančni osnovi, privzeto 6 %); + odpisane terjatve; opominjanje × strošek administrativne ure × 12',
     rationale:
       'Šteje se samo prekoračitev NAD dogovorjenim rokom. Financiranje roka, ki ste ga kupcu sami odobrili, je normalno poslovanje in ne strošek napake — če bi šteli celoten DSO, bi bil znesek videti večji, a bi ga vsak finančnik takoj zavrnil.',
   },

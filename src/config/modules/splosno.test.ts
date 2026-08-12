@@ -25,10 +25,11 @@ const CONTEXT: ComputeContext = {
   // Splošni segment ur ne prodaja po ceniku — postavka je tu samo zato, ker je v
   // ComputeContext obvezna. Noben izid je ne sme uporabiti.
   chargeOutRateEUR: 90,
-  // Ta segment prihodek vpraša kot svoje polje modula (glej terjatve), iz konteksta
-  // ga ne bere — zato 0. Sicer bi test meril nekaj, česar modul ne uporablja.
+  // V osnovnem kontekstu 0: od modulov segmenta prihodek bere samo terjatve (ima
+  // svoj kontekst spodaj) in vsak drug modul, ki bi ga tiho začel brati, test takoj izda.
   annualRevenueEUR: 0,
   contributionMarginRate: 0,
+  capitalCostRate: 0.06,
 };
 const MONTHS = 12;
 
@@ -127,13 +128,17 @@ describe('Napake in ponovno delo', () => {
 });
 
 describe('Plačilni roki in terjatve', () => {
-  const outputs = run(denarSp, {
-    annualRevenueEUR: 4_000_000,
-    overdueDaysAverage: 20,
-    dunningHoursPerMonth: 12,
-    annualBadDebtEUR: 15_000,
-    mainCause: 0, // Opominjanje ni sistematično → planning
-  });
+  // Prihodek pride iz skupne finančne osnove, ne iz polja modula (korak 2 prenove).
+  const REVENUE_CONTEXT: ComputeContext = { ...CONTEXT, annualRevenueEUR: 4_000_000 };
+  const outputs = denarSp.compute(
+    resolveInputs(denarSp, {
+      overdueDaysAverage: 20,
+      dunningHoursPerMonth: 12,
+      annualBadDebtEUR: 15_000,
+      mainCause: 0, // Opominjanje ni sistematično → planning
+    }),
+    REVENUE_CONTEXT,
+  );
 
   it('strošek zamud šteje samo prekoračitev nad dogovorjenim rokom', () => {
     expect(pick(outputs, 'Strošek zamud pri plačilih').valueEUR).toBeCloseTo(
@@ -271,8 +276,8 @@ describe('Skupne lastnosti stroškovnih modulov', () => {
       },
       {
         definition: denarSp,
-        base: { annualRevenueEUR: 4_000_000, overdueDaysAverage: 20, currentDSODays: 0 },
-        twist: { annualRevenueEUR: 4_000_000, overdueDaysAverage: 20, currentDSODays: 95 },
+        base: { overdueDaysAverage: 20, currentDSODays: 0 },
+        twist: { overdueDaysAverage: 20, currentDSODays: 95 },
       },
       {
         definition: zalogeSp,

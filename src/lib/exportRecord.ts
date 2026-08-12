@@ -1,13 +1,17 @@
 import type { BusinessProfile } from '../config/contexts';
+import { getIndustryLabel } from '../config/industries';
 import type { ModuleOutput } from '../config/modules/moduleTypes';
 import type { SegmentId } from '../config/segmentTypes';
+import { getSizeClass } from '../config/sizeClasses';
 import { triggerDownload } from './download';
 import type { FollowUpSequence } from './followUp';
 import type { TriageScores } from './moduleEngine';
-import type { ConfidenceLevel } from './potential';
+import type { ConfidenceLevel, ResultTotals } from './potential';
+import type { LeadConsents, LeadContact } from '../types';
 
 // Ni CRM API — ta modul nadomešča pravo integracijo z ročnim izvozom (spec pogl. 8, MVP tabela).
-// Prenese CSV + JSON datoteko neposredno v brskalniku, brez omrežnega klica.
+// Zapis sestavi buildLeadExportRecord; dostavo opravi bodisi webhook (lib/submitLead.ts),
+// bodisi ročni prenos CSV/JSON prek downloadAsCsv/downloadAsJson.
 
 export interface LeadExportRecord {
   timestampISO: string;
@@ -41,6 +45,8 @@ export interface LeadExportRecord {
   outputs: ModuleOutput[];
   totals: {
     directLossEUR: number;
+    /** Nezaslužena marža — ločen letni koš (korak 0 prenove). */
+    lostMarginEUR: number;
     capacityEUR: number;
     capacityHoursPerMonth: number;
     oneTimeCapitalEUR: number;
@@ -56,6 +62,70 @@ export interface LeadExportRecord {
   utmSource: string | null;
 }
 
+export interface BuildLeadExportRecordParams {
+  timestampISO: string;
+  contact: LeadContact;
+  consents: LeadConsents;
+  industry: string;
+  segment: SegmentId;
+  employeeCount: number;
+  /** Odsoten pri segmentu brez konteksta — zapis tedaj kontekstnih stolpcev nima. */
+  profile: BusinessProfile | undefined;
+  selectedModules: string[];
+  triageScores: TriageScores;
+  moduleInputs: Record<string, Record<string, number>>;
+  outputs: ModuleOutput[];
+  totals: ResultTotals;
+  followUpSequence: FollowUpSequence;
+  utmSource: string | null;
+}
+
+/**
+ * Sestavi izvozni zapis iz istih podatkov, kot jih ima CalculatorFlow ob oddaji.
+ *
+ * Vrne null brez obvezne privolitve: tip zahteva `gdprConsent: true` in zapis brez
+ * nje ne sme obstajati — klicatelj tedaj ne sme poslati ničesar. (Oddaja obrazca
+ * privolitev sicer zahteva, a naj varovalo stoji tam, kjer zapis nastane.)
+ */
+export function buildLeadExportRecord(params: BuildLeadExportRecordParams): LeadExportRecord | null {
+  if (!params.consents.consentProcessing) return null;
+
+  return {
+    timestampISO: params.timestampISO,
+    segment: params.segment,
+    industry: params.industry,
+    industryLabel: getIndustryLabel(params.industry) || params.industry,
+    sizeClass: getSizeClass(params.employeeCount),
+    employeeCount: params.employeeCount,
+    companyName: params.contact.companyName,
+    email: params.contact.email,
+    gdprConsent: true,
+    firstName: params.contact.firstName,
+    lastName: params.contact.lastName,
+    phone: params.contact.phone,
+    // Normaliziran že v obrazcu (glej types.LeadContact).
+    taxNumber: params.contact.taxNumber,
+    consentOffers: params.consents.consentOffers,
+    consentContent: params.consents.consentContent,
+    selectedModules: params.selectedModules,
+    triageScores: params.triageScores,
+    moduleInputs: params.moduleInputs,
+    outputs: params.outputs,
+    totals: {
+      directLossEUR: params.totals.directLossEUR,
+      lostMarginEUR: params.totals.lostMarginEUR,
+      capacityEUR: params.totals.capacityEUR,
+      capacityHoursPerMonth: params.totals.capacityHoursPerMonth,
+      oneTimeCapitalEUR: params.totals.oneTimeCapitalEUR,
+      potentialMinEUR: params.totals.potential?.minEUR,
+      potentialMaxEUR: params.totals.potential?.maxEUR,
+    },
+    confidence: params.totals.confidence,
+    profile: params.profile,
+    followUpSequence: params.followUpSequence,
+    utmSource: params.utmSource,
+  };
+}
 
 export function downloadAsJson(record: LeadExportRecord): void {
   const filename = `datalab-lead-${record.segment}-${record.timestampISO.slice(0, 10)}.json`;
@@ -114,6 +184,8 @@ export const CSV_COLUMNS = [
   'taxNumber',
   'consentOffers',
   'consentContent',
+  // Nezaslužena marža (korak 0 prenove) — na koncu, ker so preslikave pozicijske.
+  'lostMarginEUR',
 ] as const;
 
 /** Prazna celica namesto "0" — segment brez te vrednosti je ni izračunal, ni je izmeril kot nič. */
@@ -175,6 +247,7 @@ export function buildCsvRow(record: LeadExportRecord): string[] {
     record.taxNumber,
     String(record.consentOffers),
     String(record.consentContent),
+    String(Math.round(record.totals.lostMarginEUR)),
   ].map((value) => csvEscape(value));
 }
 

@@ -11,8 +11,8 @@ import type { CostBand } from './contextTypes';
 
 /** Vodstveno in pisarniško delo se med dejavnostmi razlikuje bistveno manj kot operativno. */
 export const ADMIN_HOUR_BANDS: CostBand[] = [
-  { id: 'do25', label: 'Do 25 EUR', midpointEUR: 20 },
-  { id: '25do35', label: '25–35 EUR', midpointEUR: 30 },
-  { id: '35do50', label: '35–50 EUR', midpointEUR: 42 },
-  { id: 'nad50', label: 'Več kot 50 EUR', midpointEUR: 60 },
+  { id: 'do25', label: 'Do 25 EUR', midpointEUR: 20, minEUR: 15, maxEUR: 25 },
+  { id: '25do35', label: '25–35 EUR', midpointEUR: 30, minEUR: 25, maxEUR: 35 },
+  { id: '35do50', label: '35–50 EUR', midpointEUR: 42, minEUR: 35, maxEUR: 50 },
+  { id: 'nad50', label: 'Več kot 50 EUR', midpointEUR: 60, minEUR: 50, maxEUR: 70 },
 ];

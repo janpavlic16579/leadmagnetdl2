@@ -17,3 +17,13 @@ export function formatHours(value: number): string {
 export function formatPercent(fraction: number): string {
   return new Intl.NumberFormat('sl-SI', { maximumFractionDigits: 1 }).format(fraction * 100) + ' %';
 }
+
+/**
+ * "X – Y EUR" oziroma ena vrednost, kadar razpona ni. Meji se najprej zaokrožita:
+ * 12.400,4 in 12.400,6 sta po zaokrožitvi ista številka in izpis "12.400 EUR –
+ * 12.400 EUR" bi izgledal kot napaka.
+ */
+export function formatEURRange(minEUR: number, maxEUR: number): string {
+  if (Math.round(minEUR) === Math.round(maxEUR)) return formatEUR(minEUR);
+  return `${formatEUR(minEUR)} – ${formatEUR(maxEUR)}`;
+}

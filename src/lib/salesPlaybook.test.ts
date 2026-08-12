@@ -56,13 +56,15 @@ const BASE: PlaybookInput = {
   },
   summary: {
     directLossEUR: 45_000,
+    lostMarginEUR: 0,
+    rangeEUR: null,
     capacityEUR: 55_000,
     capacityHoursPerMonth: 200,
     oneTimeCapitalEUR: 0,
     confidence: 'medium',
     confidenceReason: 'Del vrednosti izhaja iz razponov.',
   },
-  softness: { hourAssumptions: [], unknownAnswers: [], untouchedFields: [] },
+  softness: { hourAssumptions: [], unknownAnswers: [], untouchedFields: [], plausibilityWarning: null },
   triage: [],
   measured: [],
   risks: [],
@@ -89,6 +91,7 @@ describe('Iztočnice za pogovor', () => {
         hourAssumptions: [],
         unknownAnswers: [{ moduleTitle: 'Zaloge', question: 'Kaj je glavni vzrok?' }],
         untouchedFields: [],
+        plausibilityWarning: null,
       },
     });
 
@@ -141,7 +144,7 @@ describe('Iztočnice za pogovor', () => {
       question: `Vprašanje ${index}`,
     }));
     const playbook = play({
-      softness: { hourAssumptions: [], unknownAnswers: many, untouchedFields: many },
+      softness: { hourAssumptions: [], unknownAnswers: many, untouchedFields: many, plausibilityWarning: null },
     });
     expect(playbook.openingQuestions.length).toBeLessThanOrEqual(6);
   });

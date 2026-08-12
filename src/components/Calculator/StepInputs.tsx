@@ -16,6 +16,8 @@ interface StepInputsProps {
   onChange: (value: ModuleInputsState) => void;
   raw: ModuleInputsState;
   liveTotalEUR: number;
+  /** Mehko opozorilo o verjetnosti vnesenih ur — nikoli ne blokira (lib/plausibility). */
+  plausibilityWarning?: string | null;
   stepLabel: string;
   onNext: () => void;
   onBack: () => void;
@@ -29,6 +31,7 @@ export function StepInputs({
   onChange,
   raw,
   liveTotalEUR,
+  plausibilityWarning,
   stepLabel,
   onNext,
   onBack,
@@ -67,6 +70,14 @@ export function StepInputs({
           drugo delo.
         </p>
       </div>
+
+      {plausibilityWarning ? (
+        // Mehko opozorilo, ne napaka: vnos je lahko resničen, zato gumb Naprej
+        // ostane omogočen. role="status", da ga bralnik zaslona prebere ob pojavu.
+        <p className={styles.plausibilityWarning} role="status">
+          {plausibilityWarning}
+        </p>
+      ) : null}
 
       {/*
         Vsota neposrednih izgub IN kapacitete: področji Plan in Delovni nalogi ne

@@ -3,7 +3,6 @@ import type { ModuleDefinition, RiskLevel } from './moduleTypes';
 import {
   ASSURANCE_CHOICES,
   MONTHS_PER_YEAR,
-  RECEIVABLES_CAPITAL_COST,
   reducibleShareField,
   reducibleShareOf,
   riskLevelFromScore,
@@ -338,6 +337,7 @@ const DENAR_CAUSES: CauseOption[] = [
 
 export const denarSp: ModuleDefinition = {
   id: 'denarSp',
+  usesRevenue: true,
   title: 'Plačilni roki in terjatve',
   summary: 'Strošek denarja, ki predolgo čaka na kupca, čas za izterjavo in odpisane terjatve.',
   triage: {
@@ -350,13 +350,8 @@ export const denarSp: ModuleDefinition = {
     ],
   },
   fields: [
-    {
-      key: 'annualRevenueEUR',
-      label: 'Kolikšni so vaši letni prihodki?',
-      kind: 'number',
-      unit: 'EUR/leto',
-      default: 0,
-    },
+    // Prihodek pride iz skupne finančne osnove (contexts/splosno.ts) — je lastnost
+    // podjetja, ne področja, in mora obstajati tudi, kadar to področje ni izbrano.
     {
       key: 'overdueDaysAverage',
       label: 'Za koliko dni povprečno kupci prekoračijo dogovorjeni plačilni rok?',
@@ -392,13 +387,13 @@ export const denarSp: ModuleDefinition = {
   ],
   compute: (input, context) => {
     const addressableShare = addressableShareOf(DENAR_CAUSES, input.mainCause);
-    const dailyRevenue = input.annualRevenueEUR / 365;
+    const dailyRevenue = context.annualRevenueEUR / 365;
 
     return [
       {
         bucket: 'directLoss',
         label: 'Strošek zamud pri plačilih',
-        valueEUR: dailyRevenue * input.overdueDaysAverage * RECEIVABLES_CAPITAL_COST,
+        valueEUR: dailyRevenue * input.overdueDaysAverage * context.capitalCostRate,
         addressableShare,
       },
       {

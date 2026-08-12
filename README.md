@@ -178,19 +178,20 @@ Dvoje je vredno vedeti pred urejanjem:
   jo vsak finančnik takoj zavrnil. Letni strošek kapitala je konstanta `RECEIVABLES_CAPITAL_COST`
   (`src/config/modules/shared.ts`), ne vprašanje — omejitev na šest polj na modul je ostrejša od koristi.
 
-### Maloprodaja — pet izključujočih se stroškovnih področij
+### Maloprodaja — šest izključujočih se stroškovnih področij
 
 | Modul | Meri |
 |---|---|
-| `zalogeMp` | Zaloge, police in odpisi |
-| `marzeMp` | Nabavne cene, akcije in marža |
-| `mankoMp` | Blagajna, manko in vračila |
+| `razpolozljivostMp` | Prazne police in nedobavljivi artikli |
+| `zalogeMp` | Presežna zaloga, odpisi in znižanja |
+| `marzeMp` | Cene, akcije in marža |
+| `blagajnaMp` | Blagajna, zaključki in manko |
 | `prevzemMp` | Prevzem blaga, dokumenti in prenosi |
 | `kanaliMp` | Spletna prodaja in usklajenost kanalov |
 | `diagnostikaMp` | Štiri vprašanja o podatkih in odpornosti procesa — brez evrov, vedno vidna |
 
 Najostrejša meja v maloprodaji je med **znano in neznano** izgubo blaga: odpisano, poteklo in prisilno
-znižano blago je `zalogeMp` (vemo, kaj se je zgodilo), inventurni manko pa `mankoMp` (ne vemo). Trgovec
+znižano blago je `zalogeMp` (vemo, kaj se je zgodilo), inventurni manko pa `blagajnaMp` (ne vemo). Trgovec
 obe številki pozna ločeno; v enem znesku bi bila razlika izgubljena, z njo pa vsak ukrep, ki iz nje sledi.
 
 ### Storitve in projekti — pet izključujočih se stroškovnih področij
@@ -430,16 +431,23 @@ Povezava na pravilnik o zasebnosti v obvezni privolitvi še ni znana: konstanta 
 je prazna, zato se stavek izriše brez povezave. Ko URL prispe, mora biti **absoluten** — aplikacija
 teče na podpoti `/leadmagnetdl/`.
 
-## Kaj se prenese ob oddaji obrazca
+## Kaj se zgodi ob oddaji obrazca
 
-Datalab (še) nima znanega CRM API-ja, zato oddaja obrazca **ne kliče strežnika**. Zbrani kontaktni
-podatki torej ne gredo nikamor razen v spodnji datoteki za svetovalca. Nastanejo tri datoteke:
+Dostava je odvisna od build spremenljivke **`VITE_LEAD_WEBHOOK_URL`** (`.env`):
+
+- **Webhook nastavljen:** ob oddaji se na naslov POST-a JSON (`src/lib/submitLead.ts`) z izvoznim
+  zapisom (`buildLeadExportRecord`, `src/lib/exportRecord.ts`) in prodajno pripravo kot HTML. Stranka
+  tedaj dobi **samo svoje poročilo** — prodajna priprava je interni dokument in ne pristane na njeni
+  napravi. S tem se prvič lahko zaprejo kalibracijske zanke ("preveriti po ~50 vnosih").
+- **Webhook ni nastavljen (privzeto):** oddaja **ne kliče strežnika** in vse konča v lokalno
+  prenesenih datotekah, kot doslej. Napaka webhooka pade nazaj na ta način — strankino poročilo mora
+  priti vedno.
 
 | Datoteka | Za koga | Kaj vsebuje |
 |---|---|---|
 | `datalab-analiza-skritih-stroskov-<podjetje>-<datum>.pdf` | stranka | `src/lib/pdf.ts` — hero zneski, graf, razčlenitev, tveganja, 3 ukrepi |
-| `datalab-prodajna-priprava-<podjetje>-<datum>.pdf` | svetovalec | `src/lib/pdfSales.ts` |
-| `datalab-prodajna-priprava-<podjetje>-<datum>.html` | svetovalec | `src/lib/salesReportHtml.ts` — ista vsebina za branje na telefonu |
+| `datalab-prodajna-priprava-<podjetje>-<datum>.pdf` | svetovalec (samo brez webhooka) | `src/lib/pdfSales.ts` |
+| `datalab-prodajna-priprava-<podjetje>-<datum>.html` | svetovalec (samo brez webhooka) | `src/lib/salesReportHtml.ts` — ista vsebina za branje na telefonu |
 
 **Vse tri se prenesejo samodejno, a ZAPOREDNO in z razmikom ~1,2 s** (`downloadSequentially` v
 `src/lib/download.ts`). Brskalnik iz ene geste zanesljivo dovoli en prenos; naslednje bodisi pogojuje
@@ -541,12 +549,15 @@ prikazali nazaj.
 
 ### Izvoz za CRM
 
-`src/lib/exportRecord.ts` (`LeadExportRecord`, CSV + JSON) je pripravljen, a **še ni ožičen** — funkcija
-`buildLeadExportRecord` ni napisana in datoteke se ne prenašajo. Glava CSV je namenoma fiksna in enaka
-za vse segmente; novi stolpci se dodajajo **na konec**, ker je vsaka obstoječa preslikava pozicijska.
+`src/lib/exportRecord.ts` (`LeadExportRecord`, CSV + JSON) je **ožičen prek webhooka**: ob oddaji
+obrazca `buildLeadExportRecord` sestavi zapis (samo ob obvezni privolitvi — brez nje vrne `null`),
+`src/lib/submitLead.ts` pa ga POST-a na `VITE_LEAD_WEBHOOK_URL`, skupaj s prodajno pripravo v HTML.
+Brez nastavljenega webhooka se zapis ne pošilja nikamor; funkciji `downloadAsCsv`/`downloadAsJson`
+ostajata za ročni izvoz. Glava CSV je namenoma fiksna in enaka za vse segmente; novi stolpci se
+dodajajo **na konec**, ker je vsaka obstoječa preslikava pozicijska (zadnji dodani: `lostMarginEUR`).
 
-Follow-up sekvence se **ne pošiljajo** — `selectFollowUpSequence()` samo izračuna, v katero sekvenco
-zapis sodi, da je logika pripravljena, ko bo integracija na voljo.
+Follow-up sekvence se **ne pošiljajo kot e-pošta** — `selectFollowUpSequence()` izračuna, v katero
+sekvenco zapis sodi, ključ pa potuje v izvoznem zapisu (`followUpSequence`), da jo lahko sproži CRM.
 
 ## Odprta vprašanja pred objavo
 

@@ -2,10 +2,10 @@ import { ADMIN_HOUR_BANDS } from './shared';
 import type { CostBand, SegmentContext } from './contextTypes';
 
 const PRODUCTION_HOUR_BANDS: CostBand[] = [
-  { id: 'do30', label: 'Do 30 EUR', midpointEUR: 25 },
-  { id: '30do45', label: '30–45 EUR', midpointEUR: 37 },
-  { id: '45do60', label: '45–60 EUR', midpointEUR: 52 },
-  { id: 'nad60', label: 'Več kot 60 EUR', midpointEUR: 70 },
+  { id: 'do30', label: 'Do 30 EUR', midpointEUR: 25, minEUR: 20, maxEUR: 30 },
+  { id: '30do45', label: '30–45 EUR', midpointEUR: 37, minEUR: 30, maxEUR: 45 },
+  { id: '45do60', label: '45–60 EUR', midpointEUR: 52, minEUR: 45, maxEUR: 60 },
+  { id: 'nad60', label: 'Več kot 60 EUR', midpointEUR: 70, minEUR: 60, maxEUR: 80 },
 ];
 
 export const PROIZVODNJA_CONTEXT: SegmentContext = {
@@ -13,7 +13,7 @@ export const PROIZVODNJA_CONTEXT: SegmentContext = {
   intro:
     'Tri vprašanja, ki ne sprašujejo po številkah. Iz njih izpeljemo, koliko od izmerjenega stroška je realno mogoče nasloviti — podjetje, ki že uporablja proizvodni modul, je lažje izboljšave namreč večinoma že pobralo.',
   costBasisIntro:
-    'Dve številki, ki veljata za vsa področja. Polni strošek pomeni bruto plačo z vsemi prispevki in režijo, ne neto izplačila.',
+    'Štiri številke, ki veljajo za vsa področja. Polni strošek ure pomeni bruto plačo z vsemi prispevki in režijo, ne neto izplačila. Prihodek in maržo vprašamo enkrat — sta lastnost podjetja, ne posameznega področja.',
 
   businessType: {
     legend: 'Kako pretežno proizvajate?',
@@ -60,5 +60,36 @@ export const PROIZVODNJA_CONTEXT: SegmentContext = {
     help: 'Planer, vodja proizvodnje, nabava, priprava dela.',
     bands: ADMIN_HOUR_BANDS,
     fallbackEUR: 35,
+  },
+
+  /**
+   * KALIBRACIJA: razponi pokrivajo ciljni razred 10–249 zaposlenih; sredine so
+   * geometrijske (glej contexts/maloprodaja.ts). Preveriti po prvih ~50 vnosih.
+   */
+  annualRevenue: {
+    label: 'Letni prihodki od prodaje',
+    help: 'Neto, brez DDV. Če razpona ne izberete, postavk, vezanih na prihodek, ne bomo ocenili — prihodka si ne izmišljamo.',
+    bands: [
+      { id: 'do2mio', label: 'Do 2 mio EUR', midpoint: 1_200_000, min: 400_000, max: 2_000_000 },
+      { id: '2do5mio', label: '2–5 mio EUR', midpoint: 3_200_000, min: 2_000_000, max: 5_000_000 },
+      { id: '5do15mio', label: '5–15 mio EUR', midpoint: 8_500_000, min: 5_000_000, max: 15_000_000 },
+      { id: 'nad15mio', label: 'Več kot 15 mio EUR', midpoint: 25_000_000, min: 15_000_000, max: 35_000_000 },
+    ],
+    fallback: 0,
+    unit: 'EUR/leto',
+  },
+
+  contributionMargin: {
+    label: 'Povprečna prispevna marža',
+    help: 'Kar od prodajne cene ostane po materialu in neposrednih stroških izdelave. Ni razlika v ceniku, ampak dejanski ostanek.',
+    bands: [
+      { id: 'do20', label: 'Do 20 %', midpoint: 0.15, min: 0.1, max: 0.2 },
+      { id: '20do35', label: '20–35 %', midpoint: 0.28, min: 0.2, max: 0.35 },
+      { id: '35do50', label: '35–50 %', midpoint: 0.42, min: 0.35, max: 0.5 },
+      { id: 'nad50', label: 'Več kot 50 %', midpoint: 0.58, min: 0.5, max: 0.66 },
+    ],
+    fallback: 0.25,
+    unit: '%',
+    asPercent: true,
   },
 };

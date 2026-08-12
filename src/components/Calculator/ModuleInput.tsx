@@ -83,6 +83,18 @@ export function ModuleInput(props: ModuleInputProps) {
   const allowUnknown = props.mode === 'number' && props.allowUnknown === true;
   const isUnknown = allowUnknown && value === UNKNOWN_ANSWER;
 
+  /**
+   * min/max se uveljavita ob vnosu, ne le kot HTML atributa: atributa ustavita
+   * puščici, ne pa tipkanja — vtipkana -50 ali vrednost čez mejo drsnika je doslej
+   * vstopila v izračun. Prosto številsko polje ima spodnjo mejo 0 (negativnih ur
+   * ali evrov ni), navzgor pa ostane odprto.
+   */
+  const clamp = (raw: number): number => {
+    if (!Number.isFinite(raw)) return 0;
+    if (props.mode === 'slider') return Math.min(props.max, Math.max(props.min, raw));
+    return Math.max(0, raw);
+  };
+
   return (
     <div className={styles.field}>
       <label className={styles.label}>{label}</label>
@@ -113,7 +125,7 @@ export function ModuleInput(props: ModuleInputProps) {
             min={props.mode === 'slider' ? props.min : 0}
             max={props.mode === 'slider' ? props.max : undefined}
             step={props.mode === 'slider' ? props.step : 'any'}
-            onChange={(event) => onChange(event.target.value === '' ? 0 : Number(event.target.value))}
+            onChange={(event) => onChange(event.target.value === '' ? 0 : clamp(Number(event.target.value)))}
             aria-label={`${label} (vrednost)`}
           />
           {unit ? <span className={styles.unit}>{unit}</span> : null}

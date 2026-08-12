@@ -29,6 +29,7 @@ const RECORD: LeadExportRecord = {
   outputs: [],
   totals: {
     directLossEUR: 12000,
+    lostMarginEUR: 5000,
     capacityEUR: 8000,
     capacityHoursPerMonth: 20,
     oneTimeCapitalEUR: 0,
@@ -47,10 +48,10 @@ describe('Izvozni zapis za CRM', () => {
     expect(new Set(CSV_COLUMNS).size).toBe(CSV_COLUMNS.length);
   });
 
-  it('kontaktna polja so na koncu, za obstoječimi', () => {
-    // Vrivanje h companyName bi bilo vsebinsko lepše, a bi premaknilo vse
-    // pozicijske preslikave, ki so bile narejene pred to spremembo.
-    const tail = CSV_COLUMNS.slice(-6);
+  it('novi stolpci gredo na konec, za obstoječimi', () => {
+    // Vrivanje na vsebinsko "pravo" mesto bi premaknilo vse pozicijske preslikave,
+    // ki so bile narejene pred spremembo.
+    const tail = CSV_COLUMNS.slice(-7);
     expect(tail).toEqual([
       'firstName',
       'lastName',
@@ -58,7 +59,13 @@ describe('Izvozni zapis za CRM', () => {
       'taxNumber',
       'consentOffers',
       'consentContent',
+      'lostMarginEUR',
     ]);
+  });
+
+  it('nezaslužena marža pristane pod svojim stolpcem', () => {
+    const row = buildCsvRow(RECORD);
+    expect(row[CSV_COLUMNS.indexOf('lostMarginEUR')]).toBe('5000');
   });
 
   it('kontaktna vrednost pristane pod svojim stolpcem', () => {

@@ -7,10 +7,10 @@ import type { CostBand, SegmentContext } from './contextTypes';
  * bi pri isti vneseni uri prikazala skoraj dvakrat previsok znesek.
  */
 const OPERATIONAL_HOUR_BANDS: CostBand[] = [
-  { id: 'do20', label: 'Do 20 EUR', midpointEUR: 17 },
-  { id: '20do28', label: '20–28 EUR', midpointEUR: 24 },
-  { id: '28do36', label: '28–36 EUR', midpointEUR: 32 },
-  { id: 'nad36', label: 'Več kot 36 EUR', midpointEUR: 42 },
+  { id: 'do20', label: 'Do 20 EUR', midpointEUR: 17, minEUR: 14, maxEUR: 20 },
+  { id: '20do28', label: '20–28 EUR', midpointEUR: 24, minEUR: 20, maxEUR: 28 },
+  { id: '28do36', label: '28–36 EUR', midpointEUR: 32, minEUR: 28, maxEUR: 36 },
+  { id: 'nad36', label: 'Več kot 36 EUR', midpointEUR: 42, minEUR: 36, maxEUR: 48 },
 ];
 
 /**
@@ -37,7 +37,7 @@ export const RACUNOVODSTVO_CONTEXT: SegmentContext = {
   intro:
     'Tri vprašanja, ki ne sprašujejo po številkah. Iz njih izpeljemo, koliko od izmerjenega stroška je realno mogoče nasloviti — servis, ki listine že zajema samodejno, je lažje izboljšave namreč večinoma že pobral.',
   costBasisIntro:
-    'Dve številki, ki veljata za vsa področja. Polni strošek pomeni bruto plačo z vsemi prispevki in režijo, ne neto izplačila — in ne cene, ki jo za uro zaračunate stranki.',
+    'Štiri številke, ki veljajo za vsa področja. Polni strošek pomeni bruto plačo z vsemi prispevki in režijo, ne neto izplačila — in ne cene, ki jo za uro zaračunate stranki. Prihodek in maržo vprašamo enkrat — sta lastnost servisa, ne posameznega področja.',
 
   businessType: {
     legend: 'Kakšna je pretežna struktura vaših strank?',
@@ -100,5 +100,33 @@ export const RACUNOVODSTVO_CONTEXT: SegmentContext = {
     // Višje od proizvodne administrativne ure: podpis pod obračun nosi odgovornost,
     // ki je referent ne more prevzeti, zato ta ura ni zamenljiva z operativno.
     fallbackEUR: 38,
+  },
+
+  /** KALIBRACIJA: sredine so geometrijske, preveriti po prvih ~50 vnosih. */
+  annualRevenue: {
+    label: 'Letni prihodki servisa',
+    help: 'Neto, brez DDV. Če razpona ne izberete, postavk, vezanih na prihodek, ne bomo ocenili — prihodka si ne izmišljamo.',
+    bands: [
+      { id: 'do03mio', label: 'Do 0,3 mio EUR', midpoint: 200_000, min: 100_000, max: 300_000 },
+      { id: '03do1mio', label: '0,3–1 mio EUR', midpoint: 600_000, min: 300_000, max: 1_000_000 },
+      { id: '1do3mio', label: '1–3 mio EUR', midpoint: 1_800_000, min: 1_000_000, max: 3_000_000 },
+      { id: 'nad3mio', label: 'Več kot 3 mio EUR', midpoint: 5_000_000, min: 3_000_000, max: 7_000_000 },
+    ],
+    fallback: 0,
+    unit: 'EUR/leto',
+  },
+
+  contributionMargin: {
+    label: 'Povprečna prispevna marža',
+    help: 'Kar od zaračunanega ostane po neposrednih stroških izvedbe (plače na strankah, licence, zunanji sodelavci).',
+    bands: [
+      { id: 'do30', label: 'Do 30 %', midpoint: 0.25, min: 0.2, max: 0.3 },
+      { id: '30do50', label: '30–50 %', midpoint: 0.4, min: 0.3, max: 0.5 },
+      { id: '50do70', label: '50–70 %', midpoint: 0.6, min: 0.5, max: 0.7 },
+      { id: 'nad70', label: 'Več kot 70 %', midpoint: 0.78, min: 0.7, max: 0.86 },
+    ],
+    fallback: 0.25,
+    unit: '%',
+    asPercent: true,
   },
 };
