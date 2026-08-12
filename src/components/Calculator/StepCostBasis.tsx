@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import type {
   BusinessProfile,
   CostAssumption,
@@ -113,6 +113,59 @@ export function StepCostBasis({
   );
 }
 
+interface FallbackRowProps {
+  /**
+   * Prevzem povprečja panoge. Odsoten, kadar povprečja ne ponudimo — prihodek ima
+   * privzetek 0, ker si prometa ne izmišljamo.
+   */
+  average?: { label: string; taken: boolean; onToggle: () => void };
+  bandsOpen: boolean;
+  onToggleBands: () => void;
+  bandsId: string;
+}
+
+/**
+ * Ena tiha vrstica z izhodoma v sili pod vnosnim poljem.
+ *
+ * Doslej sta bila to dva bloka, oba naslovljena "Ne vem —": gumb s črtkanim
+ * okvirjem in skupina štirih radijskih gumbov. Vsako vprašanje je zato ponujalo
+ * tri vzporedne načine odgovora hkrati, obiskovalec pa je moral izbrati NAČIN,
+ * preden je sploh odgovoril. Zdaj je privzeto vidno samo vnosno polje; kdor
+ * številke nima, tu najde oba izhoda, razponi pa se razgrnejo šele na klik.
+ */
+function FallbackRow({ average, bandsOpen, onToggleBands, bandsId }: FallbackRowProps) {
+  return (
+    <p className={styles.fallbackRow}>
+      {/* Predpona enkrat, ne pri vsakem izhodu posebej. */}
+      {average?.taken ? null : <span className={styles.fallbackLead}>Ne veste?</span>}
+      {average ? (
+        <button
+          type="button"
+          className={`${styles.fallbackButton} ${average.taken ? styles.fallbackButtonActive : ''}`}
+          aria-pressed={average.taken}
+          onClick={average.onToggle}
+        >
+          {average.label}
+        </button>
+      ) : null}
+      {average ? (
+        <span className={styles.fallbackSeparator} aria-hidden="true">
+          ·
+        </span>
+      ) : null}
+      <button
+        type="button"
+        className={styles.fallbackButton}
+        aria-expanded={bandsOpen}
+        aria-controls={bandsId}
+        onClick={onToggleBands}
+      >
+        {bandsOpen ? 'Skrij razpone' : 'Izberi razpon'}
+      </button>
+    </p>
+  );
+}
+
 interface CostFieldProps {
   question: CostQuestion;
   value: CostAssumption;
@@ -122,6 +175,8 @@ interface CostFieldProps {
 function CostField({ question, value, onChange }: CostFieldProps) {
   const groupId = useId();
   const fromAverage = value.source === 'industryAverage';
+  /** Odprto ostane, kadar je razpon že izbran — sicer bi se ob vrnitvi skril odgovor. */
+  const [bandsOpen, setBandsOpen] = useState(value.source === 'band');
   /**
    * Povprečje panoge se izpiše v polje, čeprav ni uporabnikov podatek — prav to je
    * namen gumba: številka mora biti vidna tam, kjer jo obiskovalec pričakuje, in
@@ -159,59 +214,63 @@ function CostField({ question, value, onChange }: CostFieldProps) {
         <span className={styles.unit}>EUR/h</span>
       </div>
 
-      <div className={styles.average}>
-        <button
-          type="button"
-          className={`${styles.averageButton} ${fromAverage ? styles.averageButtonActive : ''}`}
-          aria-pressed={fromAverage}
-          onClick={() =>
+      <FallbackRow
+        average={{
+          label: fromAverage
+            ? `Povprečje panoge — ${question.fallbackEUR} EUR/h`
+            : `Vzemi povprečje panoge (${question.fallbackEUR} EUR/h)`,
+          taken: fromAverage,
+          onToggle: () =>
             onChange(
               fromAverage
                 ? { valueEUR: question.fallbackEUR, estimated: true, source: 'none' }
                 : { valueEUR: question.fallbackEUR, estimated: true, source: 'industryAverage' },
-            )
-          }
-        >
-          {fromAverage
-            ? `Povprečje panoge — ${question.fallbackEUR} EUR/h`
-            : `Ne vem — vzemi povprečje panoge (${question.fallbackEUR} EUR/h)`}
-        </button>
-        {fromAverage && (
-          <p className={styles.averageNote}>
-            Naša ocena za to dejavnost, ne vaš podatek. Izračun bo tekel z razponom te ocene;
-            popravite jo, če veste bolje.
-          </p>
-        )}
-      </div>
+            ),
+        }}
+        bandsOpen={bandsOpen}
+        onToggleBands={() => setBandsOpen((open) => !open)}
+        bandsId={`${groupId}-bands`}
+      />
 
-      <fieldset className={styles.bands}>
-        <legend className={styles.bandsLegend}>Ne vem — izberi razpon</legend>
-        <div className={styles.bandOptions}>
-          {question.bands.map((band) => (
-            <label
-              key={band.id}
-              className={`${styles.band} ${
-                value.source === 'band' && value.bandId === band.id ? styles.bandActive : ''
-              }`}
-            >
-              <input
-                type="radio"
-                name={groupId}
-                checked={value.source === 'band' && value.bandId === band.id}
-                onChange={() =>
-                  onChange({
-                    valueEUR: band.midpointEUR,
-                    estimated: true,
-                    source: 'band',
-                    bandId: band.id,
-                  })
-                }
-              />
-              <span>{band.label}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      {fromAverage && (
+        <p className={styles.averageNote}>
+          Naša ocena za to dejavnost, ne vaš podatek. Izračun bo tekel z razponom te ocene;
+          popravite jo, če veste bolje.
+        </p>
+      )}
+
+      {bandsOpen && (
+        <fieldset id={`${groupId}-bands`} className={styles.bands}>
+          {/* Skrita, ne odstranjena: predpona je zdaj v vrstici izhodov, skupina
+              radijskih gumbov pa mora za bralnik zaslona ohraniti ime. */}
+          <legend className={styles.srOnly}>Izberi razpon</legend>
+          <div className={styles.bandOptions}>
+            {question.bands.map((band) => (
+              <label
+                key={band.id}
+                className={`${styles.band} ${
+                  value.source === 'band' && value.bandId === band.id ? styles.bandActive : ''
+                }`}
+              >
+                <input
+                  type="radio"
+                  name={groupId}
+                  checked={value.source === 'band' && value.bandId === band.id}
+                  onChange={() =>
+                    onChange({
+                      valueEUR: band.midpointEUR,
+                      estimated: true,
+                      source: 'band',
+                      bandId: band.id,
+                    })
+                  }
+                />
+                <span>{band.label}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
     </div>
   );
 }
@@ -229,9 +288,17 @@ interface ScaleFieldProps {
  */
 function ScaleField({ question, value, onChange }: ScaleFieldProps) {
   const groupId = useId();
+  const fromAverage = value.source === 'industryAverage';
+  const [bandsOpen, setBandsOpen] = useState(value.source === 'band');
 
   const toDisplay = (raw: number) => (question.asPercent ? Math.round(raw * 1000) / 10 : raw);
   const fromDisplay = (shown: number) => (question.asPercent ? shown / 100 : shown);
+
+  /**
+   * Povprečje panoge ponudimo samo, kadar ga sploh imamo. Prihodek ima privzetek
+   * 0 namenoma — prometa si ne izmišljamo — zato tam ostane le razpon.
+   */
+  const hasIndustryAverage = question.fallback > 0;
 
   return (
     <div className={styles.field}>
@@ -250,8 +317,11 @@ function ScaleField({ question, value, onChange }: ScaleFieldProps) {
           min={0}
           inputMode="numeric"
           placeholder={question.asPercent ? 'npr. 25' : 'npr. 2000000'}
-          // Ocenjena vrednost se namenoma ne izpiše kot vnos — ni uporabnikov podatek.
-          value={value.source === 'entered' && value.value ? toDisplay(value.value) : ''}
+          // Prevzeto povprečje se izpiše v polje (kot pri urni postavki), da je
+          // številka vidna tam, kjer jo obiskovalec pričakuje, in popravljiva.
+          value={
+            value.source === 'entered' || fromAverage ? (value.value ? toDisplay(value.value) : '') : ''
+          }
           onChange={(event) =>
             onChange(
               event.target.value === ''
@@ -267,34 +337,65 @@ function ScaleField({ question, value, onChange }: ScaleFieldProps) {
         <span className={styles.unit}>{question.unit}</span>
       </div>
 
-      <fieldset className={styles.bands}>
-        <legend className={styles.bandsLegend}>Ne vem — izberi razpon</legend>
-        <div className={styles.bandOptions}>
-          {question.bands.map((band) => (
-            <label
-              key={band.id}
-              className={`${styles.band} ${
-                value.source === 'band' && value.bandId === band.id ? styles.bandActive : ''
-              }`}
-            >
-              <input
-                type="radio"
-                name={groupId}
-                checked={value.source === 'band' && value.bandId === band.id}
-                onChange={() =>
-                  onChange({
-                    value: band.midpoint,
-                    estimated: true,
-                    source: 'band',
-                    bandId: band.id,
-                  })
-                }
-              />
-              <span>{band.label}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      <FallbackRow
+        average={
+          hasIndustryAverage
+            ? {
+                label: fromAverage
+                  ? `Povprečje panoge — ${toDisplay(question.fallback)} ${question.unit}`
+                  : `Vzemi povprečje panoge (${toDisplay(question.fallback)} ${question.unit})`,
+                taken: fromAverage,
+                onToggle: () =>
+                  onChange(
+                    fromAverage
+                      ? { value: question.fallback, estimated: true, source: 'none' }
+                      : { value: question.fallback, estimated: true, source: 'industryAverage' },
+                  ),
+              }
+            : undefined
+        }
+        bandsOpen={bandsOpen}
+        onToggleBands={() => setBandsOpen((open) => !open)}
+        bandsId={`${groupId}-bands`}
+      />
+
+      {fromAverage && (
+        <p className={styles.averageNote}>
+          Naša ocena za to dejavnost, ne vaš podatek. Izračun bo tekel z razponom te ocene;
+          popravite jo, če veste bolje.
+        </p>
+      )}
+
+      {bandsOpen && (
+        <fieldset id={`${groupId}-bands`} className={styles.bands}>
+          <legend className={styles.srOnly}>Izberi razpon</legend>
+          <div className={styles.bandOptions}>
+            {question.bands.map((band) => (
+              <label
+                key={band.id}
+                className={`${styles.band} ${
+                  value.source === 'band' && value.bandId === band.id ? styles.bandActive : ''
+                }`}
+              >
+                <input
+                  type="radio"
+                  name={groupId}
+                  checked={value.source === 'band' && value.bandId === band.id}
+                  onChange={() =>
+                    onChange({
+                      value: band.midpoint,
+                      estimated: true,
+                      source: 'band',
+                      bandId: band.id,
+                    })
+                  }
+                />
+                <span>{band.label}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
     </div>
   );
 }

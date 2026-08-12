@@ -40,59 +40,95 @@
   color: var(--color-text-muted);
 }
 
-/* Povprečje panoge stoji med vnosom in razponi, ker je po natančnosti tam: manj
-   od lastne številke, več od "nekje v tem pasu". Vizualno tiho iz istega razloga
-   kot razponi — ponujena pomoč, ne enakovredna možnost. */
-.average {
-  margin-top: var(--space-2);
+/*
+ * Oba izhoda v sili v eni tihi vrstici pod vnosnim poljem.
+ *
+ * Prej sta bila to dva bloka (črtkan gumb za povprečje in skupina štirih
+ * radijskih gumbov), oba naslovljena "Ne vem —". Videti sta bila kot enakovredni
+ * možnosti in sta stran napolnila s kontrolami. Zdaj sta besedilni: ponujena
+ * pomoč tistemu, ki številke nima, ne tretja pot za vse ostale.
+ */
+.fallbackRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
 }
 
-.averageButton {
-  min-height: 44px;
-  padding: var(--space-1) var(--space-3);
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-md);
+.fallbackLead {
+  color: var(--color-text-muted);
+}
+
+/*
+ * Videz povezave, ne gumba. Klikalna tarča ostane 44px visoka prek navpičnega
+ * odmika, negativni rob pa poskrbi, da povečana tarča ne razmakne vrstice —
+ * isti prijem kot pri gumbu "?" (HelpTip.module.css).
+ */
+.fallbackButton {
+  padding: var(--space-3) 0;
+  margin: calc(-1 * var(--space-3)) 0;
+  border: none;
   background: none;
   color: var(--color-text-muted);
   font: inherit;
   font-size: var(--font-size-sm);
   text-align: left;
+  text-decoration: underline;
   cursor: pointer;
 }
 
-.averageButton:hover {
-  border-color: var(--color-primary-text);
+.fallbackButton:hover {
   color: var(--color-text);
 }
 
-/* Prevzeto povprečje je polna črta in ne črtkana: takrat ni več ponudba, ampak
-   odgovor — enako kot izbran razpon. */
-.averageButtonActive {
-  border-style: solid;
-  border-color: var(--color-primary-text);
-  background: var(--color-accent);
+/* Prevzeto povprečje ni več ponudba, ampak odgovor — zato brez podčrtaja in v
+   barvi besedila, kot izbran razpon. */
+.fallbackButtonActive {
   color: var(--color-text);
   font-weight: 600;
+  text-decoration: none;
+}
+
+.fallbackSeparator {
+  color: var(--color-border);
+}
+
+/* Na ozkem zaslonu se vrstica prelomi in ločilo obvisi na koncu prve vrstice —
+   tam ne loči več ničesar. Ista meja kot pri ModuleInput. */
+@media (max-width: 520px) {
+  .fallbackSeparator {
+    display: none;
+  }
 }
 
 .averageNote {
-  margin: var(--space-1) 0 0;
+  margin: var(--space-2) 0 0;
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
 }
 
-/* Razponi so izhod v sili, ne enakovredna možnost — zato so vizualno tišji. */
+/* Vidno skrito, a še vedno v drevesu dostopnosti — ime skupine radijskih gumbov. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Razponi so izhod v sili, ne enakovredna možnost — zato so vizualno tišji in se
+   izrišejo šele, ko jih obiskovalec razgrne. Legenda je skrita (.srOnly): naslov
+   "Izberi razpon" nosi že gumb, ki jih je odprl. */
 .bands {
   border: none;
   padding: 0;
-  margin: var(--space-3) 0 0;
-}
-
-.bandsLegend {
-  padding: 0;
-  margin-bottom: var(--space-1);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
+  margin: var(--space-2) 0 0;
 }
 
 .bandOptions {

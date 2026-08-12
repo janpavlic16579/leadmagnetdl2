@@ -1,4 +1,4 @@
-import { industryAverageBand } from '../config/contexts';
+import { industryAverageBand, industryAverageScaleBand } from '../config/contexts';
 import type {
   BusinessProfile,
   CostAssumption,
@@ -73,9 +73,18 @@ function costRange(question: CostQuestion | undefined, assumption: CostAssumptio
 }
 
 function scaleRange(question: ScaleQuestion | undefined, assumption: ScaleAssumption): ValueRange {
-  if (question && assumption.source === 'band') {
-    const band = question.bands.find((candidate) => candidate.id === assumption.bandId);
-    if (band) return { low: band.min, high: band.max };
+  if (question) {
+    if (assumption.source === 'band') {
+      const band = question.bands.find((candidate) => candidate.id === assumption.bandId);
+      if (band) return { low: band.min, high: band.max };
+    }
+    // Enako kot pri urni postavki: prevzeto povprečje je ocena z razpršenostjo.
+    // Brez te veje bi isti klik pri marži dal navidezno natančno točko, pri urni
+    // postavki pa razpon — ista poteza z dvema različnima merama natančnosti.
+    if (assumption.source === 'industryAverage') {
+      const band = industryAverageScaleBand(question);
+      if (band) return { low: band.min, high: band.max };
+    }
   }
   return { low: assumption.value, high: assumption.value };
 }
