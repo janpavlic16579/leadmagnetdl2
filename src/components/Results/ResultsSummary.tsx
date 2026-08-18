@@ -71,7 +71,10 @@ export function ResultsSummary({ totals, totalsRange, directLossNote }: ResultsS
           <Figure
             title="Nezaslužena letna marža"
             value={amount(totals.lostMarginEUR, totalsRange?.lostMargin)}
-            note="Marža, ki je niste zaslužili — prazna polica, odpovedano naročilo, prodaja po napačni ceni. Ni odtekel denar, zato je prikazana ločeno."
+            // Besedilo je namerno panožno nevtralno: koš 'lostMargin' zdaj polni šest
+            // dejavnosti, ne le maloprodaja. Prejšnji primeri ("prazna polica") so bili
+            // trgovinski in so v proizvodnji, storitvah in računovodstvu zveneli tuje.
+            note="Marža, ki je niste zaslužili — posel, do katerega ni prišlo, ali prodaja po napačni ceni. Denar ni odtekel, zato je prikazana ločeno."
           />
         ) : null}
 

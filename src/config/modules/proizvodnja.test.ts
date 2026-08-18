@@ -159,10 +159,17 @@ describe('Roki in nujni stroški', () => {
     mainCause: 3, // Zunanji dobavitelji ali kupci → external
   });
 
-  it('denarni stroški so neposredne izgube', () => {
+  // Namerna sprememba pričakovanja: izgubljena prispevna marža je bila prestavljena iz
+  // 'directLoss' v 'lostMargin'. Ekspresna nabava in penal sta plačana in dokazljiva na
+  // kontu; odpovedano naročilo je denar, ki ni nikoli prišel. Test meri prav to ločnico.
+  it('plačani stroški so neposredne izgube, odpovedano naročilo pa nezaslužena marža', () => {
     const directLoss = outputs.filter((output) => output.bucket === 'directLoss');
-    expect(directLoss).toHaveLength(3);
-    expect(directLoss.reduce((sum, output) => sum + (output.valueEUR ?? 0), 0)).toBe(35_000);
+    expect(directLoss).toHaveLength(2);
+    expect(directLoss.reduce((sum, output) => sum + (output.valueEUR ?? 0), 0)).toBe(23_000);
+
+    const lostMargin = outputs.filter((output) => output.bucket === 'lostMargin');
+    expect(lostMargin).toHaveLength(1);
+    expect(lostMargin[0].valueEUR).toBe(12_000);
   });
 
   it('obveščanje kupcev je kapaciteta', () => {

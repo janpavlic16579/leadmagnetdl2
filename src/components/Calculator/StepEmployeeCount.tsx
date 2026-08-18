@@ -13,9 +13,14 @@ interface StepEmployeeCountProps {
 
 /**
  * Število zaposlenih ima svoj korak, ker z dejavnostjo nima ničesar skupnega:
- * dejavnost določi celoten nadaljnji vprašalnik, ta podatek pa v nobeno formulo
- * ne vstopi — iz njega se izpelje samo velikostni razred v poročilu
- * (config/sizeClasses.ts), da uporabnik istega podatka ne vnaša dvakrat.
+ * dejavnost določi celoten nadaljnji vprašalnik.
+ *
+ * V nobeno formulo res ne vstopi, ni pa neuporabljen — trditev "na izračun ne
+ * vpliva" je bila zavajajoča v obe smeri. Iz njega se izpelje velikostni razred
+ * v poročilu (config/sizeClasses.ts), predvsem pa ovojnica verjetnosti
+ * (lib/plausibility.ts): vnesene ure se primerjajo s kapaciteto ekipe in
+ * izračun opozori, kadar jih je preveč. Nosi tudi del ICP ocene in oceno
+ * velikosti posla v prodajni pripravi (config/icp.ts).
  */
 export function StepEmployeeCount({ value, onChange, stepLabel, onNext, onBack }: StepEmployeeCountProps) {
   const canProceed = value.employeeCount > 0;
@@ -42,8 +47,8 @@ export function StepEmployeeCount({ value, onChange, stepLabel, onNext, onBack }
       </div>
 
       <p className={styles.trustNote}>
-        Podatek na izračun ne vpliva — iz njega izpeljemo le velikostni razred podjetja, ki se izpiše v
-        poročilu.
+        Podatek ne vstopa v noben znesek — iz njega izpeljemo velikostni razred podjetja in preverimo,
+        ali so vnesene ure skladne z velikostjo vaše ekipe.
       </p>
 
       <div className={styles.stickyFooter}>

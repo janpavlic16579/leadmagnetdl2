@@ -6,7 +6,9 @@ import {
   REDUCIBLE_STOCK_EXPLAINER,
   reducibleShareField,
   reducibleShareOf,
-  riskLevelFromScore,
+  ASSURANCE_UNANSWERED,
+  ASSURANCE_UNANSWERED_NOTE,
+  assuranceRiskLevel,
 } from './shared';
 
 /**
@@ -200,7 +202,18 @@ export const napake: ModuleDefinition = {
       min: 0,
       max: 0.1,
       step: 0.005,
-      default: 0.02,
+      // Privzetek 0 in ne 0,02: znesek nastane kot zmnožek treh polj, od katerih je število
+      // pošiljk nevtralen podatek, ki ga vsak vpiše takoj. Pri 5.000 pošiljkah na mesec sta
+      // nedotaknjena privzetka 0,02 in 40 EUR sama proizvedla 48.000 EUR neposredne izgube.
+      // Delež napak je edino od treh polj, ki trdi, da težava obstaja — mora priti od
+      // obiskovalca. Strošek napake ostane s privzetkom, ker brez deleža ne množi ničesar.
+      default: 0,
+      help:
+        'Samo pošiljke, ki so terjale popravek — ponovno dostavo, prepakiranje ali vračilo. ' +
+        'Zamude brez napake v vsebini sodijo v področje Roki.',
+      explainer:
+        'Če deleža ne vodite, ga ocenite iz reklamacij: koliko primerov na mesec delite s ' +
+        'številom pošiljk. Primer: 60 reklamacij pri 5.000 pošiljkah je 1,2 %.',
     },
     {
       key: 'costPerErrorEUR',
@@ -223,6 +236,7 @@ export const napake: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
       help: 'Samo del, ki ga ni pokrilo zavarovanje.',
       explainer:
         'Vrednost poškodovanega ali izgubljenega blaga, ki ste jo nosili vi — nad odbitno franšizo ' +
@@ -329,6 +343,7 @@ export const skladisce: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
     },
     reducibleShareField(
       'Kolikšen delež zaloge bi po vaši oceni lahko znižali brez večjega tveganja za oskrbo?',
@@ -528,6 +543,7 @@ export const roki: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
       help: 'Samo dodatni strošek nad ceno običajnega prevoza.',
       explainer:
         'Samo doplačilo nad redno ceno: podizvajalec v zadnjem hipu, ekspresni prevoz, dodatna vožnja. ' +
@@ -540,6 +556,7 @@ export const roki: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
       help: 'Stojnine, ki jih plačate vi (demurrage, detention), ne tiste, ki jih zaračunate stranki.',
       explainer:
         'Denar, ki ste ga plačali ali vam je bil odbit zaradi zamude: pogodbeni penali, stojnine ' +
@@ -552,6 +569,7 @@ export const roki: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
       help: 'Ne vpisujte celotne vrednosti izgubljenega posla.',
       explainer:
         'Ne vrednost izgubljenega posla, ampak samo marža, ki bi vam ostala. Primer: izgubljena pogodba ' +
@@ -587,7 +605,9 @@ export const roki: ModuleDefinition = {
         addressableShare,
       },
       {
-        bucket: 'directLoss',
+        // Koš 'lostMargin' in ne 'directLoss' — glej razlago pri istem polju v proizvodnji:
+        // izgubljen posel je denar, ki ni nikoli prišel, in ga ni mogoče pokazati na kontu.
+        bucket: 'lostMargin',
         label: 'Izgubljena prispevna marža',
         valueEUR: input.lostMarginEUR,
         addressableShare,
@@ -640,47 +660,49 @@ export const diagnostikaLogistika: ModuleDefinition = {
       key: 'realtimeRecording',
       label: 'Ali se opravljene vožnje, kilometri in ure evidentirajo sproti?',
       kind: 'choice',
-      default: 1,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
     {
       key: 'knowsTripCost',
       label: 'Ali poznate dejansko lastno ceno posamezne vožnje oziroma pošiljke?',
       kind: 'choice',
-      default: 1,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
     {
       key: 'shipmentTraceability',
       label: 'Ali lahko kadar koli zanesljivo poveste, kje je posamezna pošiljka?',
       kind: 'choice',
-      default: 2,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
     {
       key: 'keyPersonIndependence',
       label: 'Ali razporejanje prevozov deluje normalno tudi brez ključne osebe?',
       kind: 'choice',
-      default: 1,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
   ],
   compute: (input) => {
-    const dataLevel = riskLevelFromScore(input.realtimeRecording + input.knowsTripCost, 6);
-    const processLevel = riskLevelFromScore(input.shipmentTraceability + input.keyPersonIndependence, 6);
+    const dataLevel = assuranceRiskLevel(input.realtimeRecording, input.knowsTripCost);
+    const processLevel = assuranceRiskLevel(input.shipmentTraceability, input.keyPersonIndependence);
 
     return [
       {
         bucket: 'risk',
         label: 'Zanesljivost podatkov',
-        riskLevel: dataLevel,
-        note: DATA_RISK_NOTE[dataLevel],
+        ...(dataLevel
+          ? { riskLevel: dataLevel, note: DATA_RISK_NOTE[dataLevel] }
+          : { note: ASSURANCE_UNANSWERED_NOTE }),
       },
       {
         bucket: 'risk',
         label: 'Procesna odpornost',
-        riskLevel: processLevel,
-        note: PROCESS_RISK_NOTE[processLevel],
+        ...(processLevel
+          ? { riskLevel: processLevel, note: PROCESS_RISK_NOTE[processLevel] }
+          : { note: ASSURANCE_UNANSWERED_NOTE }),
       },
     ];
   },

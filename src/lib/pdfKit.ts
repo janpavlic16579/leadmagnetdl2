@@ -67,6 +67,17 @@ export const RISK_LEVEL_LABEL: Record<RiskLevel, string> = {
   high: 'visoko tveganje',
 };
 
+/**
+ * Oznaka za tveganje BREZ stopnje — kadar obiskovalec na diagnostična vprašanja
+ * para ni odgovoril (glej assuranceRiskLevel v config/modules/shared.ts).
+ *
+ * Obstaja, ker so izrisovalniki doslej manjkajočo stopnjo brali kot `?? 'low'`.
+ * To ni nevtralen privzetek, ampak najbolj pomirjujoča od treh možnih trditev:
+ * PDF bi podjetju, ki ni odgovorilo, sporočil "nizko tveganje". Barve ostanejo
+ * nevtralne (kot pri 'low'), besedilo pa pove resnico.
+ */
+export const RISK_LEVEL_UNRATED_LABEL = 'ni ocenjeno';
+
 /** Preslikava iz RiskCard.module.css — low je nevtralen krem, medium/high opozorilna barva. */
 export const RISK_LEVEL_COLORS: Record<RiskLevel, { bg: RGB; border: RGB; text: RGB; bold: boolean }> = {
   low: { bg: PALETTE.cream, border: PALETTE.border, text: PALETTE.textMuted, bold: false },

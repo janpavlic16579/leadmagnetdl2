@@ -518,7 +518,10 @@ function drawRisksSection(doc: jsPDF, risks: ModuleOutput[], startY: number): nu
   y += intro.length * 4.5 + 4;
 
   for (const risk of risks) {
+    // Nevtralne barve ('low'), a besedilo pove, da ocene ni — sicer bi PDF podjetju,
+    // ki na diagnostiko ni odgovorilo, sporočil "nizko tveganje".
     const level: RiskLevel = risk.riskLevel ?? 'low';
+    const levelLabel = risk.riskLevel ? RISK_LEVEL_LABEL[risk.riskLevel] : RISK_LEVEL_UNRATED_LABEL;
     const colors = RISK_LEVEL_COLORS[level];
 
     setFont(doc, 'semibold');
@@ -537,7 +540,7 @@ function drawRisksSection(doc: jsPDF, risks: ModuleOutput[], startY: number): nu
     setFont(doc, colors.bold ? 'bold' : 'normal');
     doc.setFontSize(8);
     doc.setTextColor(...colors.text);
-    doc.text(RISK_LEVEL_LABEL[level], MARGIN + CONTENT_WIDTH - 4, y + 6, { align: 'right' });
+    doc.text(levelLabel, MARGIN + CONTENT_WIDTH - 4, y + 6, { align: 'right' });
 
     if (noteLines.length > 0) {
       setFont(doc, 'normal');

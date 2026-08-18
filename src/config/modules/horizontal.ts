@@ -49,11 +49,17 @@ export const analitikaHz: ModuleDefinition = {
   fields: [
     {
       key: 'reportPrepHoursPerMonth',
-      label: 'Koliko ur mesečno gre za ročno pripravo rednih poročil za vodstvo ali lastnike?',
+      // "vašega podjetja" je nosilno in ne okrasno: v računovodskem servisu je bilo to
+      // polje neločljivo od priprave poročil ZA STRANKE, ki jo meri panožno področje.
+      // Zamejitev je izražena vsebinsko in ne z imenom sosednjega področja — horizontala
+      // je ista v šestih dejavnostih in ne sme imenovati področja, ki ga v peti ni
+      // (glej pravilo na vrhu datoteke).
+      label:
+        'Koliko ur mesečno gre za ročno pripravo rednih poročil za vodstvo ali lastnike vašega podjetja?',
       kind: 'number',
       unit: 'h/mesec',
       default: 0,
-      help: 'Ure, ki ste jih že vpisali v drugem področju, tu ne ponavljajte.',
+      help: 'Samo poročila, po katerih vodite svoje podjetje. Ure, ki ste jih že vpisali v drugem področju, tu ne ponavljajte.',
       explainer:
         'Ročno sestavljanje poročil: izvoz v Excel, lepljenje, oblikovanje, usklajevanje številk pred ' +
         'sestankom. Ocenite: koliko poročil na mesec × koliko ur na poročilo. Primer: 4 poročila × 3 h ≈ ' +
@@ -185,12 +191,22 @@ export const financeHz: ModuleDefinition = {
       default: 0,
     },
     {
+      // "zaradi davčnih obračunov in poročanja" je nosilna zamejitev: zamudne obresti so
+      // bile naštete kot primer tudi pri dokumentih (annualDocDelayEUR), zato je
+      // obiskovalec, ki je izbral obe področji, isti znesek vpisal dvakrat. Vsako polje
+      // je zdaj omejeno na svoj vzrok — tu obračun, tam prepozno potrjen dokument.
       key: 'annualPenaltyEUR',
       label:
-        'Koliko so v zadnjih 12 mesecih znašale zamudne obresti, globe in stroški popravkov obračunov?',
+        'Koliko so v zadnjih 12 mesecih znašale zamudne obresti, globe in stroški popravkov zaradi davčnih obračunov in poročanja?',
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
+      help: 'Samo posledice napačnega ali prepoznega obračuna. Stroške prepozno potrjenih dokumentov merimo posebej.',
+      explainer:
+        'Seštejte zadnjih 12 mesecev: zamudne obresti na davčne obveznosti, globe zaradi ' +
+        'prepozne oddaje, stroški popravkov in samoprijav. Primer: 2 samoprijavi × 400 EUR + ' +
+        '600 EUR obresti ≈ 1.400 EUR.',
     },
     mainCauseField(FINANCE_CAUSES),
   ],
@@ -261,11 +277,16 @@ export const kadriHz: ModuleDefinition = {
   fields: [
     {
       key: 'timesheetHoursPerMonth',
-      label: 'Koliko ur mesečno gre za zbiranje in urejanje evidenc prisotnosti in delovnih ur?',
+      // "za plačo, ne za račun naročniku" je nosilna zamejitev: v storitvenih podjetjih je
+      // bilo to polje neločljivo od projektne časovnice, ki je podlaga za obračun stranki.
+      // Meja je izražena vsebinsko in ne z imenom sosednjega področja — horizontala je ista
+      // v sedmih dejavnostih (glej pravilo na vrhu datoteke).
+      label:
+        'Koliko ur mesečno gre za zbiranje in urejanje evidenc prisotnosti in delovnih ur vaših zaposlenih?',
       kind: 'number',
       unit: 'h/mesec',
       default: 0,
-      help: 'Ure, ki ste jih že vpisali v drugem področju, tu ne ponavljajte.',
+      help: 'Evidenca za plačo, ne za račun naročniku. Ure, ki ste jih že vpisali v drugem področju, tu ne ponavljajte.',
       explainer:
         'Zbiranje in urejanje evidenc: prepisovanje listov, lovljenje manjkajočih vnosov, popravki pred ' +
         'obračunom plač. Ocenite: koliko ur ob koncu meseca × koliko oseb to dela. Primer: 2 osebi × 5 h ' +
@@ -293,6 +314,7 @@ export const kadriHz: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
     },
     mainCauseField(KADRI_CAUSES),
   ],
@@ -341,7 +363,12 @@ export const kadriHz: ModuleDefinition = {
 
 const DOKUMENTI_CAUSES: CauseOption[] = [
   { label: 'Dokumenti so v mapah in e-pošti, ne v sistemu', category: 'data' },
-  { label: 'Potrjevanje poteka ročno, po e-pošti ali na papirju', category: 'planning' },
+  // Kategorija 'data' in ne 'planning': ročno potrjevanje po e-pošti je ročni prenos
+  // dokumenta, kar je drugod v registru dosledno uvrščeno med podatkovne vzroke
+  // (npr. "Podatke vodimo v več različnih orodjih", "Dokumenti so v mapah in e-pošti").
+  // Kot 'planning' je isti vzrok dobil 65 % namesto 75 % naslovljivega deleža —
+  // razlika ni kozmetična, ker vstopa neposredno v realistični potencial.
+  { label: 'Potrjevanje poteka ročno, po e-pošti ali na papirju', category: 'data' },
   { label: 'Dokumenti prihajajo papirno ali kot skeni', category: 'external' },
   { label: 'Ni jasno, katera različica dokumenta je veljavna', category: 'data' },
   { label: 'Le ena oseba ve, kje kaj je', category: 'people' },
@@ -391,12 +418,21 @@ export const dokumentiHz: ModuleDefinition = {
       default: 0,
     },
     {
+      // Brez "zamudnih obresti" v naštevanju: isti primer je stal tudi pri financah
+      // (annualPenaltyEUR) in je vabil k dvojnemu vpisu istega zneska. Ostanejo primeri,
+      // ki jih povzroči izključno pot dokumenta.
       key: 'annualDocDelayEUR',
       label:
-        'Koliko so v zadnjih 12 mesecih stali izgubljeni ali prepozno potrjeni dokumenti (zamujeni skonti, zamudne obresti, ponovna izstavitev)?',
+        'Koliko so v zadnjih 12 mesecih stali izgubljeni ali prepozno potrjeni dokumenti (zamujeni skonti, opomini dobaviteljev, ponovna izstavitev)?',
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
+      help: 'Samo posledice poti dokumenta. Obresti in globe zaradi davčnih obračunov merimo posebej.',
+      explainer:
+        'Seštejte zadnjih 12 mesecev: zamujeni skonti za predčasno plačilo, stroški ponovne ' +
+        'izstavitve izgubljenih dokumentov, opomini zaradi računa, ki je obtičal v potrjevanju. ' +
+        'Primer: 20 zamujenih skontov × 80 EUR ≈ 1.600 EUR.',
     },
     mainCauseField(DOKUMENTI_CAUSES),
   ],
@@ -503,6 +539,7 @@ export const servisHz: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
       help: 'Samo stroški, ki še niso zajeti drugje — dobropisi, vračila kupnine in poškodovano blago sem ne sodijo.',
       explainer:
         'Denar, ki odteče poleg porabljenih ur: nadomestni deli, prevozi na teren, zunanji servis, ' +

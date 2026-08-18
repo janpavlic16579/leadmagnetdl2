@@ -175,9 +175,13 @@ describe('Neobračunano delo in donosnost strank', () => {
     expect(pick(outputs, 'Neobračunano opravljeno delo').hoursPerMonth).toBe(50);
   });
 
-  it('primanjkljaj pri strankah pod lastno ceno je denar, ki odteka', () => {
+  // Namerna sprememba pričakovanja: postavka je bila prestavljena iz 'directLoss' v
+  // 'lostMargin'. Znesek stoji na oceni stroška po stranki, ki je servis po lastni
+  // diagnostiki pogosto ne pozna, njegova odprava pa predpostavlja dvig cene ali odhod
+  // stranke — torej odločitev in odziv, ne knjižen odliv. Vrednost ostaja ista.
+  it('primanjkljaj pri strankah pod lastno ceno je nezaslužena marža', () => {
     const item = pick(outputs, 'Stranke pod lastno ceno');
-    expect(item.bucket).toBe('directLoss');
+    expect(item.bucket).toBe('lostMargin');
     expect(item.valueEUR).toBe(6 * 150 * MONTHS);
   });
 

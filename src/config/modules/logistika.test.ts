@@ -182,10 +182,18 @@ describe('Zamude, stojnine in nujni prevozi', () => {
     mainCause: 3, // Stranke, podizvajalci ali carina → external
   });
 
-  it('denarni stroški so neposredne izgube', () => {
+  // Namerna sprememba pričakovanja: izgubljena prispevna marža je bila prestavljena iz
+  // 'directLoss' v 'lostMargin'. Ekspresni prevoz in penal sta plačana in vidna na kontu;
+  // izgubljen posel stoji na predpostavki, kaj bi stranka storila. Test zato meri prav
+  // to ločnico — če bi kdo postavki spet združil, bi padel.
+  it('plačani stroški so neposredne izgube, izgubljen posel pa nezaslužena marža', () => {
     const directLoss = outputs.filter((output) => output.bucket === 'directLoss');
-    expect(directLoss).toHaveLength(3);
-    expect(directLoss.reduce((sum, output) => sum + (output.valueEUR ?? 0), 0)).toBe(43_000);
+    expect(directLoss).toHaveLength(2);
+    expect(directLoss.reduce((sum, output) => sum + (output.valueEUR ?? 0), 0)).toBe(29_000);
+
+    const lostMargin = outputs.filter((output) => output.bucket === 'lostMargin');
+    expect(lostMargin).toHaveLength(1);
+    expect(lostMargin[0].valueEUR).toBe(14_000);
   });
 
   it('obveščanje strank je kapaciteta', () => {

@@ -36,13 +36,40 @@ export const RECEIVABLES_CAPITAL_COST = 0.06;
  */
 export const INVENTORY_CAPITAL_COST = RECEIVABLES_CAPITAL_COST;
 
-/** Enotne stopnje za diagnostična vprašanja — višja ocena pomeni večje tveganje. */
+/**
+ * Vrednost, ki pomeni "na to vprašanje nismo odgovorili".
+ *
+ * Ni ocena in v vsoto ne vstopa. Obstaja, ker so bili privzetki diagnostike doslej
+ * sredinski odgovori (1, 1, 2, 1): obiskovalec, ki koraka ni niti odprl, je na
+ * rezultatih dobil DVE oceni "srednje tveganje", zapisani kot dejstvo, in ti dve
+ * oceni sta šli tudi v PDF in v prodajno pripravo. Sodba o podjetju brez enega
+ * samega podatka o podjetju.
+ *
+ * Zakaj ne preprosto privzetek 0: to bi tiho trdilo "vse je zanesljivo" in samo
+ * obrnilo smer napake. Odsotnost odgovora mora biti razpoznavna kot odsotnost.
+ */
+export const ASSURANCE_UNANSWERED = 4;
+
+/**
+ * Enotne stopnje za diagnostična vprašanja — višja ocena pomeni večje tveganje.
+ *
+ * Peta možnost NAMERNO nima `unknown: true`, čeprav pomeni neznanje. Zastavica v
+ * potential.ts prepove oznako "visoka zanesljivost" za celoten izračun, diagnostika
+ * pa ne prispeva nobenega evra — nedotaknjen diagnostični korak zato ne sme znižati
+ * zanesljivosti denarnega dela. Da odgovor manjka, je razvidno iz besedila možnosti,
+ * ki se izpiše tudi v prodajni pripravi.
+ */
 export const ASSURANCE_CHOICES: FieldChoice[] = [
   { value: 0, label: 'Da, zanesljivo' },
   { value: 1, label: 'Večinoma' },
   { value: 2, label: 'Le približno' },
   { value: 3, label: 'Ne' },
+  { value: ASSURANCE_UNANSWERED, label: 'Nismo preverili' },
 ];
+
+/** Opomba ob paru, na katerega obiskovalec ni odgovoril. */
+export const ASSURANCE_UNANSWERED_NOTE =
+  'Ni ocenjeno — na ta vprašanja niste odgovorili. Stopnje tveganja zato ne prikazujemo; ocene si ne izmišljamo.';
 
 export function riskLevelFromScore(score: number, maxScore: number): RiskLevel {
   const ratio = score / maxScore;
@@ -52,9 +79,43 @@ export function riskLevelFromScore(score: number, maxScore: number): RiskLevel {
 }
 
 /**
+ * Stopnja tveganja iz para diagnostičnih odgovorov.
+ *
+ * Neodgovorjena vprašanja se izločijo, najvišja možna ocena pa se skrči na tista,
+ * ki so bila odgovorjena — sicer bi en sam odgovor "Ne" (3) ob enem neodgovorjenem
+ * dal razmerje 3/6 in bi bil videti kot zmerno tveganje, čeprav je edini prejeti
+ * odgovor najslabši možen.
+ *
+ * Vrne `undefined`, kadar ni odgovorjeno nobeno vprašanje para. Izid tedaj ostane
+ * brez `riskLevel` (na ModuleOutputDraft je neobvezen, RiskCard odsotnost prenese),
+ * kar je edini pošten prikaz: brez odgovora ni sodbe.
+ */
+export function assuranceRiskLevel(...answers: number[]): RiskLevel | undefined {
+  const answered = answers.filter((value) => value !== ASSURANCE_UNANSWERED);
+  if (answered.length === 0) return undefined;
+
+  const score = answered.reduce((sum, value) => sum + value, 0);
+  return riskLevelFromScore(score, 3 * answered.length);
+}
+
+/**
  * Deleži za izbrane razpone znižanja zaloge. Vrednosti polja so INDEKSI, ne
  * deleži: "Ne vem" pade na isti konservativni delež kot "Do 5 %", enaki
  * vrednosti pa bi v ModuleInput označili dva radia hkrati (glej FieldChoice).
+ *
+ * ODPRTO VPRAŠANJE KALIBRACIJE (ni popravljeno namenoma).
+ * Pregled maloprodaje (ZM-06) predlaga [0.03, 0.08, 0.15, 0.20, 0.03] z utemeljitvijo,
+ * da je zgornji pas 0,22 približno 2,2-krat nad najvišjo vrednostjo iz raziskave
+ * (sklic "A18"). Te trditve v dostopnem gradivu ni bilo mogoče preveriti: v
+ * Raziskava_maloprodaja_PANTHEON.md je ni, register v .xlsx pa se ni dal prebrati.
+ *
+ * Zamenjava ene neutemeljene številke z drugo neutemeljeno ni izboljšava, zato
+ * vrednosti ostajajo. Preden se spremenijo, je treba iz registra prebrati dejansko
+ * predpostavko A18 in jo zapisati sem kot vir.
+ *
+ * Dodatna previdnost, kadar se to zgodi: ta nabor uporablja ŠEST dejavnosti, v
+ * storitve.ts pa isti delež množi nezaračunano delo (WIP) in ne zaloge blaga —
+ * maloprodajna predpostavka tam ne velja in potrebuje svojo kalibracijo.
  */
 const REDUCIBLE_SHARES = [0.05, 0.08, 0.15, 0.22, 0.05];
 

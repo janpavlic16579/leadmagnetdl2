@@ -239,8 +239,11 @@ export const SEGMENTS: Record<SegmentId, SegmentConfig> = {
     // Ročni vnos, lovljenje listin in konice ob rokih so dnevna bolečina servisa —
     // prva tri po vrstnem redu, zato defaultIds ni potreben.
     triage: { recommendedCount: 3 },
+    // Stranke pod lastno ceno so bile s seznama umaknjene: postavka je prestavljena v koš
+    // 'lostMargin', ker stoji na oceni stroška po stranki in predpostavlja dvig cene ali
+    // odhod stranke. Opomba sme našteti samo tisto, kar je res knjižen odliv.
     directLossNote:
-      'Denar, ki dejansko odteka: zunanja pomoč v konicah, globe in obresti, samoprijave, dobropisi in stranke pod lastno ceno.',
+      'Denar, ki dejansko odteka: zunanja pomoč v konicah, globe in obresti, samoprijave in dobropisi.',
     // Rezerva, kadar področje Neobračunano delo ni med izbranimi v triaži — takrat
     // vprašanja o urah na stranko ni. Sicer velja obiskovalčev odgovor.
     accountingCapacity: { avgHoursPerClientPerMonth: 8 },

@@ -5,7 +5,9 @@ import {
   REDUCIBLE_STOCK_EXPLAINER,
   reducibleShareField,
   reducibleShareOf,
-  riskLevelFromScore,
+  ASSURANCE_UNANSWERED,
+  ASSURANCE_UNANSWERED_NOTE,
+  assuranceRiskLevel,
 } from './shared';
 import type { ModuleDefinition, ModuleField, RiskLevel } from './moduleTypes';
 
@@ -849,47 +851,49 @@ export const diagnostikaMp: ModuleDefinition = {
       key: 'stockAccuracy',
       label: 'Ali se zaloga v sistemu ujema z dejansko zalogo na polici?',
       kind: 'choice',
-      default: 1,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
     {
       key: 'knowsItemMargin',
       label: 'Ali poznate dejansko maržo po posameznem artiklu in poslovalnici?',
       kind: 'choice',
-      default: 1,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
     {
       key: 'goodsTraceability',
       label: 'Ali lahko za posamezen artikel zanesljivo ugotovite dobavitelja, serijo in rok uporabnosti?',
       kind: 'choice',
-      default: 2,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
     {
       key: 'keyPersonIndependence',
       label: 'Ali poslovalnica deluje normalno tudi brez ključne osebe?',
       kind: 'choice',
-      default: 1,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
   ],
   compute: (input) => {
-    const dataLevel = riskLevelFromScore(input.stockAccuracy + input.knowsItemMargin, 6);
-    const processLevel = riskLevelFromScore(input.goodsTraceability + input.keyPersonIndependence, 6);
+    const dataLevel = assuranceRiskLevel(input.stockAccuracy, input.knowsItemMargin);
+    const processLevel = assuranceRiskLevel(input.goodsTraceability, input.keyPersonIndependence);
 
     return [
       {
         bucket: 'risk',
         label: 'Zanesljivost podatkov',
-        riskLevel: dataLevel,
-        note: DATA_RISK_NOTE[dataLevel],
+        ...(dataLevel
+          ? { riskLevel: dataLevel, note: DATA_RISK_NOTE[dataLevel] }
+          : { note: ASSURANCE_UNANSWERED_NOTE }),
       },
       {
         bucket: 'risk',
         label: 'Procesna odpornost',
-        riskLevel: processLevel,
-        note: PROCESS_RISK_NOTE[processLevel],
+        ...(processLevel
+          ? { riskLevel: processLevel, note: PROCESS_RISK_NOTE[processLevel] }
+          : { note: ASSURANCE_UNANSWERED_NOTE }),
       },
     ];
   },

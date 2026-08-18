@@ -73,9 +73,13 @@ describe('Naročila, ponudbe in cene', () => {
     );
   });
 
-  it('izgubljena marža zaradi napačnih cen je neposredna izguba', () => {
+  // Namerna sprememba pričakovanja: postavka je bila prestavljena iz 'directLoss' v
+  // 'lostMargin'. Marža, ki je nismo zaslužili zaradi napačne cene, stoji na oceni, kaj
+  // bi kupec plačal — ni knjižen odliv. V istem košu z odpisi je prvi ugovor podrl tudi
+  // dokazljivi del naslovnega zneska.
+  it('izgubljena marža zaradi napačnih cen je nezaslužena marža, ne neposredna izguba', () => {
     const item = pick(outputs, 'Izgubljena marža zaradi napačnih cen');
-    expect(item.bucket).toBe('directLoss');
+    expect(item.bucket).toBe('lostMargin');
     expect(item.valueEUR).toBe(25_000);
   });
 
@@ -130,10 +134,13 @@ describe('Zaloge, nekurantnost in izpad prodaje', () => {
     mainCause: 1, // Stanje zalog v sistemu ni zanesljivo → data
   });
 
-  it('odpisi in izgubljena marža sta neposredni izgubi', () => {
+  // Namerna sprememba pričakovanja: odpis ostane 'directLoss' (knjižen odliv), izpad
+  // prodaje pa je prestavljen v 'lostMargin' (predpostavka, da bi kupec kupil, če bi
+  // blago bilo). Prav ta razlika v dokazu je razlog, da koša obstajata ločeno.
+  it('odpis je neposredna izguba, izpad prodaje pa nezaslužena marža', () => {
     expect(pick(outputs, 'Odpisi in nekurantna zaloga').bucket).toBe('directLoss');
     expect(pick(outputs, 'Odpisi in nekurantna zaloga').valueEUR).toBe(30_000);
-    expect(pick(outputs, 'Izgubljena marža zaradi manjkajočega blaga').bucket).toBe('directLoss');
+    expect(pick(outputs, 'Izgubljena marža zaradi manjkajočega blaga').bucket).toBe('lostMargin');
     expect(pick(outputs, 'Izgubljena marža zaradi manjkajočega blaga').valueEUR).toBe(45_000);
   });
 
@@ -352,7 +359,13 @@ describe('Skupne lastnosti stroškovnih modulov', () => {
   it('vsako področje meri svoj korak poti blaga — nobeno ne podvaja sosednjega', () => {
     // Meja je časovna: naročilo -> skladišče -> zaloga -> odprema -> plačilo.
     // Če bi kdo dodal polje v napačno področje, bi tu padlo število postavk.
-    expect(run(narocilaTrgovina).filter((o) => o.bucket === 'directLoss')).toHaveLength(1);
+    //
+    // Naročila nimajo nobene postavke v 'directLoss': edini denarni izid področja je
+    // izgubljena marža zaradi napačnih cen, ki je namerno v košu 'lostMargin'. Štejemo
+    // zato oba denarna koša skupaj — sicer bi test meril razvrstitev in ne meje področja.
+    expect(
+      run(narocilaTrgovina).filter((o) => o.bucket === 'directLoss' || o.bucket === 'lostMargin'),
+    ).toHaveLength(1);
     expect(run(skladisceTrgovina).every((o) => o.bucket === 'capacity')).toBe(true);
     expect(run(zalogeTrgovina).some((o) => o.bucket === 'capacity')).toBe(false);
     expect(run(odpremaTrgovina).filter((o) => o.bucket === 'directLoss')).toHaveLength(3);

@@ -165,7 +165,7 @@ function drawSummary(doc: jsPDF, report: SalesReport, startY: number): number {
   const rows: string[][] = [
     ['Neposredne letne izgube', value(s.directLossEUR, s.rangeEUR?.directLoss), 'Denar, ki odteka'],
     ...(s.lostMarginEUR > 0
-      ? [['Nezaslužena letna marža', value(s.lostMarginEUR, s.rangeEUR?.lostMargin), 'Prazna polica, napačna cena']]
+      ? [['Nezaslužena letna marža', value(s.lostMarginEUR, s.rangeEUR?.lostMargin), 'Posel, do katerega ni prišlo']]
       : []),
     [
       'Vrednost izgubljene kapacitete',
@@ -219,13 +219,15 @@ function drawTriage(doc: jsPDF, report: SalesReport, startY: number): number {
 
   let y = ensurePageSpace(doc, startY, 30);
 
-  const painfulUnmeasured = report.triage.filter((row) => !row.measured && row.score >= 2);
+  const painfulUnmeasured = report.triage.filter(
+    (row) => !row.measured && row.score !== null && row.score >= 2,
+  );
 
   y = drawTable(doc, {
     head: ['Področje', 'Ocena stranke', 'Izmerjeno'],
     rows: report.triage.map((row) => [
       row.title,
-      row.scoreLabel ? `${row.scoreLabel} (${row.score}/3)` : String(row.score),
+      row.scoreLabel ? `${row.scoreLabel} (${row.score}/3)` : 'ni ocenjeno',
       row.measured ? 'da' : 'ne',
     ]),
     startY: y,
@@ -325,7 +327,9 @@ function drawRisks(doc: jsPDF, report: SalesReport, startY: number): number {
   y = drawSubTitle(doc, 'Podatki, procesna tveganja in roki', y);
 
   for (const risk of report.risks) {
+    // Glej pdf.ts: nevtralne barve, a brez izmišljene stopnje v besedilu.
     const level = risk.riskLevel ?? 'low';
+    const levelLabel = risk.riskLevel ? RISK_LEVEL_LABEL[risk.riskLevel] : RISK_LEVEL_UNRATED_LABEL;
     const colors = RISK_LEVEL_COLORS[level];
     setFont(doc, 'normal');
     doc.setFontSize(8.5);
@@ -346,7 +350,7 @@ function drawRisks(doc: jsPDF, report: SalesReport, startY: number): number {
     setFont(doc, colors.bold ? 'bold' : 'normal');
     doc.setFontSize(8);
     doc.setTextColor(...colors.text);
-    doc.text(RISK_LEVEL_LABEL[level], PAGE_WIDTH - MARGIN - 4, y + 6, { align: 'right' });
+    doc.text(levelLabel, PAGE_WIDTH - MARGIN - 4, y + 6, { align: 'right' });
 
     if (noteLines.length > 0) {
       setFont(doc, 'normal');

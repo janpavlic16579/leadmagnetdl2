@@ -6,7 +6,9 @@ import {
   REDUCIBLE_STOCK_EXPLAINER,
   reducibleShareField,
   reducibleShareOf,
-  riskLevelFromScore,
+  ASSURANCE_UNANSWERED,
+  ASSURANCE_UNANSWERED_NOTE,
+  assuranceRiskLevel,
 } from './shared';
 
 /**
@@ -283,6 +285,7 @@ export const napakeSp: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
       help: 'Vpišite samo stroške, ki še niso zajeti v urah ponovnega dela.',
       explainer:
         'Denar, ki je odtekel zaradi napak: dobropisi, odškodnine, nadomestne dobave, dodatni prevozi. ' +
@@ -294,6 +297,7 @@ export const napakeSp: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
       help: 'Ne vpisujte celotne vrednosti izgubljenega posla.',
       explainer:
         'Ne vrednost izgubljenega posla, ampak samo marža, ki bi vam ostala. Primer: izgubljena stranka ' +
@@ -399,6 +403,7 @@ export const denarSp: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
     },
     {
       key: 'currentDSODays',
@@ -489,6 +494,7 @@ export const zalogeSp: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
     },
     reducibleShareField(
       'Kolikšen delež zalog bi po vaši oceni lahko znižali brez večjega tveganja za oskrbo?',
@@ -566,47 +572,49 @@ export const diagnostikaSp: ModuleDefinition = {
       key: 'knowsUnitCost',
       label: 'Ali poznate dejansko lastno ceno svojega izdelka, storitve ali posla?',
       kind: 'choice',
-      default: 1,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
     {
       key: 'singleSourceOfTruth',
       label: 'Ali so ključni poslovni podatki na enem mestu in med seboj usklajeni?',
       kind: 'choice',
-      default: 1,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
     {
       key: 'auditTrail',
       label: 'Ali lahko za pomembno spremembo ugotovite, kdo jo je naredil in kdaj?',
       kind: 'choice',
-      default: 2,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
     {
       key: 'keyPersonIndependence',
       label: 'Ali podjetje deluje normalno tudi brez ključne osebe?',
       kind: 'choice',
-      default: 1,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
   ],
   compute: (input) => {
-    const dataLevel = riskLevelFromScore(input.knowsUnitCost + input.singleSourceOfTruth, 6);
-    const processLevel = riskLevelFromScore(input.auditTrail + input.keyPersonIndependence, 6);
+    const dataLevel = assuranceRiskLevel(input.knowsUnitCost, input.singleSourceOfTruth);
+    const processLevel = assuranceRiskLevel(input.auditTrail, input.keyPersonIndependence);
 
     return [
       {
         bucket: 'risk',
         label: 'Zanesljivost podatkov',
-        riskLevel: dataLevel,
-        note: DATA_RISK_NOTE[dataLevel],
+        ...(dataLevel
+          ? { riskLevel: dataLevel, note: DATA_RISK_NOTE[dataLevel] }
+          : { note: ASSURANCE_UNANSWERED_NOTE }),
       },
       {
         bucket: 'risk',
         label: 'Procesna odpornost',
-        riskLevel: processLevel,
-        note: PROCESS_RISK_NOTE[processLevel],
+        ...(processLevel
+          ? { riskLevel: processLevel, note: PROCESS_RISK_NOTE[processLevel] }
+          : { note: ASSURANCE_UNANSWERED_NOTE }),
       },
     ];
   },

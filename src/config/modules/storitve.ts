@@ -4,7 +4,9 @@ import {
   MONTHS_PER_YEAR,
   reducibleShareField,
   reducibleShareOf,
-  riskLevelFromScore,
+  ASSURANCE_UNANSWERED,
+  ASSURANCE_UNANSWERED_NOTE,
+  assuranceRiskLevel,
 } from './shared';
 import type { ModuleDefinition, RiskLevel } from './moduleTypes';
 
@@ -164,12 +166,25 @@ export const obracun: ModuleDefinition = {
         'naredili kar tako", nedokazljive ure. Primer: 8 ljudi × 2 h na teden ≈ 69 ur na mesec.',
     },
     {
-      key: 'timesheetHoursPerMonth',
+      // Ključ je `projectTimesheetHoursPerMonth` in ne `timesheetHoursPerMonth`: pod
+      // slednjim imenom je isto polje obstajalo tudi v horizontali Kadri in plače, ki je
+      // v tem segmentu prav tako aktivna. Ločnica ni v besedah, ampak v namenu evidence:
+      // tu gre za časovnico po projektih in nalogah, ki je PODLAGA ZA RAČUN naročniku;
+      // tam za zakonsko evidenco prisotnosti, ki je podlaga za plačo. Obiskovalec, ki je
+      // izbral obe področji, je isto uro skoraj zagotovo vpisal dvakrat.
+      key: 'projectTimesheetHoursPerMonth',
       label:
-        'Koliko ur mesečno porabite za naknadno rekonstrukcijo, zbiranje in potrjevanje evidence dela?',
+        'Koliko ur mesečno porabite za naknadno rekonstrukcijo, zbiranje in potrjevanje evidence ur po projektih in nalogah?',
       kind: 'number',
       unit: 'h/mesec',
       default: 0,
+      help:
+        'Samo evidenca, ki je podlaga za račun naročniku. Evidenco prisotnosti, dopustov in ' +
+        'podlago za plačo meri področje Kadri in plače.',
+      explainer:
+        'Ure, ki gredo v urejanje časovnic po projektih: lovljenje nevpisanih ur, naknadno ' +
+        'razporejanje na naloge, potrjevanje pred izstavitvijo računa. Primer: 3 osebe × 4 h ob ' +
+        'koncu meseca ≈ 12 ur.',
     },
     {
       key: 'creditNoteCostEUR',
@@ -177,6 +192,7 @@ export const obracun: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
     },
     {
       key: 'recordingTiming',
@@ -217,8 +233,8 @@ export const obracun: ModuleDefinition = {
         // ki odteka. Zato kapaciteta po administrativni uri.
         bucket: 'capacity',
         label: 'Naknadna evidenca in potrjevanje ur',
-        valueEUR: input.timesheetHoursPerMonth * context.adminHourCostEUR * MONTHS_PER_YEAR,
-        hoursPerMonth: input.timesheetHoursPerMonth,
+        valueEUR: input.projectTimesheetHoursPerMonth * context.adminHourCostEUR * MONTHS_PER_YEAR,
+        hoursPerMonth: input.projectTimesheetHoursPerMonth,
         addressableShare,
       },
     ];
@@ -295,6 +311,7 @@ export const obseg: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
       help: 'Samo tisto, kar še ni zajeto v nezaračunanih urah ali v urah nad obsegom iz zgornjih vprašanj.',
       explainer:
         'Postavke, ki ste jih ob obračunu prečrtali ali znižali, da je račun šel skozi. Seštejte zadnjih ' +
@@ -467,6 +484,7 @@ export const terjatve: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
     },
     {
       key: 'lostMarginEUR',
@@ -474,6 +492,7 @@ export const terjatve: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
       help: 'Ne vpisujte celotne vrednosti izgubljenega posla.',
       explainer:
         'Ne vrednost izgubljenega projekta, ampak samo marža, ki bi vam ostala. Primer: odpovedan ' +
@@ -521,7 +540,10 @@ export const terjatve: ModuleDefinition = {
         addressableShare,
       },
       {
-        bucket: 'directLoss',
+        // Koš 'lostMargin' in ne 'directLoss' — glej razlago pri istem polju v proizvodnji:
+        // odpovedan projekt je denar, ki ni nikoli prišel, in stoji na predpostavki o
+        // vedenju naročnika.
+        bucket: 'lostMargin',
         label: 'Izgubljena prispevna marža',
         valueEUR: input.lostMarginEUR,
         addressableShare,
@@ -580,47 +602,49 @@ export const diagnostika: ModuleDefinition = {
       key: 'realtimeRecording',
       label: 'Ali se opravljene ure evidentirajo sproti, na dan izvedbe?',
       kind: 'choice',
-      default: 1,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
     {
       key: 'knowsProjectMargin',
       label: 'Ali poznate dejansko maržo posameznega projekta oziroma naročnika?',
       kind: 'choice',
-      default: 1,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
     {
       key: 'scopeDocumented',
       label: 'Ali je dogovorjeni obseg zapisan tako, da je spremembo mogoče dokazati?',
       kind: 'choice',
-      default: 2,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
     {
       key: 'keyPersonIndependence',
       label: 'Ali projekti tečejo normalno tudi brez ključne osebe?',
       kind: 'choice',
-      default: 1,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
   ],
   compute: (input) => {
-    const dataLevel = riskLevelFromScore(input.realtimeRecording + input.knowsProjectMargin, 6);
-    const processLevel = riskLevelFromScore(input.scopeDocumented + input.keyPersonIndependence, 6);
+    const dataLevel = assuranceRiskLevel(input.realtimeRecording, input.knowsProjectMargin);
+    const processLevel = assuranceRiskLevel(input.scopeDocumented, input.keyPersonIndependence);
 
     return [
       {
         bucket: 'risk',
         label: 'Zanesljivost podatkov',
-        riskLevel: dataLevel,
-        note: DATA_RISK_NOTE[dataLevel],
+        ...(dataLevel
+          ? { riskLevel: dataLevel, note: DATA_RISK_NOTE[dataLevel] }
+          : { note: ASSURANCE_UNANSWERED_NOTE }),
       },
       {
         bucket: 'risk',
         label: 'Procesna odpornost',
-        riskLevel: processLevel,
-        note: PROCESS_RISK_NOTE[processLevel],
+        ...(processLevel
+          ? { riskLevel: processLevel, note: PROCESS_RISK_NOTE[processLevel] }
+          : { note: ASSURANCE_UNANSWERED_NOTE }),
       },
     ];
   },

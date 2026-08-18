@@ -6,7 +6,9 @@ import {
   REDUCIBLE_STOCK_EXPLAINER,
   reducibleShareField,
   reducibleShareOf,
-  riskLevelFromScore,
+  ASSURANCE_UNANSWERED,
+  ASSURANCE_UNANSWERED_NOTE,
+  assuranceRiskLevel,
 } from './shared';
 
 /**
@@ -152,15 +154,29 @@ export const material: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
     },
     {
       key: 'scrapSharePercent',
       label: 'Kolikšen delež porabljenega materiala postane izmet, ki ga ni mogoče uporabiti ali prodati?',
       kind: 'percent',
       min: 0,
-      max: 0.15,
+      // Zgornja meja 0,30 in ne 0,15: v kovinarstvu in procesni industriji je delež izmeta
+      // nad 15 % realen, prejšnja meja pa je take vnose tiho obrezala navzdol.
+      max: 0.3,
       step: 0.005,
-      default: 0.03,
+      // Privzetek 0 in ne 0,03: skupaj z letno vrednostjo materiala je to zmnožek dveh polj,
+      // zato bi vsak privzetek nad 0 ustvaril znesek že ob vpisu same vrednosti materiala —
+      // podatka, ki ga podjetje pozna in vpiše brez pomisleka. Delež izmeta je edino od
+      // obeh polj, ki trdi, da težava obstaja, zato mora priti od obiskovalca.
+      default: 0,
+      help:
+        'Samo material, ki konča kot odpadek — ne to, kar predelate ali prodate kot drugo kakovost. ' +
+        'Ure dodelav merimo posebej v naslednjem vprašanju.',
+      explainer:
+        'Delež vrednosti, ne kosov. Če deleža ne vodite, ga ocenite iz enega meseca: vrednost ' +
+        'odpisanega materiala delite z vrednostjo porabljenega. Primer: 6.000 EUR izmeta pri ' +
+        '200.000 EUR porabljenega materiala je 3 %.',
     },
     {
       key: 'reworkHoursPerMonth',
@@ -175,6 +191,7 @@ export const material: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
       help: 'Vnesite samo stroške, ki še niso vključeni v izmet ali dodelave.',
       explainer:
         'Denar, ki je odtekel zaradi reklamacij kupcev: prevozi, nadomestna dobava, odškodnine, ' +
@@ -260,6 +277,7 @@ export const zaloge: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
     },
     {
       key: 'materialWaitingHoursPerMonth',
@@ -468,6 +486,7 @@ export const zamude: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
       help: 'Samo dodatni strošek nad običajno nabavo oziroma dostavo.',
       explainer:
         'Samo doplačilo, ne celotna cena: razlika med tem, kar ste plačali v naglici, in tem, kar bi ' +
@@ -480,6 +499,7 @@ export const zamude: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
     },
     {
       key: 'lostMarginEUR',
@@ -487,6 +507,7 @@ export const zamude: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
       help: 'Ne vpisujte celotne vrednosti izgubljenega naročila.',
       explainer:
         'Ne vrednost naročila, ampak samo marža, ki bi vam od njega ostala. Primer: odpovedano naročilo ' +
@@ -523,7 +544,12 @@ export const zamude: ModuleDefinition = {
         addressableShare,
       },
       {
-        bucket: 'directLoss',
+        // Koš 'lostMargin' in ne 'directLoss': odpoved naročila je denar, ki ni nikoli
+        // prišel, in stoji na predpostavki, kaj bi kupec storil. Odpis je denar, ki je
+        // odtekel in ga je mogoče pokazati na kontu. Ker sta bili trditvi doslej v istem
+        // košu, je prvi ugovor ("tega naročila morda tako ne bi dobili") podrl tudi
+        // dokazljivi del naslovnega zneska.
+        bucket: 'lostMargin',
         label: 'Izgubljena prispevna marža',
         valueEUR: input.lostMarginEUR,
         addressableShare,
@@ -575,47 +601,49 @@ export const diagnostika: ModuleDefinition = {
       key: 'realtimeRecording',
       label: 'Ali sproti evidentirate dejansko porabo materiala in opravljeno delo?',
       kind: 'choice',
-      default: 1,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
     {
       key: 'knowsUnitCost',
       label: 'Ali poznate dejanski strošek posameznega izdelka oziroma delovnega naloga?',
       kind: 'choice',
-      default: 1,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
     {
       key: 'materialTraceability',
       label: 'Ali lahko zanesljivo sledite materialu od dobave do končnega izdelka?',
       kind: 'choice',
-      default: 2,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
     {
       key: 'keyPersonIndependence',
       label: 'Ali proizvodnja deluje normalno tudi brez ključne osebe?',
       kind: 'choice',
-      default: 1,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
   ],
   compute: (input) => {
-    const dataLevel = riskLevelFromScore(input.realtimeRecording + input.knowsUnitCost, 6);
-    const processLevel = riskLevelFromScore(input.materialTraceability + input.keyPersonIndependence, 6);
+    const dataLevel = assuranceRiskLevel(input.realtimeRecording, input.knowsUnitCost);
+    const processLevel = assuranceRiskLevel(input.materialTraceability, input.keyPersonIndependence);
 
     return [
       {
         bucket: 'risk',
         label: 'Zanesljivost podatkov',
-        riskLevel: dataLevel,
-        note: DATA_RISK_NOTE[dataLevel],
+        ...(dataLevel
+          ? { riskLevel: dataLevel, note: DATA_RISK_NOTE[dataLevel] }
+          : { note: ASSURANCE_UNANSWERED_NOTE }),
       },
       {
         bucket: 'risk',
         label: 'Procesna odpornost',
-        riskLevel: processLevel,
-        note: PROCESS_RISK_NOTE[processLevel],
+        ...(processLevel
+          ? { riskLevel: processLevel, note: PROCESS_RISK_NOTE[processLevel] }
+          : { note: ASSURANCE_UNANSWERED_NOTE }),
       },
     ];
   },

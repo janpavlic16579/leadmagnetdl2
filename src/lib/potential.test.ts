@@ -385,7 +385,7 @@ describe('assessConfidence', () => {
     const values = {
       obracun_storitve: resolveInputs(obracun, {
         unbilledHoursPerMonth: 40,
-        timesheetHoursPerMonth: 25,
+        projectTimesheetHoursPerMonth: 25,
         creditNoteCostEUR: 12_000,
         mainCause: 0,
       }),

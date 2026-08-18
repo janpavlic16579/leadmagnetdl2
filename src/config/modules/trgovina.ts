@@ -5,7 +5,9 @@ import {
   REDUCIBLE_STOCK_EXPLAINER,
   reducibleShareField,
   reducibleShareOf,
-  riskLevelFromScore,
+  ASSURANCE_UNANSWERED,
+  ASSURANCE_UNANSWERED_NOTE,
+  assuranceRiskLevel,
 } from './shared';
 import type { ModuleDefinition, RiskLevel } from './moduleTypes';
 
@@ -119,6 +121,7 @@ export const narocilaTrgovina: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
       help: 'Samo razlika v marži, ne celotna vrednost računa. Dobropisi zaradi napačne pošiljke sodijo v področje Odprema.',
       explainer:
         'Marža, ki je zmanjkala zaradi napačne cene, pozabljenega rabata ali zastarelega cenika — samo ' +
@@ -156,7 +159,11 @@ export const narocilaTrgovina: ModuleDefinition = {
         addressableShare,
       },
       {
-        bucket: 'directLoss',
+        // Koš 'lostMargin' in ne 'directLoss': marža, ki je nismo zaslužili, ker je bila
+        // cena napačna, ni denar, ki bi ga bilo mogoče pokazati na kontu — stoji na oceni,
+        // kaj bi kupec plačal ob pravi ceni. Ločen koš ohrani dokazljivi del naslovnega
+        // zneska tudi takrat, ko sogovornik to oceno zavrne.
+        bucket: 'lostMargin',
         label: 'Izgubljena marža zaradi napačnih cen',
         valueEUR: input.annualPricingMarginLossEUR,
         addressableShare,
@@ -340,6 +347,7 @@ export const zalogeTrgovina: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
     },
     {
       key: 'annualStockoutMarginLossEUR',
@@ -347,6 +355,7 @@ export const zalogeTrgovina: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
       help: 'Samo izgubljena marža, ne celotna vrednost naročila. Ure iskanja in nadure v skladišču sodijo v področje Skladišče.',
       explainer:
         'Samo marža, ki je niste zaslužili, ker blaga ni bilo — ne vrednost naročila. Primer: 60 ' +
@@ -383,7 +392,10 @@ export const zalogeTrgovina: ModuleDefinition = {
         addressableShare,
       },
       {
-        bucket: 'directLoss',
+        // Koš 'lostMargin' in ne 'directLoss': prodaja, do katere ni prišlo, stoji na
+        // predpostavki, da bi kupec kupil, če bi blago bilo. Maloprodaja isto postavko
+        // vodi v 'lostMargin' (maloprodaja.ts, prazna polica) — vzorec je enoten.
+        bucket: 'lostMargin',
         label: 'Izgubljena marža zaradi manjkajočega blaga',
         valueEUR: input.annualStockoutMarginLossEUR,
         addressableShare,
@@ -446,6 +458,7 @@ export const odpremaTrgovina: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
       help: 'Samo dodatni prevozni in manipulativni strošek nad običajno dostavo.',
       explainer:
         'Samo doplačilo nad redno dostavo: ponovni prevoz, dodatna manipulacija, ekspresna pošiljka. ' +
@@ -457,6 +470,7 @@ export const odpremaTrgovina: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
       help: 'Ne vpisujte dobropisov zaradi napačno zaračunane cene — ti sodijo v področje Naročila.',
       explainer:
         'Vrednost dobropisov in popustov, izdanih zato, ker je bila pošiljka napačna, nepopolna ali ' +
@@ -469,6 +483,7 @@ export const odpremaTrgovina: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
       help: 'Samo izguba vrednosti vrnjenega blaga. Ležeča zaloga brez vračila sodi v področje Zaloge.',
       explainer:
         'Koliko vrednosti blago izgubi, ko se vrne: poškodovana embalaža, odprt artikel, znižanje ob ' +
@@ -596,6 +611,7 @@ export const terjatveTrgovina: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
     },
     mainCauseField(TERJATVE_CAUSES),
   ],
@@ -664,50 +680,49 @@ export const diagnostikaTrgovina: ModuleDefinition = {
       key: 'stockAccuracy',
       label: 'Ali se stanje zalog v sistemu ujema z dejanskim stanjem v skladišču?',
       kind: 'choice',
-      default: 1,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
     {
       key: 'knowsItemMargin',
       label: 'Ali poznate dejansko maržo po artiklu in po kupcu, z rabati in stroški dostave vred?',
       kind: 'choice',
-      default: 1,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
     {
       key: 'shipmentTraceability',
       label: 'Ali lahko za posamezno pošiljko zanesljivo ugotovite, kdo, kdaj in kaj je komisioniral?',
       kind: 'choice',
-      default: 2,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
     {
       key: 'keyPersonIndependence',
       label: 'Ali skladišče in prodaja delujeta normalno tudi brez ključne osebe?',
       kind: 'choice',
-      default: 1,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
   ],
   compute: (input) => {
-    const dataLevel = riskLevelFromScore(input.stockAccuracy + input.knowsItemMargin, 6);
-    const processLevel = riskLevelFromScore(
-      input.shipmentTraceability + input.keyPersonIndependence,
-      6,
-    );
+    const dataLevel = assuranceRiskLevel(input.stockAccuracy, input.knowsItemMargin);
+    const processLevel = assuranceRiskLevel(input.shipmentTraceability, input.keyPersonIndependence);
 
     return [
       {
         bucket: 'risk',
         label: 'Zanesljivost podatkov',
-        riskLevel: dataLevel,
-        note: DATA_RISK_NOTE[dataLevel],
+        ...(dataLevel
+          ? { riskLevel: dataLevel, note: DATA_RISK_NOTE[dataLevel] }
+          : { note: ASSURANCE_UNANSWERED_NOTE }),
       },
       {
         bucket: 'risk',
         label: 'Procesna odpornost',
-        riskLevel: processLevel,
-        note: PROCESS_RISK_NOTE[processLevel],
+        ...(processLevel
+          ? { riskLevel: processLevel, note: PROCESS_RISK_NOTE[processLevel] }
+          : { note: ASSURANCE_UNANSWERED_NOTE }),
       },
     ];
   },

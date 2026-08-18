@@ -72,9 +72,13 @@ export function StepIndustry({ value, onChange, onNext }: StepIndustryProps) {
             onChange={(event) => onChange({ ...value, industry: event.target.value })}
           >
             <option value="">Izberite …</option>
+            {/* industryChoiceLabel in ne industry.label: `choiceLabel` je bil doslej
+                izrisan samo pri pod-dejavnostih, v glavnem seznamu pa se ni uporabil
+                nikjer — daljša, razločevalna oznaka ("Trgovina … prodajamo podjetjem")
+                torej ni imela nobenega učinka. `label` ostane oznaka za CRM. */}
             {INDUSTRIES.map((industry) => (
               <option key={industry.id} value={industry.id}>
-                {industry.label}
+                {industryChoiceLabel(industry)}
               </option>
             ))}
           </select>

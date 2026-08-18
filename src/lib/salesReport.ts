@@ -183,7 +183,15 @@ export interface SalesReportSoftness {
 export interface TriageRow {
   moduleId: string;
   title: string;
-  score: number;
+  /**
+   * `null` pomeni, da obiskovalec področja ni ocenil.
+   *
+   * Ni 0: vsaka triažna lestvica ima možnost z vrednostjo 0 ("Plan je stabilen",
+   * "Redko"), zato bi 0 svetovalcu sporočila, da je podjetje področje ocenilo kot
+   * brezbolečinsko. Razlika med "tu nas ne boli" in "tega nismo ocenili" je za
+   * pripravo sestanka bistvena — prvo je odgovor, drugo je vprašanje.
+   */
+  score: number | null;
   scoreLabel: string | null;
   /** Področja z visoko oceno, ki NISO izmerjena, so najboljše vprašanje za sestanek. */
   measured: boolean;
@@ -318,8 +326,11 @@ export function buildSalesReport(params: BuildSalesReportParams): SalesReport {
       .map((definition) => ({
         moduleId: definition.id,
         title: definition.title,
-        score: params.triageScores[definition.id] ?? 0,
-        scoreLabel: triageScoreLabel(definition, params.triageScores[definition.id] ?? 0),
+        score: params.triageScores[definition.id] ?? null,
+        scoreLabel:
+          definition.id in params.triageScores
+            ? triageScoreLabel(definition, params.triageScores[definition.id])
+            : null,
         measured: activeIds.has(definition.id),
       })),
 

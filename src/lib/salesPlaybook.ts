@@ -80,7 +80,11 @@ export function buildSalesPlaybook(
 function buildOpeningQuestions(report: PlaybookInput): OpeningQuestion[] {
   const questions: OpeningQuestion[] = [];
 
-  for (const row of report.triage.filter((item) => !item.measured && item.score >= 2)) {
+  // `score !== null` in ne `?? 0`: neocenjeno področje ni iztočnica za sestanek —
+  // svetovalec ne more reči "ocenili ste", če obiskovalec ni ocenil.
+  for (const row of report.triage.filter(
+    (item) => !item.measured && item.score !== null && item.score >= 2,
+  )) {
     questions.push({
       question: `${row.title}: ocenili ste "${row.scoreLabel ?? row.score}" — koliko vas to dejansko stane?`,
       why: 'Sami so to označili za boleče, a področja niso izmerili. V poročilu zanj ni nobenega zneska.',
@@ -163,7 +167,7 @@ function buildObjections(report: PlaybookInput): SalesPlaybook['objections'] {
 
   if (report.qualification.isPantheonCustomer) triggered.push('alreadyHavePantheon');
 
-  if (report.triage.some((row) => !row.measured && row.score >= 2)) {
+  if (report.triage.some((row) => !row.measured && row.score !== null && row.score >= 2)) {
     triggered.push('unmeasuredAreas');
   }
 

@@ -134,10 +134,14 @@ describe('Dokumentacija in e-poslovanje', () => {
     );
   });
 
-  it('izgubljeni dokumenti so neposredna izguba, vzrok v procesu da srednji delež', () => {
+  // Namerna sprememba pričakovanja: vzrok "Potrjevanje poteka ročno, po e-pošti ali na
+  // papirju" je bil prekvalificiran iz 'planning' (65 %) v 'data' (75 %). Ročni prenos
+  // dokumenta je drugod v registru dosledno podatkovni vzrok; ista poteza je bila prej
+  // ovrednotena dvakrat različno glede na to, v katerem področju je nastopila.
+  it('izgubljeni dokumenti so neposredna izguba, ročno potrjevanje pa podatkovni vzrok', () => {
     const item = pick(outputs, 'Stroški izgubljenih in prepozno potrjenih dokumentov');
     expect(item.bucket).toBe('directLoss');
-    expect(item.addressableShare).toBe(ADDRESSABLE_SHARE.planning);
+    expect(item.addressableShare).toBe(ADDRESSABLE_SHARE.data);
   });
 });
 

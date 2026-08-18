@@ -1,6 +1,12 @@
 import { addressableShareOf, mainCauseField, type CauseOption } from './addressableShare';
 import type { ModuleDefinition, RiskLevel } from './moduleTypes';
-import { ASSURANCE_CHOICES, MONTHS_PER_YEAR, riskLevelFromScore } from './shared';
+import {
+  ASSURANCE_CHOICES,
+  ASSURANCE_UNANSWERED,
+  ASSURANCE_UNANSWERED_NOTE,
+  assuranceRiskLevel,
+  MONTHS_PER_YEAR,
+} from './shared';
 
 /**
  * Pet medsebojno izključujočih se stroškovnih področij za računovodski servis.
@@ -76,7 +82,20 @@ export const zajemRs: ModuleDefinition = {
       min: 0,
       max: 1,
       step: 0.05,
-      default: 0.6,
+      // Privzetek je 0 in ne 0,6: skupaj s številom listin in minutami na listino je to
+      // zmnožek treh polj, zato bi vsak privzetek nad 0 sam ustvaril znesek, ki ga
+      // obiskovalec ni potrdil (pri 4.800 listinah je 0,6 pomenilo 41.472 EUR na leto).
+      // Ocena zanesljivosti nedotaknjenega privzetka ne šteje med izpolnjena polja, zato
+      // bi se tak znesek izpisal celo z oznako "najmanj" — izmišljena številka s pridihom
+      // konservativnosti. Delež je hkrati edino od treh polj, ki trdi, da težava obstaja.
+      default: 0,
+      help:
+        'Delež listin, ki jih nekdo dejansko odtipka ali postavko za postavko prekontrolira. ' +
+        'E-računi in uvoženi bančni izpiski, ki gredo skozi brez posega, sem ne sodijo.',
+      explainer:
+        'Vzemite en teden: koliko listin je šlo v knjiženje brez posega in koliko jih je nekdo ' +
+        'vnašal ročno. Primer: od 1.200 tedenskih listin je 700 e-računov in izpiskov, 500 ' +
+        'ročnih — to je približno 40 %.',
     },
     {
       key: 'minutesPerManualDocument',
@@ -287,16 +306,24 @@ export const obracuniRs: ModuleDefinition = {
       default: 0,
     },
     {
-      key: 'reportPrepHoursPerMonth',
+      // Ključ je `closingPrepHoursPerMonth` in ne `reportPrepHoursPerMonth`: pod slednjim
+      // imenom je isto polje obstajalo tudi v horizontali Analitika in poročanje, ki je v
+      // tem segmentu prav tako aktivna. Isti ključ z drugim pomenom je pomenil, da je
+      // obiskovalec isto uro vpisal dvakrat — enkrat po računovodski (24 EUR), enkrat po
+      // vodstveni uri (30 EUR). Ime `filingPrepHoursPerMonth` je zasedeno po pomenu:
+      // "filing" v tem modulu pomeni arhiviranje.
+      key: 'closingPrepHoursPerMonth',
       label:
-        'Koliko ur mesečno porabite za ročno pripravo obračunov in poročil — sestavljanje v Excelu, ročne kontrole in uskladitve pred oddajo?',
+        'Koliko ur mesečno porabite za ročno pripravo obračunov in poročil za stranke in državo — sestavljanje v Excelu, ročne kontrole in uskladitve pred oddajo?',
       kind: 'number',
       unit: 'h/mesec',
       default: 0,
-      help: 'Ne vključujte vnosa listin iz področja Zajem.',
+      help:
+        'Samo obračuni in poročila za stranke in državo. Vnos listin meri področje Zajem, ' +
+        'poročila za vaše lastno vodstvo pa področje Analitika in poročanje.',
       explainer:
-        'Ure za obračune in poročila: DDV, plače, medletna poročila, priprava podatkov za oddajo. Vnos ' +
-        'listin je že v področju Zajem. Primer: 2 osebi × 8 h ob koncu meseca ≈ 16 ur.',
+        'Ure za obračune in poročila strank: DDV, plače, medletna poročila, priprava podatkov za ' +
+        'oddajo. Vnos listin je že v področju Zajem. Primer: 2 osebi × 8 h ob koncu meseca ≈ 16 ur.',
     },
     {
       key: 'externalHelpCostEUR',
@@ -305,6 +332,7 @@ export const obracuniRs: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
     },
     {
       key: 'latePenaltyCostEUR',
@@ -313,6 +341,7 @@ export const obracuniRs: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
       help: 'Samo posledice ZAMUDE. Doplačila zaradi napačne vsebine meri področje Napake in popravki.',
       explainer:
         'Samo posledice ZAMUDE pri oddaji: globe, zamudne obresti, doplačila za nujno urejanje. Seštejte ' +
@@ -350,8 +379,8 @@ export const obracuniRs: ModuleDefinition = {
       {
         bucket: 'capacity',
         label: 'Ročna priprava obračunov in poročil',
-        valueEUR: input.reportPrepHoursPerMonth * rate * MONTHS_PER_YEAR,
-        hoursPerMonth: input.reportPrepHoursPerMonth,
+        valueEUR: input.closingPrepHoursPerMonth * rate * MONTHS_PER_YEAR,
+        hoursPerMonth: input.closingPrepHoursPerMonth,
         addressableShare,
       },
       {
@@ -425,6 +454,7 @@ export const popravkiRs: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
       help: 'Globe zaradi prepozne oddaje meri področje Obračuni, ne to.',
       explainer:
         'Stroški popravkov vsebinskih napak: samoprijave, popravki obračunov, zamudne obresti, doplačan ' +
@@ -437,6 +467,7 @@ export const popravkiRs: ModuleDefinition = {
       kind: 'number',
       unit: 'EUR/leto',
       default: 0,
+      allowUnknown: true,
     },
     mainCauseField(POPRAVKI_CAUSES),
   ],
@@ -579,10 +610,17 @@ export const donosnostRs: ModuleDefinition = {
         addressableShare,
       },
       {
-        // Primanjkljaj je denar, ki vsak mesec odteče, ne izgubljen čas: te ure
-        // so opravljene in plačane, manjka pa prihodek, ki bi jih pokril.
-        bucket: 'directLoss',
+        // Primanjkljaj ni izgubljen čas: te ure so opravljene in plačane, manjka pa
+        // prihodek, ki bi jih pokril.
+        //
+        // Koš je vseeno 'lostMargin' in ne 'directLoss': znesek stoji na oceni stroška
+        // po stranki, ki je servis po lastni diagnostiki (knowsClientProfitability)
+        // pogosto ne pozna, njegova odprava pa predpostavlja dvig cene ali odhod
+        // stranke — torej odločitev servisa in odziv stranke, ne knjižen odliv.
+        bucket: 'lostMargin',
         label: 'Stranke pod lastno ceno',
+        // Brez `note`: motor ga izriše samo pri košu 'risk' (RiskCard, pdf.ts) — tu bi bil
+        // mrtev podatek. Pridržek nosi besedilo kartice nezaslužene marže na rezultatih.
         valueEUR: input.belowCostClients * input.belowCostDeficitEUR * MONTHS_PER_YEAR,
         addressableShare,
       },
@@ -626,47 +664,49 @@ export const diagnostikaRs: ModuleDefinition = {
       key: 'knowsHoursPerClient',
       label: 'Ali veste, koliko ur mesečno porabite za posamezno stranko?',
       kind: 'choice',
-      default: 1,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
     {
       key: 'knowsClientProfitability',
       label: 'Ali veste, katere stranke so za vas donosne in katere ne?',
       kind: 'choice',
-      default: 1,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
     {
       key: 'auditTrail',
       label: 'Ali lahko za vsak vnos zanesljivo ugotovite, kdo ga je naredil in kdaj?',
       kind: 'choice',
-      default: 2,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
     {
       key: 'keyPersonIndependence',
       label: 'Ali servis deluje normalno tudi brez ključne osebe?',
       kind: 'choice',
-      default: 1,
+      default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
   ],
   compute: (input) => {
-    const dataLevel = riskLevelFromScore(input.knowsHoursPerClient + input.knowsClientProfitability, 6);
-    const processLevel = riskLevelFromScore(input.auditTrail + input.keyPersonIndependence, 6);
+    const dataLevel = assuranceRiskLevel(input.knowsHoursPerClient, input.knowsClientProfitability);
+    const processLevel = assuranceRiskLevel(input.auditTrail, input.keyPersonIndependence);
 
     return [
       {
         bucket: 'risk',
         label: 'Zanesljivost podatkov',
-        riskLevel: dataLevel,
-        note: DATA_RISK_NOTE[dataLevel],
+        ...(dataLevel
+          ? { riskLevel: dataLevel, note: DATA_RISK_NOTE[dataLevel] }
+          : { note: ASSURANCE_UNANSWERED_NOTE }),
       },
       {
         bucket: 'risk',
         label: 'Procesna odpornost',
-        riskLevel: processLevel,
-        note: PROCESS_RISK_NOTE[processLevel],
+        ...(processLevel
+          ? { riskLevel: processLevel, note: PROCESS_RISK_NOTE[processLevel] }
+          : { note: ASSURANCE_UNANSWERED_NOTE }),
       },
     ];
   },

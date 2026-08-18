@@ -75,7 +75,7 @@ describe('Plan, prioritete in zasedenost ekipe', () => {
 describe('Evidenca dela in zaračunavanje', () => {
   const outputs = run(obracun, {
     unbilledHoursPerMonth: 40,
-    timesheetHoursPerMonth: 25,
+    projectTimesheetHoursPerMonth: 25,
     creditNoteCostEUR: 12_000,
     mainCause: 0, // Ure se ne evidentirajo sproti → data
   });
@@ -170,10 +170,17 @@ describe('Roki, plačila in vezan denar', () => {
     mainCause: 3, // Naročniki plačujejo z zamudo → external
   });
 
-  it('denarni stroški so neposredne izgube', () => {
+  // Namerna sprememba pričakovanja: izgubljena prispevna marža je bila prestavljena iz
+  // 'directLoss' v 'lostMargin'. Penal je plačan in dokazljiv; izgubljen projekt stoji na
+  // predpostavki o vedenju naročnika. Test meri prav to ločnico.
+  it('penal je neposredna izguba, izgubljen projekt pa nezaslužena marža', () => {
     const directLoss = outputs.filter((output) => output.bucket === 'directLoss');
-    expect(directLoss).toHaveLength(2);
-    expect(directLoss.reduce((sum, output) => sum + (output.valueEUR ?? 0), 0)).toBe(20_000);
+    expect(directLoss).toHaveLength(1);
+    expect(directLoss.reduce((sum, output) => sum + (output.valueEUR ?? 0), 0)).toBe(8_000);
+
+    const lostMargin = outputs.filter((output) => output.bucket === 'lostMargin');
+    expect(lostMargin).toHaveLength(1);
+    expect(lostMargin[0].valueEUR).toBe(12_000);
   });
 
   it('usklajevanje z naročniki je kapaciteta', () => {
@@ -246,7 +253,7 @@ describe('Meja med zaračunano in interno uro', () => {
 
     const filled: Record<string, Record<string, number>> = {
       projekti_storitve: { idleHoursPerMonth: 50, replanningHoursPerMonth: 20 },
-      obracun_storitve: { unbilledHoursPerMonth: 40, timesheetHoursPerMonth: 25 },
+      obracun_storitve: { unbilledHoursPerMonth: 40, projectTimesheetHoursPerMonth: 25 },
       obseg_storitve: { overrunHoursPerMonth: 30, reworkHoursPerMonth: 20 },
       administracija_storitve: { projectAdminHoursPerMonth: 30, retypingHoursPerMonth: 25 },
       terjatve_storitve: { clientCommsHoursPerMonth: 20, unbilledWipEUR: 300_000 },

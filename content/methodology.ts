@@ -248,7 +248,7 @@ export const MODULE_METHODOLOGY: Record<string, ModuleMethodology> = {
     formula:
       'neobračunane ure × strošek računovodske ure × 12; stranke pod lastno ceno × mesečni primanjkljaj × 12',
     rationale:
-      'Neobračunana ura je vrednotena po strošku in ne po ceniku: izračun namenoma ne trdi, da bi jo stranka plačala, če bi jo zaračunali. Primanjkljaj pri stranki pod lastno ceno je nasprotno denar, ki vsak mesec res odteče — te ure so opravljene in plačane, manjka le prihodek, ki bi jih pokril.',
+      'Neobračunana ura je vrednotena po strošku in ne po ceniku: izračun namenoma ne trdi, da bi jo stranka plačala, če bi jo zaračunali. Primanjkljaj pri stranki pod lastno ceno je prikazan ločeno kot nezaslužena marža — te ure so opravljene in plačane, manjka pa prihodek, ki bi jih pokril, njegova odprava pa predpostavlja dvig cene ali odhod stranke.',
   },
   diagnostikaRs: {
     formula: 'ocena tveganja iz štirih odgovorov — brez zneska',

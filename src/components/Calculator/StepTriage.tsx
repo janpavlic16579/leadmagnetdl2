@@ -63,7 +63,13 @@ export function StepTriage({
 
       <div className={shellStyles.card}>
         {modules.map((definition) => {
-          const score = scores[definition.id] ?? 0;
+          // Brez `?? 0`: vsako področje ima možnost z vrednostjo 0 ("Plan je stabilen",
+          // "Redko"), zato je privzeti 0 pomenil, da je bil ob prvem izrisu VSAK od
+          // desetih radiov označen na najmilejšem odgovoru. Neodgovor je bil s tem
+          // neločljiv od izjave "tu ni bolečine" — in ta razlika je edino, kar loči
+          // področje, ki ga podjetje ni ocenilo, od področja, ki ga ne boli.
+          // `undefined` pomeni "ni odgovora"; noben radio tedaj ni označen.
+          const score: number | undefined = scores[definition.id];
           const isSelected = selected.includes(definition.id);
 
           return (

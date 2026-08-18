@@ -123,7 +123,7 @@ function subsectionTheirInfo(report: SalesReport): string {
   const cards: string[] = [
     card('Neposredne letne izgube', value(s.directLossEUR, s.rangeEUR?.directLoss), 'Denar, ki odteka'),
     ...(s.lostMarginEUR > 0
-      ? [card('Nezaslužena letna marža', value(s.lostMarginEUR, s.rangeEUR?.lostMargin), 'Prazna polica, napačna cena')]
+      ? [card('Nezaslužena letna marža', value(s.lostMarginEUR, s.rangeEUR?.lostMargin), 'Posel, do katerega ni prišlo')]
       : []),
     card(
       'Izgubljena kapaciteta',
@@ -181,7 +181,9 @@ function subsectionTheirInfo(report: SalesReport): string {
 }
 
 function subsectionPainPoints(report: SalesReport): string {
-  const painful = report.triage.filter((row) => !row.measured && row.score >= 2);
+  const painful = report.triage.filter(
+    (row) => !row.measured && row.score !== null && row.score >= 2,
+  );
   const questions = report.playbook.openingQuestions;
   const objections = report.playbook.objections;
 
@@ -191,7 +193,7 @@ function subsectionPainPoints(report: SalesReport): string {
           ['Področje', 'Ocena stranke', 'Izmerjeno'],
           report.triage.map((row) => [
             row.title,
-            row.scoreLabel ? `${row.scoreLabel} (${row.score}/3)` : String(row.score),
+            row.scoreLabel ? `${row.scoreLabel} (${row.score}/3)` : 'ni ocenjeno',
             row.measured ? 'da' : raw('<span class="soft">ne</span>'),
           ]),
         )
@@ -394,9 +396,10 @@ function risksBlock(report: SalesReport): string {
   return `<h4>Podatki, procesna tveganja in roki</h4>
   ${report.risks
     .map(
+      // Nevtralen slog ('low'), a resnično besedilo: brez odgovora ni stopnje.
       (risk) => `<div class="risk risk-${risk.riskLevel ?? 'low'}">
       <p class="risk-head"><strong>${esc(risk.label)}</strong> <span>${esc(
-        LEVEL_LABEL[risk.riskLevel ?? 'low'],
+        risk.riskLevel ? LEVEL_LABEL[risk.riskLevel] : LEVEL_UNRATED_LABEL,
       )}</span></p>
       ${risk.note ? `<p>${esc(risk.note)}</p>` : ''}
     </div>`,
@@ -419,6 +422,9 @@ const LEVEL_LABEL: Record<string, string> = {
   medium: 'srednje tveganje',
   high: 'visoko tveganje',
 };
+
+/** Diagnostični par brez odgovora — glej RISK_LEVEL_UNRATED_LABEL v pdfKit.ts. */
+const LEVEL_UNRATED_LABEL = 'ni ocenjeno';
 
 /**
  * Ubeži HTML posebne znake.
