@@ -1,5 +1,6 @@
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { isFilled, isValidEmail, normalizeTaxNumber, phoneState, taxNumberState } from '../../lib/validation';
+import { useStepHeading } from '../../lib/useStepHeading';
 import type { LeadConsents, LeadContact } from '../../types';
 import buttonStyles from '../../styles/buttons.module.css';
 import styles from './EmailGate.module.css';
@@ -22,25 +23,43 @@ interface EmailGateProps {
     consents: LeadConsents;
   }) => void | Promise<void>;
   /**
+   * Ponovni prenos strankinega poročila.
+   *
+   * Samodejni prenos bloba ni zanesljiv: iOS Safari ga pogosto odpre v zavihku ali
+   * zavrne, brskalniki pa blokirajo prenos brez sveže geste. Brez tega gumba je
+   * zahvalni zaslon trdil, da je datoteka v mapi za prenose, in ni ponudil izhoda.
+   */
+  onDownloadCustomerPdf?: () => void | Promise<void>;
+  /**
    * Ponovni prenos priprave za svetovalca.
    *
-   * Brskalniki blokirajo več zaporednih prenosov iz enega klika, zato se samodejni
-   * prenos ne sme šteti za zanesljivega. Vsak gumb tu je svoja uporabnikova gesta,
-   * ki je ne blokira nič — in hkrati zavestna odločitev, da datoteko posreduje naprej.
+   * Prikaže se, kadar priprava pristane na napravi — torej v internem načinu
+   * (?debug=1) ali dokler webhook ni nastavljen in je posredovanje po stranki
+   * edina pot do svetovalca. Ob delujočem webhooku ostane skrita.
    */
   onDownloadSalesPdf?: () => void | Promise<void>;
   onDownloadSalesHtml?: () => void | Promise<void>;
+  /** Loči interni pregled od stranke: ista gumba, drugo besedilo nad njima. */
+  internalMode?: boolean;
+  /** Vrnitev na rezultate — zahvalni zaslon sicer nima nobene poti naprej ne nazaj. */
+  onBackToResults?: () => void;
   onBack: () => void;
 }
 
 export function EmailGate({
   submitted,
+  internalMode = false,
   followUpSequenceDebug,
   onSubmit,
+  onDownloadCustomerPdf,
   onDownloadSalesPdf,
   onDownloadSalesHtml,
+  onBackToResults,
   onBack,
 }: EmailGateProps) {
+  // Zahvala zamenja obrazec znotraj iste inštance, zato je `submitted` ključ:
+  // brez njega bi fokus ostal na gumbu, ki je pravkar izginil.
+  const headingRef = useStepHeading(submitted);
   const fieldId = useId();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -54,31 +73,71 @@ export function EmailGate({
   const [consentContent, setConsentContent] = useState(false);
   /** Namig se pokaže šele, ko obiskovalec polje zapusti — sicer utripa že pri drugi števki. */
   const [touched, setTouched] = useState<{ phone?: boolean; taxNumber?: boolean }>({});
+  /**
+   * Napake se pokažejo šele po prvem poskusu oddaje.
+   *
+   * Rdeč obrazec, preden je uporabnik karkoli vpisal, je grajanje za dejanje, ki
+   * se še ni zgodilo. Po prvem poskusu pa napake sledijo vsakemu tipkanju sproti,
+   * ker takrat uporabnik popravlja in mora videti, kdaj je popravljeno.
+   */
+  const [showErrors, setShowErrors] = useState(false);
   /** Generiranje PDF-jev traja; brez tega dvoklik ustvari dva kompleta datotek. */
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+
+  const firstNameRef = useRef<HTMLInputElement>(null);
+  const lastNameRef = useRef<HTMLInputElement>(null);
+  const companyNameRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const consentRef = useRef<HTMLInputElement>(null);
 
   const phoneInvalid = touched.phone && phoneState(phone) === 'invalid';
   const taxNumberInvalid = touched.taxNumber && taxNumberState(taxNumber) === 'invalid';
 
   /**
-   * Telefon in davčna oddaje NE blokirata. Sta označena kot neobvezna, zato bi bil
-   * mrtev gumb za obiskovalca napaka — in nevidna, ker onemogočen gumb ne pove,
-   * katero polje ga ustavlja. Dvom namesto tega potuje v poročilo za svetovalca.
+   * Kaj manjka za oddajo — v vrstnem redu polj na zaslonu.
+   *
+   * Prej je isto vlogo opravljal `canSubmit`, ki je gumb samo ONEMOGOČIL. Kdor je
+   * imel tipkarsko napako v e-naslovu ali nepotrjeno privolitev, je videl siv
+   * gumb in ugibal, katero od šestih polj ga ustavlja; onemogočen gumb tudi ne
+   * pove ničesar bralniku zaslona. Zdaj gumb ostane živ, ob kliku pa pove.
+   *
+   * Telefon in davčna med njimi nista: sta označena kot neobvezna, zato ju
+   * obrazec ne sme zadrževati. Dvom o njiju potuje v poročilo za svetovalca.
    */
-  const canSubmit =
-    isFilled(firstName) &&
-    isFilled(lastName) &&
-    isFilled(companyName) &&
-    isValidEmail(email) &&
-    consentProcessing;
+  const errors = {
+    firstName: isFilled(firstName) ? null : 'Vpišite ime.',
+    lastName: isFilled(lastName) ? null : 'Vpišite priimek.',
+    companyName: isFilled(companyName) ? null : 'Vpišite ime podjetja.',
+    email: isValidEmail(email) ? null : 'Vpišite veljaven e-naslov (npr. ime@podjetje.si).',
+    consentProcessing: consentProcessing
+      ? null
+      : 'Brez te privolitve vam poročila ne smemo poslati.',
+  };
+  const firstInvalid = (
+    [
+      [errors.firstName, firstNameRef],
+      [errors.lastName, lastNameRef],
+      [errors.companyName, companyNameRef],
+      [errors.email, emailRef],
+      [errors.consentProcessing, consentRef],
+    ] as const
+  ).find(([error]) => error !== null);
 
   async function handleSubmit(event: React.FormEvent) {
     // Brez tega privzeta oddaja ponovno naloži SPA in uniči vse module, triažne
     // ocene in odgovore, ki jih je obiskovalec vnašal pet minut. Zaledja ni.
     event.preventDefault();
     // setBusy je asinhron: dva Enterja v istem tiku bi sicer ustvarila dva kompleta.
-    if (busy || !canSubmit) return;
+    if (busy) return;
+
+    if (firstInvalid) {
+      setShowErrors(true);
+      // Fokus na prvo pomanjkljivo polje: sporočilo pod poljem na dolgem obrazcu
+      // lahko ostane zunaj zaslona, kazalec v polju pa pove, kje smo obtičali.
+      firstInvalid[1].current?.focus();
+      return;
+    }
 
     setBusy(true);
     setFailed(false);
@@ -108,26 +167,45 @@ export function EmailGate({
     return (
       <div className={styles.wrap}>
         <div className={styles.thanks}>
-          <h1 className={styles.thanksTitle}>Hvala!</h1>
+          <h1 className={styles.thanksTitle} tabIndex={-1} ref={headingRef}>
+            Hvala!
+          </h1>
           <p className={styles.subtitle}>
-            Vaše poročilo se je preneslo v mapo za prenose.
+            {/* "Se je preneslo" je trditev, ki je ne moremo preveriti — brskalnik prenos
+                pogosto odpre v zavihku ali ga zavrne. Gumb spodaj je zato del stavka. */}
+            Poročilo je pripravljeno in bi se moralo prenesti samodejno. Če ga v mapi za prenose ni,
+            ga dobite tu:
           </p>
+          <div className={styles.actions}>
+            {onDownloadCustomerPdf ? (
+              <button type="button" className={buttonStyles.primaryButton} onClick={onDownloadCustomerPdf}>
+                Prenesi poročilo
+              </button>
+            ) : null}
+            {onBackToResults ? (
+              <button type="button" className={buttonStyles.secondaryButton} onClick={onBackToResults}>
+                Nazaj na rezultate
+              </button>
+            ) : null}
+          </div>
           {onDownloadSalesPdf || onDownloadSalesHtml ? (
             <>
               <p className={styles.subtitle}>
-                Poleg njega smo pripravili še povzetek za svetovalca — vaši odgovori na enem mestu.
-                Če nam ga posredujete pred sestankom, vas ne bo spraševal po številkah, ki ste jih
-                pravkar vnesli. Če ga brskalnik ni prenesel skupaj s poročilom, ga dobite tu:
+                {internalMode
+                  ? '[interno] Priprava za svetovalca — ob nastavljenem webhooku se ne prikaže in ne prenese.'
+                  : /* Namen je izrecno posredovanje: brez tega bi obiskovalec dobil datoteko,
+                       za katero ne ve, čemu služi in kaj naj z njo. */
+                    'Poleg njega smo pripravili še povzetek za svetovalca — vaši odgovori na enem mestu. Če nam ga posredujete pred sestankom, vas ne bo spraševal po številkah, ki ste jih pravkar vnesli.'}
               </p>
               <div className={styles.actions}>
                 {onDownloadSalesPdf ? (
                   <button type="button" className={buttonStyles.secondaryButton} onClick={onDownloadSalesPdf}>
-                    Povzetek v PDF
+                    Priprava v PDF
                   </button>
                 ) : null}
                 {onDownloadSalesHtml ? (
                   <button type="button" className={buttonStyles.secondaryButton} onClick={onDownloadSalesHtml}>
-                    Povzetek v HTML
+                    Priprava v HTML
                   </button>
                 ) : null}
               </div>
@@ -143,10 +221,12 @@ export function EmailGate({
 
   return (
     <div className={styles.wrap}>
-      <h1 className={styles.title}>Razširjen rezultat</h1>
+      <h1 className={styles.title} tabIndex={-1} ref={headingRef}>
+        PDF poročilo in akcijski načrt
+      </h1>
       <p className={styles.subtitle}>
-        Vnesite e-naslov za PDF poročilo (primerno za posredovanje upravi) in akcijski načrt "3 ukrepi ta teden".
-        Osnovni izračun ostane na voljo brez tega koraka.
+        Poročilo je primerno za posredovanje upravi in vsebuje akcijski načrt "3 ukrepi ta teden".
+        Izračun na prejšnjem zaslonu ostane na voljo tudi brez tega koraka.
       </p>
       <form onSubmit={handleSubmit} noValidate>
         <div className={styles.card}>
@@ -157,12 +237,21 @@ export function EmailGate({
               </label>
               <input
                 id={`${fieldId}-firstName`}
+                ref={firstNameRef}
                 className={styles.input}
                 type="text"
                 autoComplete="given-name"
+                required
+                aria-invalid={showErrors && errors.firstName ? true : undefined}
+                aria-describedby={showErrors && errors.firstName ? `${fieldId}-firstName-error` : undefined}
                 value={firstName}
                 onChange={(event) => setFirstName(event.target.value)}
               />
+              {showErrors && errors.firstName ? (
+                <p id={`${fieldId}-firstName-error`} className={styles.error}>
+                  {errors.firstName}
+                </p>
+              ) : null}
             </div>
             <div className={styles.formRow}>
               <label className={styles.formLabel} htmlFor={`${fieldId}-lastName`}>
@@ -170,12 +259,21 @@ export function EmailGate({
               </label>
               <input
                 id={`${fieldId}-lastName`}
+                ref={lastNameRef}
                 className={styles.input}
                 type="text"
                 autoComplete="family-name"
+                required
+                aria-invalid={showErrors && errors.lastName ? true : undefined}
+                aria-describedby={showErrors && errors.lastName ? `${fieldId}-lastName-error` : undefined}
                 value={lastName}
                 onChange={(event) => setLastName(event.target.value)}
               />
+              {showErrors && errors.lastName ? (
+                <p id={`${fieldId}-lastName-error`} className={styles.error}>
+                  {errors.lastName}
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -185,12 +283,21 @@ export function EmailGate({
             </label>
             <input
               id={`${fieldId}-companyName`}
+              ref={companyNameRef}
               className={styles.input}
               type="text"
               autoComplete="organization"
+              required
+              aria-invalid={showErrors && errors.companyName ? true : undefined}
+              aria-describedby={showErrors && errors.companyName ? `${fieldId}-companyName-error` : undefined}
               value={companyName}
               onChange={(event) => setCompanyName(event.target.value)}
             />
+            {showErrors && errors.companyName ? (
+              <p id={`${fieldId}-companyName-error`} className={styles.error}>
+                {errors.companyName}
+              </p>
+            ) : null}
           </div>
 
           <div className={styles.formRow}>
@@ -199,12 +306,21 @@ export function EmailGate({
             </label>
             <input
               id={`${fieldId}-email`}
+              ref={emailRef}
               className={styles.input}
               type="email"
               autoComplete="email"
+              required
+              aria-invalid={showErrors && errors.email ? true : undefined}
+              aria-describedby={showErrors && errors.email ? `${fieldId}-email-error` : undefined}
               value={email}
               onChange={(event) => setEmail(event.target.value)}
             />
+            {showErrors && errors.email ? (
+              <p id={`${fieldId}-email-error`} className={styles.error}>
+                {errors.email}
+              </p>
+            ) : null}
           </div>
 
           <div className={styles.formRow}>
@@ -239,7 +355,7 @@ export function EmailGate({
               className={styles.input}
               type="text"
               inputMode="numeric"
-              placeholder="npr. SI12345679"
+              placeholder="npr. 12345679"
               value={taxNumber}
               aria-invalid={taxNumberInvalid || undefined}
               aria-describedby={taxNumberInvalid ? `${fieldId}-tax-hint` : undefined}
@@ -259,6 +375,12 @@ export function EmailGate({
             <label className={styles.consentRow}>
               <input
                 type="checkbox"
+                ref={consentRef}
+                required
+                aria-invalid={showErrors && errors.consentProcessing ? true : undefined}
+                aria-describedby={
+                  showErrors && errors.consentProcessing ? `${fieldId}-consent-error` : undefined
+                }
                 checked={consentProcessing}
                 onChange={(event) => setConsentProcessing(event.target.checked)}
               />
@@ -276,6 +398,11 @@ export function EmailGate({
                 oblikovanja personaliziranih vsebin in ponudb. <span className={styles.required}>*</span>
               </span>
             </label>
+            {showErrors && errors.consentProcessing ? (
+              <p id={`${fieldId}-consent-error`} className={styles.error}>
+                {errors.consentProcessing}
+              </p>
+            ) : null}
 
             {/* Neobvezni privolitvi sta ločeni: razlika ne sme biti samo v zvezdici. */}
             <div className={styles.consentOptional}>
@@ -321,7 +448,8 @@ export function EmailGate({
           <button type="button" className={buttonStyles.secondaryButton} onClick={onBack} disabled={busy}>
             Nazaj
           </button>
-          <button type="submit" className={buttonStyles.primaryButton} disabled={!canSubmit || busy}>
+          {/* Ni več `disabled`: gumb, ki molči, je bil edini znak, da nekaj manjka. */}
+          <button type="submit" className={buttonStyles.primaryButton} disabled={busy}>
             {busy ? 'Pripravljam …' : 'Prenesi poročilo'}
           </button>
         </div>

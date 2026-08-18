@@ -12,10 +12,21 @@ import {
 } from './moduleEngine';
 import { calculateTotalAnnualLoss } from './calculations';
 import { ALL_MODULES, getModules, MODULE_REGISTRY } from '../config/modules';
+import { LEGACY_TRGOVINA_MODULES } from '../config/modules/legacyTrgovina';
 import { SEGMENTS, SEGMENT_ORDER } from '../config/segments';
 import { MODULE_METHODOLOGY } from '../../content/methodology';
 import { ACTION_PLANS } from '../../content/actions/actions';
 import type { ModuleOutput } from '../config/modules/moduleTypes';
+
+/**
+ * Zastareli trgovinski moduli niso v registru (glej config/modules/index.ts) —
+ * berejo se neposredno iz datoteke, ki obstaja samo zaradi tega testa.
+ */
+const legacyModule = (id: string) => {
+  const definition = LEGACY_TRGOVINA_MODULES.find((candidate) => candidate.id === id);
+  if (!definition) throw new Error(`Ni zastarelega modula ${id}`);
+  return definition;
+};
 
 const output = (partial: Partial<ModuleOutput> & Pick<ModuleOutput, 'bucket'>): ModuleOutput => ({
   moduleId: 'test',
@@ -58,7 +69,7 @@ describe('aggregateBuckets', () => {
 
 describe('resolveInputs', () => {
   it('manjkajoča polja dobijo privzeto vrednost, nikoli delnega vnosa', () => {
-    const definition = MODULE_REGISTRY.A_trgovina;
+    const definition = legacyModule('A_trgovina');
     const resolved = resolveInputs(definition, { documentsPerMonth: 800 });
 
     expect(resolved.documentsPerMonth).toBe(800);
@@ -67,7 +78,7 @@ describe('resolveInputs', () => {
   });
 
   it('nedefinirana vrednost ne povozi privzete z NaN', () => {
-    const definition = MODULE_REGISTRY.A_trgovina;
+    const definition = legacyModule('A_trgovina');
     const resolved = resolveInputs(definition, { documentsPerMonth: Number.NaN });
 
     expect(resolved.documentsPerMonth).toBe(0);
@@ -82,7 +93,6 @@ describe('Skladnost s prejšnjim motorjem', () => {
   // predelave naprej na svojih modulih, teh pa ne uporablja noben segment več.
   // Test zato varuje legacy.ts neposredno — in ravno zato mora ostati: dokler te
   // definicije obstajajo, je edini dokaz, da se njihova matematika ni premaknila.
-  const LEGACY_TRGOVINA = ['A_trgovina', 'B_trgovina', 'C_trgovina', 'D_trgovina', 'E'];
 
   const scenario = {
     documentsPerMonth: 800,
@@ -101,7 +111,7 @@ describe('Skladnost s prejšnjim motorjem', () => {
   };
 
   it('preneseni moduli A–D: vsota po koših je enaka calculateTotalAnnualLoss', () => {
-    const definitions = getModules(LEGACY_TRGOVINA);
+    const definitions = [...LEGACY_TRGOVINA_MODULES, ...getModules(['E'])];
     const inputs = Object.fromEntries(definitions.map((d) => [d.id, scenario]));
     const totals = aggregateBuckets(computeModules(definitions, inputs));
 
@@ -116,7 +126,7 @@ describe('Skladnost s prejšnjim motorjem', () => {
   });
 
   it('sproščen kapital modula C ostane izven letne vsote', () => {
-    const definitions = getModules(LEGACY_TRGOVINA);
+    const definitions = [...LEGACY_TRGOVINA_MODULES, ...getModules(['E'])];
     const inputs = Object.fromEntries(definitions.map((d) => [d.id, scenario]));
     const totals = aggregateBuckets(computeModules(definitions, inputs));
 

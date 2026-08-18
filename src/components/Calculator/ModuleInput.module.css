@@ -89,6 +89,12 @@
   font-size: var(--font-size-sm);
 }
 
+/* Viden fokus na kartici, ne le obroček na 18 px radiu (glej tokens.css). */
+.choice:focus-within {
+  outline: 3px solid var(--color-primary-text);
+  outline-offset: 2px;
+}
+
 .choice:has(input:checked) {
   border-color: var(--color-primary-text);
   background: var(--color-accent);

@@ -7,8 +7,10 @@ import type {
   ScaleQuestion,
   SegmentContext,
 } from '../../config/contexts';
+import { useStepHeading } from '../../lib/useStepHeading';
 import buttonStyles from '../../styles/buttons.module.css';
 import { HelpTip } from './HelpTip';
+import { NumberField } from './NumberField';
 import helpStyles from './HelpTip.module.css';
 import shellStyles from './StepShell.module.css';
 import styles from './StepCostBasis.module.css';
@@ -42,10 +44,14 @@ export function StepCostBasis({
   onNext,
   onBack,
 }: StepCostBasisProps) {
+  const headingRef = useStepHeading();
+
   return (
     <div className={shellStyles.wrap}>
       <p className={shellStyles.stepLabel}>{stepLabel}</p>
-      <h1 className={shellStyles.title}>Skupna finančna osnova</h1>
+      <h1 className={shellStyles.title} tabIndex={-1} ref={headingRef}>
+        Skupna finančna osnova
+      </h1>
       <p className={styles.intro}>{context.costBasisIntro}</p>
 
       <div className={shellStyles.card}>
@@ -195,19 +201,19 @@ function CostField({ question, value, onChange }: CostFieldProps) {
       </div>
 
       <div className={styles.inputRow}>
-        <input
+        <NumberField
           id={`${groupId}-input`}
           className={styles.input}
-          type="number"
-          min={0}
-          inputMode="numeric"
           placeholder={`npr. ${question.fallbackEUR}`}
-          value={shown || ''}
-          onChange={(event) =>
+          value={shown === '' || shown === 0 ? null : shown}
+          onChange={(valueEUR) =>
             onChange(
-              event.target.value === ''
+              // Ničla je enakovredna praznemu polju: postavka 0 EUR/h bi vsa
+              // področja z urami izničila, izračun pa bi tako številko štel med
+              // vnesene in rezultat označil z višjo zanesljivostjo, kot si zasluži.
+              valueEUR === null || valueEUR === 0
                 ? { valueEUR: question.fallbackEUR, estimated: true, source: 'none' }
-                : { valueEUR: Number(event.target.value), estimated: false, source: 'entered' },
+                : { valueEUR, estimated: false, source: 'entered' },
             )
           }
         />
@@ -310,27 +316,23 @@ function ScaleField({ question, value, onChange }: ScaleFieldProps) {
       </div>
 
       <div className={styles.inputRow}>
-        <input
+        <NumberField
           id={`${groupId}-input`}
           className={styles.input}
-          type="number"
-          min={0}
-          inputMode="numeric"
-          placeholder={question.asPercent ? 'npr. 25' : 'npr. 2000000'}
+          placeholder={question.asPercent ? 'npr. 25' : 'npr. 2 000 000'}
+          // Odstotek ne more čez 100; prihodek zgornje meje nima, ker je vsaka
+          // izmišljena meja lahko nekomu prenizka.
+          max={question.asPercent ? 100 : undefined}
           // Prevzeto povprečje se izpiše v polje (kot pri urni postavki), da je
           // številka vidna tam, kjer jo obiskovalec pričakuje, in popravljiva.
           value={
-            value.source === 'entered' || fromAverage ? (value.value ? toDisplay(value.value) : '') : ''
+            (value.source === 'entered' || fromAverage) && value.value ? toDisplay(value.value) : null
           }
-          onChange={(event) =>
+          onChange={(shown) =>
             onChange(
-              event.target.value === ''
+              shown === null || shown === 0
                 ? { value: question.fallback, estimated: true, source: 'none' }
-                : {
-                    value: fromDisplay(Number(event.target.value)),
-                    estimated: false,
-                    source: 'entered',
-                  },
+                : { value: fromDisplay(shown), estimated: false, source: 'entered' },
             )
           }
         />

@@ -5,3 +5,9 @@ dist
 # Karta vprašalnika — nastane iz konfiguracije (tools/karta-vprasalnika),
 # v objavo jo zgradi CI. V git ne gre: pol megabajta strojno generirane datoteke.
 public/karta/
+
+# Naslov webhooka za oddajo leadov (VITE_LEAD_WEBHOOK_URL) in vse drugo iz okolja.
+# .env.example sme ostati — je vzorec brez vrednosti.
+.env
+.env.*
+!.env.example

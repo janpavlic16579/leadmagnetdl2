@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import { roleDisplay } from './answerLabels';
-import { formatEUR, formatEURRange, formatHours, formatPercent } from './format';
+import { formatEUR, formatEURRange, formatHours, formatPercent, isoDate } from './format';
 import { displayRange, type EURRange } from './range';
 import { slugify, type DownloadFile } from './download';
 import {
@@ -11,14 +11,15 @@ import {
   drawSectionTitle,
   drawTable,
   ensurePageSpace,
+  createPdfDocument,
   loadImage,
   MARGIN,
   PAGE_WIDTH,
   PALETTE,
   PDF_DISCLAIMER,
-  registerFonts,
   RISK_LEVEL_COLORS,
   RISK_LEVEL_LABEL,
+  RISK_LEVEL_UNRATED_LABEL,
   setFont,
 } from './pdfKit';
 import {
@@ -53,8 +54,7 @@ const DATE_TIME = new Intl.DateTimeFormat('sl-SI', { dateStyle: 'short', timeSty
 
 /** Sestavi pripravo in jo vrne — dostavo opravi lib/download.ts (glej pdf.ts). */
 export async function buildSalesPdfFile(report: SalesReport): Promise<DownloadFile> {
-  const doc = new jsPDF();
-  registerFonts(doc);
+  const doc = createPdfDocument();
   const logo = await loadImage(`${import.meta.env.BASE_URL}logo-datalab.png`);
 
   // Pet razdelkov: sodba → dejstva → ukrep → utemeljitev sodbe.
@@ -69,7 +69,7 @@ export async function buildSalesPdfFile(report: SalesReport): Promise<DownloadFi
 
   const company = slugify(report.meta.companyName);
   return {
-    filename: `datalab-prodajna-priprava${company ? `-${company}` : ''}-${report.meta.generatedAtISO.slice(0, 10)}.pdf`,
+    filename: `datalab-prodajna-priprava${company ? `-${company}` : ''}-${isoDate(new Date(report.meta.generatedAtISO))}.pdf`,
     blob: doc.output('blob'),
   };
 }

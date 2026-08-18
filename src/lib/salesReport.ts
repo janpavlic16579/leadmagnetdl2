@@ -23,7 +23,7 @@ import {
   triageScoreLabel,
 } from './answerLabels';
 import { scoreIcp, type IcpScore, type IcpSignals } from '../config/icp';
-import { MODULE_E_ITEMS } from '../config/modules/legacy';
+import { MODULE_E_ITEMS } from '../config/modules/moduleE';
 import { buildSalesPlaybook, type SalesPlaybook } from './salesPlaybook';
 import type { FollowUpSequence } from './followUp';
 import { ANNUAL_BUCKETS, groupByModule, isModuleAnswered, type TriageScores } from './moduleEngine';

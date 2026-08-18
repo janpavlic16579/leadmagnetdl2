@@ -59,15 +59,6 @@ export function calculateModuleD(input: ModuleDInput): ModuleDResult {
   return { annualEUR };
 }
 
-export interface ModuleEChecked {
-  sqlServer2016: boolean;
-  windowsServer2016: boolean;
-  eInvoiceZierded: boolean;
-}
-export function hasAnyModuleERisk(checked: ModuleEChecked): boolean {
-  return checked.sqlServer2016 || checked.windowsServer2016 || checked.eInvoiceZierded;
-}
-
 /** Posebnost segmenta "računovodstvo": ure preračunane v kapaciteto za nove stranke. */
 export function calculateAccountingCapacity(
   hoursFreedPerMonth: number,
@@ -89,18 +80,4 @@ export function calculateTotalAnnualLoss(input: TotalLossInput): number {
     (input.C?.annualEUR ?? 0) +
     (input.D?.annualEUR ?? 0)
   );
-}
-
-export type ModuleKeyForHighest = 'A' | 'B' | 'C' | 'D';
-
-export function findHighestModule(input: TotalLossInput): ModuleKeyForHighest | null {
-  const entries: [ModuleKeyForHighest, number][] = [
-    ['A', input.A?.annualEUR ?? 0],
-    ['B', input.B?.annualEUR ?? 0],
-    ['C', input.C?.annualEUR ?? 0],
-    ['D', input.D?.annualEUR ?? 0],
-  ];
-  const nonZero = entries.filter(([, value]) => value > 0);
-  if (nonZero.length === 0) return null;
-  return nonZero.reduce((max, current) => (current[1] > max[1] ? current : max))[0];
 }

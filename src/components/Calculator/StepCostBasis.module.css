@@ -149,6 +149,12 @@
   cursor: pointer;
 }
 
+/* Viden fokus na kartici, ne le obroček na 18 px radiu (glej tokens.css). */
+.band:focus-within {
+  outline: 3px solid var(--color-primary-text);
+  outline-offset: 2px;
+}
+
 .bandActive {
   border-color: var(--color-primary-text);
   background: var(--color-accent);

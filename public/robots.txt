@@ -1,0 +1,3 @@
+# Lead magnet naj bo najdljiv — pot do njega je del kampanje, ne skrivnost.
+User-agent: *
+Allow: /

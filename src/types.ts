@@ -16,8 +16,8 @@ export type ModuleInputsState = Record<string, Record<string, number>>;
  * Kontaktni podatki iz obrazca za prevzem poročila.
  *
  * Neobvezna polja so prazen niz in ne null: ujemajo se s sosednjimi in z izpisom
- * `|| '—'` v obeh izrisovalcih, strictNullChecks pa je izklopljen, zato null ne bi
- * prinesel nobenega jamstva pri prevajanju.
+ * `|| '—'` v obeh izrisovalcih. Prazen niz je hkrati to, kar polje obrazca res
+ * vrne — nedotaknjeno polje nima "odsotne" vrednosti, ki bi jo bilo treba pretvoriti.
  */
 export interface LeadContact {
   firstName: string;

@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       # Karta vprašalnika nastane iz konfiguracije ob vsaki objavi, zato ne more zastarati
@@ -32,7 +32,14 @@ jobs:
         run: |
           npx --yes tsx tools/karta-vprasalnika/extract.ts
           node tools/karta-vprasalnika/build-diagram.mjs public/karta/index.html
-      - run: npm run build
+      - name: Build
+        run: npm run build
+        env:
+          # Brez naslova prodajna priprava nima poti do Datalaba. Ni "secret" v
+          # pravem pomenu: predpona VITE_ pomeni, da naslov pristane v javnem
+          # svežnju, zato se mora končna točka braniti sama (omejevanje hitrosti,
+          # CORS, preverjanje izvora) in ne s skrivnostjo naslova.
+          VITE_LEAD_WEBHOOK_URL: ${{ vars.VITE_LEAD_WEBHOOK_URL }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SEGMENTS, type SegmentId } from '../../config/segments';
 import { getModules } from '../../config/modules';
 import {
@@ -26,6 +26,9 @@ import { buildTotalsRange } from '../../lib/range';
 import { assessHoursPlausibility, hoursPlausibilityWarning } from '../../lib/plausibility';
 import { selectFollowUpSequence } from '../../lib/followUp';
 import { triageScoreLabel } from '../../lib/answerLabels';
+import { track } from '../../lib/analytics';
+import { deliverLead, loadDeliveryModules } from '../../lib/deliverLead';
+import { clearProgress, readProgress, saveProgress } from '../../lib/progressStorage';
 import type { DownloadFile } from '../../lib/download';
 import type { SalesReport } from '../../lib/salesReport';
 import type {
@@ -48,6 +51,12 @@ interface CalculatorFlowProps {
   /** Dejavnost, ki jo prednastavi kampanjski ?s= — obiskovalec jo v Koraku 1 vidi in sme popraviti. */
   initialIndustry: string;
   utmSource: string | null;
+  /**
+   * Interni način (?debug=1): edina pot, po kateri se prodajna priprava prenese
+   * na napravo. Brez njega je dostava mogoča samo prek webhooka — dokument je
+   * napisan O stranki in ne ZANJO.
+   */
+  internalMode?: boolean;
   /** Obvesti starša o trenutno aktivnem segmentu (npr. za logotip v headerju). */
   onActiveSegmentChange?: (id: SegmentId) => void;
 }
@@ -55,34 +64,65 @@ interface CalculatorFlowProps {
 export function CalculatorFlow({
   initialIndustry,
   utmSource,
+  internalMode = false,
   onActiveSegmentChange,
 }: CalculatorFlowProps) {
-  const [step, setStep] = useState<FlowStep>('industry');
-  const [basicInfo, setBasicInfo] = useState<BasicInfo>({
-    industry: initialIndustry,
-    employeeCount: 0,
-  });
   /**
-   * Privzetka urnih postavk pripadata dejavnosti (voznikova ura ni operaterjeva),
-   * zato se profil ob vsaki spremembi dejavnosti ali profila izračuna postavi na
-   * novo. Brez tega bi obiskovalec, ki koraka s stroškovno osnovo ne izpolni,
-   * dobil privzetek tiste dejavnosti, ki jo je izbral najprej.
+   * Napredek prejšnje seje v tem zavihku (lib/progressStorage.ts). Prebere se
+   * enkrat, ob prvem izrisu: po tem tok krmili stanje, ne shramba.
    */
+  const [restored] = useState(readProgress);
+
+  /**
+   * Kampanjski `?s=` prevlada le, dokler obiskovalec dejavnosti še ni izbral.
+   *
+   * Obnovljen zapis je sicer močnejši od povezave — je obiskovalčeva lastna
+   * izbira, ki je povezava ne sme povoziti sredi vprašalnika. Prazna dejavnost v
+   * zapisu pa ni izbira, ampak sled obiska, ki se je končal na prvem koraku;
+   * brez te veje je star prazen zapis v zavihku pobral prednastavitev vsaki
+   * naslednji kampanjski povezavi.
+   *
+   * Profil se drži iste odločitve: urne postavke so privzetki DEJAVNOSTI, zato
+   * bi ob prevzeti dejavnosti in obnovljenem profilu obiskovalec dobil postavke
+   * druge panoge.
+   */
+  const useRestoredIndustry = Boolean(restored?.basicInfo.industry);
+  const startingIndustry = useRestoredIndustry ? restored!.basicInfo.industry : initialIndustry;
+
+  const [step, setStep] = useState<FlowStep>(restored?.step ?? 'industry');
+  const [basicInfo, setBasicInfo] = useState<BasicInfo>(() => ({
+    ...(restored?.basicInfo ?? { employeeCount: 0 }),
+    industry: startingIndustry,
+  }));
   const [profile, setProfile] = useState<BusinessProfile>(() =>
-    emptyProfileFor(getSegmentContext(getSegmentForIndustry(initialIndustry))),
+    useRestoredIndustry && restored
+      ? restored.profile
+      : emptyProfileFor(getSegmentContext(getSegmentForIndustry(startingIndustry))),
   );
-  const [moduleInputs, setModuleInputs] = useState<ModuleInputsState>({});
-  const [triageScores, setTriageScores] = useState<TriageScores>({});
+  const [moduleInputs, setModuleInputs] = useState<ModuleInputsState>(restored?.moduleInputs ?? {});
+  const [triageScores, setTriageScores] = useState<TriageScores>(restored?.triageScores ?? {});
   /** null = uporabnik še ni bil v triaži; takrat velja samodejni predlog. */
-  const [triageSelection, setTriageSelection] = useState<string[] | null>(null);
+  const [triageSelection, setTriageSelection] = useState<string[] | null>(
+    restored?.triageSelection ?? null,
+  );
   /**
    * Katero področje je na vrsti v koraku z vnosi. Hranjen kot id modula in ne kot
    * indeks: gumb "izmeri to področje" na rezultatih doda modul v izbiro, zato bi
    * indeks meril po seznamu, ki v naslednjem izrisu ne velja več. null = prva stran.
    */
-  const [inputsModuleId, setInputsModuleId] = useState<string | null>(null);
+  const [inputsModuleId, setInputsModuleId] = useState<string | null>(
+    restored?.inputsModuleId ?? null,
+  );
   const [submitted, setSubmitted] = useState(false);
-  /** Pripravljeno poročilo za svetovalca — hranimo ga, da ga je mogoče prenesti znova. */
+  /**
+   * Strankino poročilo, kot je bilo preneseno.
+   *
+   * Hranimo ga, ker prenos bloba ni zanesljiv — iOS Safari ga pogosto odpre v
+   * zavihku ali zavrne, zahvalni zaslon pa je doslej trdil, da je datoteka v mapi
+   * za prenose, in ni ponudil nobene poti nazaj.
+   */
+  const [customerFile, setCustomerFile] = useState<DownloadFile | null>(null);
+  /** Pripravljeno poročilo za svetovalca — samo v internem načinu (glej internalMode). */
   const [salesReport, setSalesReport] = useState<SalesReport | null>(null);
 
   /**
@@ -93,6 +133,14 @@ export function CalculatorFlow({
    */
   const activeSegmentId = getSegmentForIndustry(basicInfo.industry);
   const segment = SEGMENTS[activeSegmentId];
+  /**
+   * Segment, po katerem so nastali obstoječi odgovori.
+   *
+   * Loči "obiskovalec premika spustni seznam" od "obiskovalec je izbiro potrdil":
+   * odgovore zavrže šele drugo. Brez tega je vsak vmesni premik po seznamu
+   * pomenil izgubo, tudi kadar se je obiskovalec takoj popravil nazaj.
+   */
+  const committedSegmentId = useRef(activeSegmentId);
   /**
    * Odsoten kontekst je hkrati stikalo: segment brez njega nima koraka "nekaj o
    * vas" ne skupne finančne osnove, zato tudi ne pasu izboljšave in ne oznake
@@ -115,6 +163,82 @@ export function CalculatorFlow({
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [step, inputsModuleId]);
+
+  /**
+   * Napredek preživi osvežitev strani.
+   *
+   * Po oddaji ne shranjujemo več in zapis pobrišemo: tok je končan, obiskovalec
+   * pa ob naslednjem obisku ne sme pristati sredi tujega vprašalnika.
+   */
+  useEffect(() => {
+    if (submitted) {
+      clearProgress();
+      return;
+    }
+    saveProgress({ step, basicInfo, profile, moduleInputs, triageScores, triageSelection, inputsModuleId });
+  }, [submitted, step, basicInfo, profile, moduleInputs, triageScores, triageSelection, inputsModuleId]);
+
+  /**
+   * Gumb "Nazaj" v brskalniku (in gib "swipe back" na telefonu) pelje korak
+   * nazaj, ne pa z aplikacije.
+   *
+   * Vsak korak dobi svoj vnos v zgodovini. Brez tega je bil najbolj naraven gib
+   * za "nazaj" hkrati najbolj poguben: obiskovalca je odnesel s strani, s tem pa
+   * je izginil ves vprašalnik.
+   */
+  useEffect(() => {
+    const state = window.history.state as {
+      lm10Step?: FlowStep;
+      lm10InputsModuleId?: string | null;
+    } | null;
+    // Tudi inputsModuleId in ne le step: korak z vnosi je ena stran na področje,
+    // zato bi sicer vsa področja delila en vnos v zgodovini in bi "Nazaj" s
+    // tretjega področja skočil na finančno osnovo.
+    const unchanged =
+      state?.lm10Step === step && (state?.lm10InputsModuleId ?? null) === inputsModuleId;
+    if (unchanged) return;
+
+    // Prvi korak samo označimo (replace), da v zgodovini ne nastane prazen vnos.
+    const method = state?.lm10Step ? 'pushState' : 'replaceState';
+    window.history[method]({ lm10Step: step, lm10InputsModuleId: inputsModuleId }, '');
+  }, [step, inputsModuleId]);
+
+  useEffect(() => {
+    const onPopState = (event: PopStateEvent) => {
+      const state = event.state as { lm10Step?: FlowStep; lm10InputsModuleId?: string | null } | null;
+      // Vnos brez naše oznake pomeni, da smo prišli iz zgodovine pred aplikacijo —
+      // takrat naj brskalnik odnavigira, kot bi sicer.
+      if (!state?.lm10Step) return;
+      setStep(state.lm10Step);
+      setInputsModuleId(state.lm10InputsModuleId ?? null);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  /**
+   * Opozorilo pred zaprtjem zavihka, kadar je kaj za izgubiti.
+   *
+   * Le kadar so vnosi neprazni in obrazec še ni oddan: opozorilo brez vsebine je
+   * zoprnost, ki jo obiskovalci nehajo brati, in bi zato ne delovalo takrat, ko
+   * bi moralo.
+   */
+  const hasAnswers = Object.keys(moduleInputs).length > 0;
+  useEffect(() => {
+    if (!hasAnswers || submitted) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [hasAnswers, submitted]);
+
+  /**
+   * Lijak (lib/analytics.ts). Korak in segment, nič osebnega — brez tega o
+   * odpadanju skozi deset korakov ni znano nič, s tem pa je vsaka razprava o
+   * krajšanju vprašalnika razprava o mnenjih.
+   */
+  useEffect(() => {
+    track('lm10_step_view', { step, segment: activeSegmentId });
+  }, [step, activeSegmentId]);
 
   /**
    * Zaporedje korakov je izpeljano iz konfiguracije segmenta, ne iz verige ternarjev.
@@ -281,7 +405,16 @@ export function CalculatorFlow({
   const followUpSequence = selectFollowUpSequence({
     segment: segment.id,
     annualLossEUR: totals.directLossEUR + totals.lostMarginEUR,
-    hasModuleERisk: totals.risks.length > 0,
+    /**
+     * Tehnično opozorilo modula E in ne "kakršnokoli tveganje".
+     *
+     * Prej je bil pogoj `totals.risks.length > 0`, ta pa je bil vedno resničen:
+     * med izidi koša 'risk' sta tudi obe diagnostični oceni, ki sta prisotni v
+     * vsakem segmentu in tudi tedaj, ko obiskovalec na diagnostiko ne odgovori.
+     * Sekvenca 'high-loss-no-risk' zato ni bila dosegljiva nikoli — modul E, ki
+     * naj bi o njej odločal, na izbiro ni vplival.
+     */
+    hasModuleERisk: outputs.some((output) => output.moduleId === 'E' && output.bucket === 'risk'),
     highLossThresholdEUR: segment.highLossThresholdEUR,
   });
 
@@ -301,6 +434,33 @@ export function CalculatorFlow({
         !isModuleAnswered(definition, resolvedValues[definition.id])),
   );
 
+/**
+   * Rezultat je konec brezplačnega dela in edina točka, kjer je smiselno meriti
+   * KAKOVOST izračuna (oznaka zanesljivosti, koliko področij je izmerjenih) —
+   * s tem se pokaže, ali obiskovalci odpadejo zaradi šibkih ali močnih številk.
+   * Zneskov med njimi ni; ti so poslovni podatek stranke, ne merilo lijaka.
+   */
+  const resultsSeen = useRef(false);
+  useEffect(() => {
+    if (step !== 'results' || resultsSeen.current) return;
+    resultsSeen.current = true;
+
+    /**
+     * jsPDF s pisavami vred je 540 kB in se doslej začel nalagati šele ob kliku
+     * na "Prenesi poročilo" — obiskovalec je po oddaji obrazca gledal vrteči se
+     * gumb tudi nekaj sekund. Tu je naslednji klik že skoraj gotov, povezava pa
+     * med branjem rezultatov prosta.
+     */
+    void import('../../lib/pdf');
+
+    track('lm10_results_view', {
+      segment: activeSegmentId,
+      confidence: totals.confidence ?? 'unknown',
+      measuredAreas: triageableIds.length - unmeasuredModules.length,
+      offeredAreas: triageableIds.length,
+    });
+  });
+
   async function handleEmailSubmit({
     contact,
     consents,
@@ -308,68 +468,25 @@ export function CalculatorFlow({
     contact: LeadContact;
     consents: LeadConsents;
   }) {
-    // jsPDF je težka knjižnica in je potrebna šele tu — naloži se ob oddaji, ne ob
-    // prvem prikazu strani. Prodajna dela gresta v isti blok, da ostaneta izven
-    // začetnega svežnja.
-    const [
-      { buildResultsPdfFile },
-      { buildSalesReport },
-      { buildSalesPdfFile },
-      { buildSalesHtmlFile, buildSalesReportHtml },
-      { downloadSequentially },
-      { buildLeadExportRecord },
-      { leadWebhookUrl, submitLead },
-    ] = await Promise.all([
-      import('../../lib/pdf'),
-      import('../../lib/salesReport'),
-      import('../../lib/pdfSales'),
-      import('../../lib/salesReportHtml'),
+    // Orkestracija dostave živi v lib/deliverLead.ts: vitest teče brez jsdom, zato
+    // je bilo tu — sredi komponente — pravilo "prodajna priprava nikoli k stranki"
+    // nepreverljivo s testom. Tu ostane samo vezava na stanje in na brskalnik.
+    const [modules, { downloadFile, downloadSequentially }] = await Promise.all([
+      loadDeliveryModules(),
       import('../../lib/download'),
-      import('../../lib/exportRecord'),
-      import('../../lib/submitLead'),
     ]);
 
-    // Strankino poročilo se sestavi PRVO in izven try/catch: je edina datoteka, ki
-    // mora priti vedno, in napaka v prodajnem delu je ne sme odnesti s seboj.
-    const customerFile = await buildResultsPdfFile({
-      segment,
-      // Samo ime podjetja: poročilo gre upravi stranke, ki ve, kdo ga je izpolnil,
-      // in se posreduje interno — osebni podatki v njem so odveč.
-      companyName: contact.companyName,
-      outputs,
-      totals,
-      totalsRange,
-      // Ista pokritost kot na zaslonu: hero znesek meri samo izbrana področja.
-      coverage: {
-        measuredCount: triageableIds.length - unmeasuredModules.length,
-        offeredCount: triageableIds.length,
-        unmeasured: unmeasuredModules.map((definition) => ({
-          title: definition.title,
-          scoreLabel:
-            (triageScores[definition.id] ?? 0) > 0
-              ? triageScoreLabel(definition, triageScores[definition.id] ?? 0)
-              : null,
-        })),
-      },
-      highestModule,
-      accountingCapacity,
-    });
-
-    // Priprava za svetovalca. Vse, kar potrebuje, obstaja samo tu in bi se sicer
-    // ob prehodu na zahvalni zaslon zavrglo — vključno z odgovori, triažnimi
-    // ocenami neizmerjenih področij in podatkom, katere številke so bile ugibane.
-    const salesFiles: DownloadFile[] = [];
-    try {
-      const report = buildSalesReport({
-        generatedAtISO: new Date().toISOString(),
+    await deliverLead(
+      {
         contact,
         consents,
         utmSource,
-        industry: basicInfo.industry,
-        employeeCount: basicInfo.employeeCount,
+        internalMode,
         segment,
         context,
         profile,
+        industry: basicInfo.industry,
+        employeeCount: basicInfo.employeeCount,
         segmentModules,
         activeModules,
         values: resolvedValues,
@@ -378,83 +495,63 @@ export function CalculatorFlow({
         totals,
         totalsRange,
         highestModule,
+        accountingCapacity,
+        // Ista pokritost kot na zaslonu: hero znesek meri samo izbrana področja.
+        coverage: {
+          measuredCount: triageableIds.length - unmeasuredModules.length,
+          offeredCount: triageableIds.length,
+          unmeasured: unmeasuredModules.map((definition) => ({
+            title: definition.title,
+            scoreLabel:
+              (triageScores[definition.id] ?? 0) > 0
+                ? triageScoreLabel(definition, triageScores[definition.id] ?? 0)
+                : null,
+          })),
+        },
         followUpSequence,
-      });
-      setSalesReport(report);
-
-      /**
-       * Dostava prodajne priprave in izvoznega zapisa (kalibracijska zanka):
-       * kadar je konfiguriran webhook (VITE_LEAD_WEBHOOK_URL), gre vse na
-       * strežnik — prodajna priprava je INTERNI dokument in ob uspešni dostavi
-       * ne pristane na napravi stranke. Brez webhooka (ali ob napaki) ostane
-       * dosedanje vedenje: prenos k stranki, da orodje deluje samostojno.
-       */
-      let deliveredToWebhook = false;
-      const webhookUrl = leadWebhookUrl();
-      if (webhookUrl) {
-        const record = buildLeadExportRecord({
-          timestampISO: report.meta.generatedAtISO,
-          contact,
-          consents,
-          industry: basicInfo.industry,
-          segment: segment.id,
-          employeeCount: basicInfo.employeeCount,
-          profile,
-          selectedModules: activeModules.map((definition) => definition.id),
-          triageScores,
-          moduleInputs: resolvedValues,
-          outputs,
-          totals,
-          followUpSequence,
-          utmSource,
-        });
-        if (record) {
-          deliveredToWebhook = await submitLead(
-            { record, salesReportHtml: buildSalesReportHtml(report) },
-            webhookUrl,
-          );
-        }
-      }
-
-      if (!deliveredToWebhook) {
-        salesFiles.push(await buildSalesPdfFile(report), buildSalesHtmlFile(report));
-      }
-    } catch {
-      // Strankina datoteka je že sestavljena in se prenese tako ali tako.
-    }
-
-    // Zaporedno in z razmikom: trije prenosi v isti niti so za brskalnik en sam
-    // dogodek, ki ga po prvi datoteki zavrne — prav zato strankino poročilo prej
-    // ni pristalo. Prva v vrsti je zato tista, ki mora priti.
-    await downloadSequentially([customerFile, ...salesFiles]);
-
-    setSubmitted(true);
+      },
+      modules,
+      {
+        downloadFile,
+        downloadSequentially,
+        onCustomerFile: setCustomerFile,
+        onSalesReport: setSalesReport,
+        onSubmitted: () => setSubmitted(true),
+      },
+    );
   }
 
   if (step === 'industry') {
     return (
       <StepIndustry
         value={basicInfo}
-        onChange={(value) => {
-          setBasicInfo(value);
-
-          /**
-           * Odgovori pripadajo vprašalniku, vprašalnik pa segmentu — zato je sprožilec
-           * sprememba SEGMENTA in ne dejavnosti: 'trgovina' in 'drugo_blago' vodita v
-           * isti vprašalnik, zato bi brisanje pomenilo izgubo dela brez razloga.
-           *
-           * Kadar se segment spremeni, ne pomeni isto noben odgovor — niti modul 'E',
-           * ki si ga delijo vsi segmenti in se je doslej tiho prenesel v novo dejavnost.
-           */
-          const nextSegmentId = getSegmentForIndustry(value.industry);
-          if (nextSegmentId === activeSegmentId) return;
-
-          setProfile(emptyProfileFor(getSegmentContext(nextSegmentId)));
-          setTriageScores({});
-          setTriageSelection(null);
-          setModuleInputs({});
+        /**
+         * Odgovori pripadajo vprašalniku, vprašalnik pa segmentu — zato je sprožilec
+         * sprememba SEGMENTA in ne dejavnosti: 'trgovina' in 'drugo_blago' vodita v
+         * isti vprašalnik, zato bi brisanje pomenilo izgubo dela brez razloga.
+         *
+         * Zavrže jih šele "Naprej" in ne že premik v spustnem seznamu: kdor je
+         * pomotoma izbral sosednjo dejavnost in se takoj popravil, je doslej vse
+         * izgubil — dvakrat sprožena sprememba segmenta, brez opozorila in brez
+         * razveljavitve. Zdaj do zadnjega trenutka nič ne izgine, opozorilo v
+         * koraku pa pove, kaj bo "Naprej" stalo.
+         */
+        answersAtRisk={hasAnswers}
+        onChange={setBasicInfo}
+        onNext={() => {
+          const nextSegmentId = getSegmentForIndustry(basicInfo.industry);
+          if (nextSegmentId !== committedSegmentId.current) {
+            // Kadar se segment spremeni, ne pomeni isto noben odgovor — niti modul 'E',
+            // ki si ga delijo vsi segmenti in se je doslej tiho prenesel v novo dejavnost.
+            setProfile(emptyProfileFor(getSegmentContext(nextSegmentId)));
+            setTriageScores({});
+            setTriageSelection(null);
+            setModuleInputs({});
+          }
+          committedSegmentId.current = nextSegmentId;
+          track('lm10_industry_selected', { industry: basicInfo.industry, segment: nextSegmentId });
+          goNext('industry')();
         }}
-        onNext={goNext('industry')}
       />
     );
   }
@@ -498,7 +595,10 @@ export function CalculatorFlow({
         onSelectedChange={setTriageSelection}
         recommendedCount={recommendedCount}
         stepLabel={stepLabel('triage')}
-        onNext={goNext('triage')}
+        onNext={() => {
+          track('lm10_triage_done', { segment: segment.id, selectedAreas: selectedIds.length });
+          goNext('triage')();
+        }}
         onBack={goBack('triage')}
       />
     );
@@ -564,6 +664,7 @@ export function CalculatorFlow({
         accountingCapacity={accountingCapacity}
         unmeasuredModules={unmeasuredModules}
         triageScores={triageScores}
+        valuesByModule={resolvedValues}
         stepLabel={stepLabel('results')}
         onMeasureModule={(id) => {
           // Odkar je "neizmerjeno" izpeljano iz podatkov, se gumb prikaže tudi pri
@@ -573,7 +674,10 @@ export function CalculatorFlow({
           // in moral do svojega priklikati skozi vsa vmesna.
           openInputsAt(id);
         }}
-        onProceedToEmail={() => setStep('emailGate')}
+        onProceedToEmail={() => {
+          track('lm10_email_gate_view', { segment: segment.id });
+          setStep('emailGate');
+        }}
         onBack={() => openInputsAt(inputPages.at(-1)?.[0].id ?? null)}
       />
     );
@@ -583,8 +687,21 @@ export function CalculatorFlow({
     return (
       <EmailGate
         submitted={submitted}
+        internalMode={internalMode}
         followUpSequenceDebug={followUpSequence}
         onSubmit={handleEmailSubmit}
+        onDownloadCustomerPdf={
+          customerFile
+            ? async () => {
+                const { downloadFile } = await import('../../lib/download');
+                downloadFile(customerFile);
+                // Pove, kako pogosto samodejni prenos odpove — brez tega o
+                // zanesljivosti prenosa bloba na iOS ugibamo.
+                track('lm10_report_redownload', { segment: segment.id });
+              }
+            : undefined
+        }
+        onBackToResults={() => setStep('results')}
         onDownloadSalesPdf={
           salesReport
             ? async () => {

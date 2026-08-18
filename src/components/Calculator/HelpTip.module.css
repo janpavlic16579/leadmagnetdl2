@@ -28,6 +28,8 @@
  */
 .questionRow {
   display: block;
+  /* Sidro za pojasnilo na ozkih zaslonih — glej medijsko poizvedbo na dnu. */
+  position: relative;
 }
 
 /*
@@ -91,7 +93,14 @@
  */
 .panel {
   position: absolute;
-  top: calc(100% + var(--space-1));
+  /*
+   * Brez vrzeli med gumbom in oknom: prosojna zgornja obroba naredi videz odmika,
+   * hkrati pa ostane del elementa, tako da miška na poti v okno ne zapusti
+   * njegovega območja in okno ne izgine (WCAG 1.4.13 "hoverable").
+   */
+  top: 100%;
+  border-top: var(--space-1) solid transparent;
+  background-clip: padding-box;
   left: 50%;
   transform: translateX(-50%);
   z-index: 30;
@@ -115,8 +124,52 @@
 }
 
 .anchor:hover .panel,
-.anchor:focus-within .panel {
+.anchor:focus-within .panel,
+.panel[data-open] {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
+}
+
+/*
+ * Na dotik hover ni gib, ampak stranski učinek tapa ("sticky hover"), ki okno
+ * pusti odprto, dokler obiskovalec ne klikne kam drugam. Tam torej odloča samo
+ * klik (data-open) — in ta ima pot nazaj.
+ */
+@media (hover: none) {
+  .anchor:hover .panel {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .panel[data-open] {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+}
+
+/*
+ * Na ozkem zaslonu pojasnilo ni več plavajoče oknce ob gumbu, ampak blok čez
+ * celo širino vprašanja.
+ *
+ * Sredinsko sidranje na 24 px gumb je pri gumbu v desni polovici 300 px široko
+ * okno potisnilo čez rob zaslona — na 375 px je bilo odrezano vsako pojasnilo
+ * pri vprašanju, katerega naslov se je prelomil tako, da je "?" pristal desno.
+ * Sidro je zato vrstica vprašanja (.questionRow) in ne gumb; širina je s tem
+ * enaka širini vsebine in prelivanje ni več mogoče.
+ */
+@media (max-width: 520px) {
+  .anchor {
+    position: static;
+  }
+
+  .panel {
+    left: 0;
+    right: 0;
+    transform: none;
+    width: auto;
+    max-width: none;
+  }
 }

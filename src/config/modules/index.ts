@@ -1,7 +1,7 @@
 import { HORIZONTAL_MODULES } from './horizontal';
-import { LEGACY_MODULES } from './legacy';
 import { LOGISTIKA_MODULES } from './logistika';
 import { MALOPRODAJA_MODULES } from './maloprodaja';
+import { moduleE } from './moduleE';
 import { PROIZVODNJA_MODULES } from './proizvodnja';
 import { RACUNOVODSTVO_MODULES } from './racunovodstvo';
 import { SPLOSNO_MODULES } from './splosno';
@@ -20,7 +20,7 @@ import type { ModuleDefinition } from './moduleTypes';
  * vprašanja. Enakost velikosti registra in seznama varuje test v moduleEngine.test.ts.
  */
 export const ALL_MODULES: ModuleDefinition[] = [
-  ...LEGACY_MODULES,
+  moduleE,
   ...PROIZVODNJA_MODULES,
   ...LOGISTIKA_MODULES,
   ...TRGOVINA_MODULES,

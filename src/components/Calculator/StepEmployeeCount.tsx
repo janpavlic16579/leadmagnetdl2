@@ -1,4 +1,6 @@
 import type { BasicInfo } from '../../types';
+import { useStepHeading } from '../../lib/useStepHeading';
+import { NumberField } from './NumberField';
 import buttonStyles from '../../styles/buttons.module.css';
 import styles from './StepShell.module.css';
 import ownStyles from './StepEmployeeCount.module.css';
@@ -23,24 +25,31 @@ interface StepEmployeeCountProps {
  * velikosti posla v prodajni pripravi (config/icp.ts).
  */
 export function StepEmployeeCount({ value, onChange, stepLabel, onNext, onBack }: StepEmployeeCountProps) {
+  const headingRef = useStepHeading();
   const canProceed = value.employeeCount > 0;
 
   return (
     <div className={styles.wrap}>
       <p className={styles.stepLabel}>{stepLabel}</p>
-      <h1 className={styles.title}>Koliko ljudi zaposlujete?</h1>
+      <h1 className={styles.title} tabIndex={-1} ref={headingRef}>
+        Koliko ljudi zaposlujete?
+      </h1>
 
       <div className={styles.card}>
         <div className={ownStyles.inputRow}>
-          <input
+          <NumberField
             id="employeeCount"
             className={`${styles.input} ${ownStyles.numberInput}`}
-            type="number"
-            min={1}
+            // Zaposleni so cela števila in jih ni več kot nekaj deset tisoč: brez
+            // zgornje meje je "1e400" dal Infinity, velikostni razred pa "250+".
+            min={0}
+            max={100_000}
+            integer
             inputMode="numeric"
             aria-label="Število zaposlenih"
-            value={value.employeeCount || ''}
-            onChange={(event) => onChange({ ...value, employeeCount: Number(event.target.value) || 0 })}
+            value={value.employeeCount || null}
+            onChange={(employeeCount) => onChange({ ...value, employeeCount: employeeCount ?? 0 })}
+            onEnter={canProceed ? onNext : undefined}
           />
           <span className={ownStyles.unit}>zaposlenih</span>
         </div>

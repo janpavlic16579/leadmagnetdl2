@@ -15,6 +15,8 @@
  * Enumov ni, ker je v tsconfig vklopljen erasableSyntaxOnly.
  */
 
+import { DEFAULT_COST_CONTEXT } from '../modules/moduleTypes';
+
 export interface ContextOption {
   /** Zapiše se v izvozni zapis za CRM, zato naj ostane stabilen. */
   id: string;
@@ -295,30 +297,31 @@ export function emptyProfileFor(context: SegmentContext | undefined): BusinessPr
     currentSystem: null,
     role: null,
     roleOther: '',
-    // Vrednosti za `??` so iste kot DEFAULT_COST_CONTEXT (lib/moduleEngine.ts) —
-    // dva zapisa istega privzetka, ki morata ostati usklajena. Izpeljava:
-    // docs/urne-postavke.md.
+    // Rezerve so ISTE vrednosti kot DEFAULT_COST_CONTEXT in se od tam tudi berejo.
+    // Prej sta bili tu prepisani številki z opombo, da ju je treba ročno držati v
+    // skladu — dvojna evidenca, pri kateri se razhajanje pokaže šele kot razlika
+    // med zneskom na zaslonu in v testu. Izpeljava: docs/urne-postavke.md.
     operationalHour: {
-      valueEUR: context?.operationalHour.fallbackEUR ?? 22,
+      valueEUR: context?.operationalHour.fallbackEUR ?? DEFAULT_COST_CONTEXT.operationalHourCostEUR,
       estimated: true,
       source: 'none',
     },
-    adminHour: { valueEUR: context?.adminHour.fallbackEUR ?? 25, estimated: true, source: 'none' },
+    adminHour: { valueEUR: context?.adminHour.fallbackEUR ?? DEFAULT_COST_CONTEXT.adminHourCostEUR, estimated: true, source: 'none' },
     chargeOutRate: {
-      valueEUR: context?.chargeOutRate?.fallbackEUR ?? 55,
+      valueEUR: context?.chargeOutRate?.fallbackEUR ?? DEFAULT_COST_CONTEXT.chargeOutRateEUR,
       estimated: true,
       source: 'none',
     },
     // Prihodek brez odgovora ostane 0: odstotkovna polja tedaj ne dajo nobenega
     // evra. To je namen — izmišljen promet bi ustvaril izmišljeno izgubo.
-    annualRevenue: { value: context?.annualRevenue?.fallback ?? 0, estimated: true, source: 'none' },
+    annualRevenue: { value: context?.annualRevenue?.fallback ?? DEFAULT_COST_CONTEXT.annualRevenueEUR, estimated: true, source: 'none' },
     contributionMargin: {
-      value: context?.contributionMargin?.fallback ?? 0.25,
+      value: context?.contributionMargin?.fallback ?? DEFAULT_COST_CONTEXT.contributionMarginRate,
       estimated: true,
       source: 'none',
     },
     capitalCostRate: {
-      value: context?.capitalCostRate?.fallback ?? 0.06,
+      value: context?.capitalCostRate?.fallback ?? DEFAULT_COST_CONTEXT.capitalCostRate,
       estimated: true,
       source: 'none',
     },

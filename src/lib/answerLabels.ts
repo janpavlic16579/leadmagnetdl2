@@ -7,6 +7,7 @@ import type {
   SegmentContext,
 } from '../config/contexts';
 import { MAIN_CAUSE_KEY } from '../config/modules/addressableShare';
+import { isUnknownAnswer } from '../config/modules/moduleTypes';
 import type { ModuleDefinition, ModuleField } from '../config/modules/moduleTypes';
 import { formatNumber, formatPercent } from './format';
 
@@ -109,6 +110,11 @@ export function triageScoreLabel(definition: ModuleDefinition, score: number): s
  * checkbox je nimajo.
  */
 export function fieldAnswerText(field: ModuleField, value: number): string {
+  // Sentinela "ne vem" pri številskih poljih je -1 (config/modules/moduleTypes.ts).
+  // Brez te veje se je v prodajni pripravi izpisala dobesedno — "−1 EUR/leto",
+  // z virom "vneseno". Prodajnik je torej bral izmišljen negativen znesek tam,
+  // kjer je stranka izrecno povedala, da podatka nima.
+  if (isUnknownAnswer(value)) return '„Ne vem"';
   if (field.kind === 'choice') {
     return field.choices?.find((choice) => choice.value === value)?.label ?? String(value);
   }
@@ -146,6 +152,6 @@ export function isUnknownChoice(field: ModuleField, value: number | undefined): 
  * "Ne vem" je odgovor, privzetek pa je odsotnost odgovora.
  */
 export function answerSource(field: ModuleField, value: number | undefined): string {
-  if (isUnknownChoice(field, value)) return '„Ne vem"';
+  if (isUnknownChoice(field, value) || isUnknownAnswer(value)) return '„Ne vem"';
   return isAnswered(field, value) ? 'vneseno' : 'privzeto';
 }

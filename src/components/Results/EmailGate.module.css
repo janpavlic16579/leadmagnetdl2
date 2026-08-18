@@ -66,6 +66,17 @@
   margin: 0;
 }
 
+/*
+ * Napaka, ki oddajo ustavi — v nasprotju z .hint, ki le opozori (telefon, davčna).
+ * Krepko, ker mora ob petih poljih takoj povedati, katero od njih je.
+ */
+.error {
+  font-size: var(--font-size-sm);
+  color: var(--color-danger);
+  font-weight: 600;
+  margin: var(--space-1) 0 0;
+}
+
 .consentGroup {
   border: 0;
   margin: 0 0 var(--space-2);

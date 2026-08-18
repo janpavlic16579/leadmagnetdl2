@@ -53,3 +53,15 @@
   height: 18px;
   flex-shrink: 0;
 }
+
+/* Opozorilo pred menjavo vprašalnika — ista podoba kot opozorilo o verjetnosti
+   pri vnosih, ker gre za isto vrsto sporočila: opomni, a ne ustavi. */
+.discardWarning {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--radius-md);
+  color: var(--color-warning-text);
+  font-size: var(--font-size-sm);
+}

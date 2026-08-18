@@ -30,6 +30,15 @@ export function leadWebhookUrl(env: Record<string, unknown> = import.meta.env): 
 }
 
 /**
+ * Koliko časa čakamo webhook, preden odnehamo.
+ *
+ * Brez omejitve je viseč strežnik pomenil, da obiskovalec gleda vrteči se gumb,
+ * dokler ne obupa — njegovega poročila tedaj ni prenesel nihče. Osem sekund je
+ * krepko čez vsak zdrav odziv; ob prekoračitvi lead pade v lokalno pot.
+ */
+const REQUEST_TIMEOUT_MS = 8_000;
+
+/**
  * Pošlje zapis. Nikoli ne vrže: napaka omrežja ali strežnika ne sme pokvariti
  * prenosa strankinega poročila, zato se dostava le sporoči kot false in klicatelj
  * pade nazaj na lokalne prenose.
@@ -44,6 +53,10 @@ export async function submitLead(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(submission),
+      // Zahteva preživi zaprtje zavihka: obiskovalec po prenosu poročila pogosto
+      // zapre stran, preden strežnik odgovori, in lead je bil s tem izgubljen.
+      keepalive: true,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     if (!response.ok) {
       console.warn(`Oddaja leada ni uspela: ${response.status}`);

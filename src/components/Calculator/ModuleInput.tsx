@@ -1,6 +1,7 @@
 import { useId } from 'react';
 import { UNKNOWN_ANSWER } from '../../config/modules';
 import { HelpTip } from './HelpTip';
+import { NumberField } from './NumberField';
 import helpStyles from './HelpTip.module.css';
 import styles from './ModuleInput.module.css';
 
@@ -17,7 +18,7 @@ interface SliderFieldProps {
   onChange: (value: number) => void;
 }
 
-interface NumberFieldProps {
+interface NumberModeProps {
   mode: 'number';
   label: string;
   helpText?: string;
@@ -48,7 +49,7 @@ interface CheckboxFieldProps {
   onChange: (value: number) => void;
 }
 
-type ModuleInputProps = SliderFieldProps | NumberFieldProps | ChoiceFieldProps | CheckboxFieldProps;
+type ModuleInputProps = SliderFieldProps | NumberModeProps | ChoiceFieldProps | CheckboxFieldProps;
 
 export function ModuleInput(props: ModuleInputProps) {
   const { label, helpText, explainer, value, onChange } = props;
@@ -94,21 +95,20 @@ export function ModuleInput(props: ModuleInputProps) {
   const isUnknown = allowUnknown && value === UNKNOWN_ANSWER;
 
   /**
-   * min/max se uveljavita ob vnosu, ne le kot HTML atributa: atributa ustavita
+   * Meje se uveljavijo ob vnosu, ne le kot HTML atributa: atributa ustavita
    * puščici, ne pa tipkanja — vtipkana -50 ali vrednost čez mejo drsnika je doslej
    * vstopila v izračun. Prosto številsko polje ima spodnjo mejo 0 (negativnih ur
    * ali evrov ni), navzgor pa ostane odprto.
    */
-  const clamp = (raw: number): number => {
-    if (!Number.isFinite(raw)) return 0;
-    if (props.mode === 'slider') return Math.min(props.max, Math.max(props.min, raw));
-    return Math.max(0, raw);
-  };
+  const bounds =
+    props.mode === 'slider' ? { min: props.min, max: props.max } : { min: 0, max: undefined };
 
   return (
     <div className={styles.field}>
       <div className={helpStyles.questionRow}>
-        <label className={styles.label}>{label}</label>
+        <label className={styles.label} htmlFor={`${groupId}-number`}>
+          {label}
+        </label>
         <HelpTip label={label} help={helpText} explainer={explainer} />
       </div>
       <div className={styles.row}>
@@ -125,19 +125,18 @@ export function ModuleInput(props: ModuleInputProps) {
           />
         ) : null}
         <div className={styles.numberWrap}>
-          <input
+          <NumberField
+            id={`${groupId}-number`}
             className={styles.number}
-            type="number"
             // Prazno polje namesto dobesedne ničle: sicer mora uporabnik najprej
             // pobrisati "0", preden začne tipkati, kar da vmesne vrednosti kot "056".
             // Pri "ne vem" je prazno tudi vsebinsko pravilno — vrednosti ni.
-            value={Number.isFinite(value) && value > 0 ? value : ''}
+            value={Number.isFinite(value) && value > 0 ? value : null}
             placeholder={isUnknown ? '—' : '0'}
             disabled={isUnknown}
-            min={props.mode === 'slider' ? props.min : 0}
-            max={props.mode === 'slider' ? props.max : undefined}
-            step={props.mode === 'slider' ? props.step : 'any'}
-            onChange={(event) => onChange(event.target.value === '' ? 0 : clamp(Number(event.target.value)))}
+            min={bounds.min}
+            max={bounds.max}
+            onChange={(next) => onChange(next ?? 0)}
             aria-label={`${label} (vrednost)`}
           />
           {unit ? <span className={styles.unit}>{unit}</span> : null}

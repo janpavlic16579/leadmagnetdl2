@@ -1,6 +1,6 @@
 import { roleDisplay } from './answerLabels';
 import { slugify, type DownloadFile } from './download';
-import { formatEUR, formatEURRange, formatHours, formatPercent } from './format';
+import { formatEUR, formatEURRange, formatHours, formatPercent, isoDate } from './format';
 import { displayRange, type EURRange } from './range';
 import {
   contactPerson,
@@ -65,7 +65,7 @@ ${sectionIcp(report)}
 export function buildSalesHtmlFile(report: SalesReport): DownloadFile {
   const company = slugify(report.meta.companyName);
   return {
-    filename: `datalab-prodajna-priprava${company ? `-${company}` : ''}-${report.meta.generatedAtISO.slice(0, 10)}.html`,
+    filename: `datalab-prodajna-priprava${company ? `-${company}` : ''}-${isoDate(new Date(report.meta.generatedAtISO))}.html`,
     blob: new Blob([buildSalesReportHtml(report)], { type: 'text/html;charset=utf-8' }),
   };
 }

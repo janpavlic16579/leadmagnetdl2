@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import styles from './HelpTip.module.css';
 
 interface HelpTipProps {
@@ -11,22 +11,25 @@ interface HelpTipProps {
 }
 
 /**
- * Spremljajoče besedilo vprašanja: kratka razlaga in gumb "?" s plavajočim
- * oknom pojasnila na hover/fokus.
+ * Spremljajoče besedilo vprašanja: kratka razlaga in gumb "?" s pojasnilom.
  *
  * Kratka razlaga pove, KAJ vprašamo; pojasnilo v oknu pove, kako do številke
  * priti — s primerom in mejo področja. Obiskovalec, ki pojma ne pozna, sicer
  * vpiše napačno vrednost ali obupa, na koraku Skupna finančna osnova pa ena
  * napačna številka popači vse nadaljnje izračune.
  *
- * Tooltip in ne razkritje: vidnost okna krmili izključno CSS (:hover in
- * :focus-within na .anchor), zato tu ni useState in ni klika. Na dotik večina
- * brskalnikov gumbu ob tapu da fokus, kar isti :focus-within sproži tudi na
- * mobilnem — brez dodatne JS poti.
+ * RAZKRITJE in ne več zgolj tooltip na hover. Prejšnja različica je vidnost
+ * prepustila izključno CSS-u (:hover / :focus-within) in s tem tri stvari:
  *
- * ARIA temu ustrezno: `aria-describedby` + `role="tooltip"`, ne
- * `aria-expanded`/`aria-controls` (ta sta za razkritja/akordione, glej prejšnjo
- * različico te komponente).
+ * - okna ni bilo mogoče zapreti s tipko Escape (WCAG 1.4.13);
+ * - med gumbom in oknom je bila 4 px vrzel, zato je okno ob poskusu, da bi se
+ *   miška premaknila vanj (izbor besedila, kopiranje), izginilo — isti kriterij
+ *   zahteva, da je vsebina dosegljiva z miško;
+ * - na dotik je delovalo samo zato, ker brskalnik gumbu ob tapu da fokus, in
+ *   ostalo odprto, dokler ni obiskovalec kliknil kam drugam.
+ *
+ * Hover ostane kot bližnjica na namizju (CSS), klik pa doda pot, ki jo je mogoče
+ * tudi zapreti. Vrzel zapolni prosojna zgornja obroba v CSS.
  *
  * Ni `<details>/<summary>` kot MethodologyToggle: sprožilec mora biti drobna
  * ikona ob naslovu vprašanja, `<summary>` pa v `<legend>` (polja kind 'choice')
@@ -38,6 +41,18 @@ interface HelpTipProps {
  */
 export function HelpTip({ label, help, explainer }: HelpTipProps) {
   const panelId = useId();
+  const [open, setOpen] = useState(false);
+  const anchorRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!anchorRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    // Zapre tudi ob kliku v drugo pojasnilo — dve odprti okni hkrati bi se prekrili.
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [open]);
 
   return (
     <span className={styles.wrapper}>
@@ -45,11 +60,28 @@ export function HelpTip({ label, help, explainer }: HelpTipProps) {
         // Tesen ovoj velikosti gumba: sidro za okno mora biti to, ne .wrapper
         // (ta poleg gumba nosi tudi .help spodaj) — sicer se okno pozicionira
         // glede na skupno višino obeh in pristane predaleč pod gumbom.
-        <span className={styles.anchor}>
-          <button type="button" className={styles.button} aria-describedby={panelId} aria-label={`Pojasnilo: ${label}`}>
+        <span
+          className={styles.anchor}
+          ref={anchorRef}
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape' || !open) return;
+            // stopPropagation: Escape sme zapreti okno, ne pa česa nad njim.
+            event.stopPropagation();
+            setOpen(false);
+          }}
+        >
+          <button
+            type="button"
+            className={styles.button}
+            aria-expanded={open}
+            aria-controls={panelId}
+            aria-describedby={panelId}
+            aria-label={`Pojasnilo: ${label}`}
+            onClick={() => setOpen((isOpen) => !isOpen)}
+          >
             ?
           </button>
-          <span id={panelId} role="tooltip" className={styles.panel}>
+          <span id={panelId} role="tooltip" className={styles.panel} data-open={open || undefined}>
             {explainer}
           </span>
         </span>

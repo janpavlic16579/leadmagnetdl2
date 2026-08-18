@@ -61,6 +61,68 @@ export function setFont(doc: jsPDF, style: FontStyle): void {
   doc.setFont(FONT, style);
 }
 
+/**
+ * Znaki, ki jih vdelani podnabor Titilliuma NIMA.
+ *
+ * jsPDF manjkajočega glifa ne nadomesti in ne javi — tiho ga IZPUSTI. Formula
+ * "(1 − delež)" se je v PDF izpisala kot "(1  delež)", puščica v odpiralnem
+ * vprašanju pa je izginila sredi stavka. Napaka je bila zato vidna samo tistemu,
+ * ki je PDF odprl in besedilo poznal na pamet.
+ *
+ * Zamenjava je na strani PDF-ja in ne v content/ datotekah namenoma: na zaslonu
+ * so ti znaki pravilni in lepši, uredništvo pa jih sme uporabljati naprej.
+ */
+const PDF_TEXT_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/\u2212/g, '-'], // minus − → vezaj
+  [/\u2192/g, '->'], // puščica
+  [/\u2248/g, '~'], // približno
+];
+
+/** Besedilo, pripravljeno za izris: manjkajoči znaki zamenjani z razpoložljivimi. */
+export function sanitizePdfText(value: string): string {
+  let result = value;
+  for (const [pattern, replacement] of PDF_TEXT_REPLACEMENTS) {
+    result = result.replace(pattern, replacement);
+  }
+  return result;
+}
+
+const sanitizeDeep = (value: unknown): unknown =>
+  typeof value === 'string'
+    ? sanitizePdfText(value)
+    : Array.isArray(value)
+      ? value.map(sanitizeDeep)
+      : value;
+
+/**
+ * Edina pot do novega dokumenta.
+ *
+ * Poleg pisav vgradi še čiščenje besedila, in sicer na ravni instance: metodi
+ * `text` in `splitTextToSize` uporablja tudi jspdf-autotable, zato so z enim
+ * mestom pokrite tudi vse tabele. Alternativa — klicati sanitizePdfText na vsakem
+ * izrisu — bi pomenila, da en pozabljen klic vrne prav tisto tiho izgubo znakov,
+ * ki jo popravljamo. `splitTextToSize` je zajet zato, ker se prelom vrstic računa
+ * po širini KONČNEGA besedila; če bi čistili šele ob izrisu, bi se vrstice lomile
+ * po napačni meri.
+ */
+export function createPdfDocument(): jsPDF {
+  const doc = new jsPDF();
+  registerFonts(doc);
+
+  const originalText = doc.text.bind(doc);
+  doc.text = ((text: string | string[], ...rest: unknown[]) =>
+    (originalText as (...args: unknown[]) => jsPDF)(sanitizeDeep(text), ...rest)) as typeof doc.text;
+
+  const originalSplit = doc.splitTextToSize.bind(doc);
+  doc.splitTextToSize = ((text: string, ...rest: unknown[]) =>
+    (originalSplit as (...args: unknown[]) => string[])(
+      sanitizeDeep(text),
+      ...rest,
+    )) as typeof doc.splitTextToSize;
+
+  return doc;
+}
+
 export const RISK_LEVEL_LABEL: Record<RiskLevel, string> = {
   low: 'nizko tveganje',
   medium: 'srednje tveganje',
@@ -98,9 +160,12 @@ export const CONFIDENCE_NOTE: Record<ConfidenceLevel, string> = {
 };
 
 export const PAGE_WIDTH = 210;
+export const PAGE_HEIGHT = 297;
 export const MARGIN = 14;
 export const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 export const PAGE_BOTTOM = 275;
+/** Y, na katerem se začne vsebina nove strani (glej ensurePageSpace). */
+export const PAGE_TOP = 20;
 
 /**
  * Preostane prostora na trenutni strani ni dovolj → nova stran.
@@ -119,7 +184,7 @@ export const PAGE_BOTTOM = 275;
 export function ensurePageSpace(doc: jsPDF, y: number, needed: number): number {
   if (y + needed > PAGE_BOTTOM) {
     doc.addPage();
-    return 20;
+    return PAGE_TOP;
   }
   return y;
 }
@@ -204,7 +269,13 @@ export function drawTable(doc: jsPDF, options: TableOptions): number {
 
   autoTable(doc, {
     startY: options.startY,
-    margin: { left: MARGIN, right: MARGIN },
+    /*
+      Spodnja meja je NUJNA in ne kozmetična: brez nje autotable privzame 40/scale
+      = 14,1 mm in sme risati do y ≈ 282,9 — noga (črta na 280, besedilo na 284,5)
+      je torej pod tabelo in ne za njo. Zgornja poskrbi, da se nadaljevanje tabele
+      na novi strani začne na isti višini kot vsaka druga vsebina (PAGE_TOP).
+    */
+    margin: { top: PAGE_TOP, bottom: PAGE_HEIGHT - PAGE_BOTTOM, left: MARGIN, right: MARGIN },
     head: [options.head],
     body: options.rows,
     theme: 'plain',

@@ -16,6 +16,9 @@ function readInitialParams() {
   return {
     industry: segment ? getIndustryForSegment(segment.id) : '',
     utmSource: params.get('utm_source'),
+    // Interni način: prodajna priprava se prenese na napravo. Namenjen razvoju in
+    // preverjanju vsebine; obiskovalec ga po nesreči ne vklopi.
+    internalMode: params.get('debug') === '1',
   };
 }
 
@@ -38,11 +41,15 @@ function App() {
   return (
     <>
       <Header activeSegmentId={activeSegmentId} theme={theme} onToggleTheme={handleToggleTheme} />
-      <CalculatorFlow
-        initialIndustry={initial.industry}
-        utmSource={initial.utmSource}
-        onActiveSegmentChange={setActiveSegmentId}
-      />
+      {/* Orientir "glavna vsebina": bralnik zaslona lahko skoči nanj mimo glave. */}
+      <main>
+        <CalculatorFlow
+          initialIndustry={initial.industry}
+          utmSource={initial.utmSource}
+          internalMode={initial.internalMode}
+          onActiveSegmentChange={setActiveSegmentId}
+        />
+      </main>
     </>
   );
 }

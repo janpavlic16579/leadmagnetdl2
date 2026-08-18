@@ -15,6 +15,22 @@
   --color-warning-text: #7a4a00;
   --color-danger: #c0392b;
 
+  /*
+   * Barve serij v grafu — LASTNI tokeni in ne semantični.
+   *
+   * Prej so serije uporabljale --color-primary, --color-warning-border in
+   * --color-primary-text. V svetli temi sta bili prvi dve (#faaf17 in #f0b429)
+   * praktično ista barva (kontrast ≈1,03:1), v temni pa sta bili prva in tretja
+   * DOSLOVNO isti, ker je --color-primary-text tam enak --color-primary. Graf s
+   * tremi stolpci je torej pokazal dve razločljivi barvi ali eno.
+   *
+   * Ne razlikuje jih le odtenek, ampak tudi svetlost (≈0,49 / 0,22 / 0,11) — tako
+   * ostanejo ločljive tudi ob barvni slepoti in v črno-belem izpisu.
+   */
+  --color-chart-loss: #faaf17;
+  --color-chart-margin: #a86a08;
+  --color-chart-capacity: #4b5563;
+
   /* Onemogočen gumb: v svetli temi zbledela rumena, kot je bilo doslej. */
   --color-button-disabled-bg: var(--color-primary);
   --color-button-disabled-text: var(--color-on-primary);
@@ -32,6 +48,7 @@
   --space-5: 32px;
   --space-6: 48px;
 
+  --font-size-xs: 0.75rem;
   --font-size-sm: 0.875rem;
   --font-size-md: 1rem;
   --font-size-lg: 1.25rem;
@@ -81,6 +98,11 @@
   --color-warning-text: #f3ca7d;
   --color-danger: #e8776b;
 
+  /* Ista tri mesta v svetlobni lestvici, obrnjena za temno podlago (≈0,72/0,49/0,36). */
+  --color-chart-loss: #faaf17;
+  --color-chart-margin: #ffd89b;
+  --color-chart-capacity: #8fa3b8;
+
   --color-button-disabled-bg: #2e2a2b;
   --color-button-disabled-text: #7d7573;
   --button-disabled-opacity: 1;
@@ -117,10 +139,49 @@ h3 {
   font-weight: 600;
 }
 
+/*
+ * Naslov koraka dobi ob vstopu fokus (lib/useStepHeading.ts), da bralnik zaslona
+ * prebere, kje smo, uporabnik tipkovnice pa ne tabia znova skozi glavo. Obris pri
+ * tem ni na mestu: fokus ni prišel s tipkovnice. `:focus-visible` ga vrne, kadar
+ * uporabnik na naslov pride s tabulatorjem.
+ */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
 button {
   font-family: inherit;
 }
 
+/*
+ * Viden fokus na vseh interaktivnih elementih. Doslej ga je imel samo preklopnik
+ * teme — pri izbirnih karticah (triaža, kontekst, razponi) je bil edini znak
+ * fokusa obroč na 18 px velikem radiu, ki ga ob hitrem tabanju ni videti.
+ */
+button:focus-visible,
+select:focus-visible,
+summary:focus-visible,
+a:focus-visible {
+  outline: 3px solid var(--color-primary-text);
+  outline-offset: 2px;
+}
+
 input[type='range'] {
   accent-color: var(--color-primary-text);
+}
+
+/*
+ * Zmanjšano gibanje velja za celotno aplikacijo, ne le za preklopnik teme.
+ * Animacije v grafu izklopi komponenta sama (Recharts jih ne bere iz CSS) —
+ * glej BreakdownChart in lib/useMediaQuery.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
 }

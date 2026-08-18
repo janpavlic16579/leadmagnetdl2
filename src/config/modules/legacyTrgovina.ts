@@ -4,20 +4,19 @@ import {
   calculateModuleC,
   calculateModuleD,
 } from '../../lib/calculations';
-import type { ModuleDefinition, ModuleField, ModuleOutputDraft } from './moduleTypes';
+import type { ModuleDefinition, ModuleField } from './moduleTypes';
 
 /**
- * Obstoječi moduli A–E, prepisani v register.
+ * Zastareli trgovinski moduli A–D — SAMO za migracijski test.
+ *
+ * A_racunovodstvo in A/C/D_splosno so bili odstranjeni: obe dejavnosti imata svojih
+ * pet področij (racunovodstvo.ts oziroma splosno.ts) in noben segment jih ni več
+ * uporabljal. Trgovinski so ostali, ker na njih stoji dokaz, da prepis v register
+ * ni premaknil nobene številke.
  *
  * compute() namenoma DELEGIRA na funkcije v lib/calculations.ts — matematika se ni
  * spremenila, zato calculations.test.ts z validacijskimi primeri ostane nedotaknjen
- * in še naprej velja. Koši so izbrani tako, da je directLossEUR za trgovino,
- * računovodstvo in splošno številčno enak nekdanjemu totalAnnualLossEUR
- * (glej test enakosti v moduleEngine.test.ts).
- *
- * Vprašanja so bila doslej segmentno različna, zato ima vsak modul po eno različico
- * na segment. Podvojitev je tu cenejša od segmentnega prekrivanja besedil, ki bi
- * vrnilo prav kompleksnost, ki jo register odpravlja.
+ * in še naprej velja.
  */
 
 // --- Skupna polja -----------------------------------------------------------
@@ -240,62 +239,21 @@ function makeModuleD(id: string, dsoQuestion: string): ModuleDefinition {
   };
 }
 
-// --- Modul E: tehnološka in regulatorna tveganja ----------------------------
-
-export interface ModuleEChecklistItem {
-  key: 'sqlServer2016' | 'windowsServer2016' | 'eInvoiceZierded';
-  label: string;
-  warningDate: string;
-  warningText: string;
-}
-
-/** Modul E je vsebinsko enak za vse segmente (spec pogl. 3) — ni segmentne variacije. */
-export const MODULE_E_ITEMS: ModuleEChecklistItem[] = [
-  {
-    key: 'sqlServer2016',
-    label: 'Uporabljamo SQL Server 2016',
-    warningDate: '2026-07-14',
-    warningText: 'Podpora za SQL Server 2016 je potekla 14. 7. 2026 — rok je že mimo.',
-  },
-  {
-    key: 'windowsServer2016',
-    label: 'Uporabljamo Windows Server 2016',
-    warningDate: '2027-01-12',
-    warningText: 'Podpora za Windows Server 2016 se konča 12. 1. 2027.',
-  },
-  {
-    key: 'eInvoiceZierded',
-    label: 'Nimamo urejenega kanala za e-račune',
-    warningDate: '2028-01-01',
-    warningText:
-      'Od 1. 1. 2028 velja ZIERDED: brez urejenega e-računa vam kupec preprosto ne bo mogel plačati — globa do 3.000 EUR je ob tem obrobna.',
-  },
-];
-
-export const moduleE: ModuleDefinition = {
-  id: 'E',
-  title: 'Tvegani stroški',
-  summary: 'Roki, ki vas dohitijo, tudi če danes vse deluje.',
-  fields: MODULE_E_ITEMS.map((item) => ({
-    key: item.key,
-    label: item.label,
-    kind: 'checkbox' as const,
-    default: 0,
-  })),
-  compute: (input) =>
-    MODULE_E_ITEMS.filter((item) => input[item.key] === 1).map(
-      (item): ModuleOutputDraft => ({
-        bucket: 'risk',
-        label: item.label,
-        riskLevel: 'high',
-        note: item.warningText,
-      }),
-    ),
-};
-
 // --- Segmentne različice ----------------------------------------------------
 
-export const LEGACY_MODULES: ModuleDefinition[] = [
+/**
+ * Zastareli trgovinski moduli A–D.
+ *
+ * NISO v registru (config/modules/index.ts) in obiskovalec do njih ne more priti:
+ * veleprodaja je že dolgo na svojih petih področjih. Ostajajo kot edina priča
+ * migracijskega testa skladnosti (lib/moduleEngine.test.ts), ki drži, da se
+ * matematika ob prepisu v register ni tiho spremenila.
+ *
+ * Ločeni od modula E prav zato, da ta besedila ne potujejo v produkcijski sveženj:
+ * dokler so bila v isti datoteki kot živ modul, jih je uvoz registra potegnil s
+ * seboj — nekaj kilobajtov vprašanj, ki jih ne vidi nihče.
+ */
+export const LEGACY_TRGOVINA_MODULES: ModuleDefinition[] = [
   makeModuleA({
     id: 'A_trgovina',
     documentsQuestion: 'Koliko naročil/dobavnic ročno obdelate mesečno?',
@@ -303,14 +261,6 @@ export const LEGACY_MODULES: ModuleDefinition[] = [
     documentsUnit: 'dokumentov/mesec',
     minutesDefault: 3,
   }),
-  // A_racunovodstvo in A/C/D_splosno so odstranjeni: obe dejavnosti imata od tu
-  // naprej svojih pet področij (config/modules/racunovodstvo.ts oziroma
-  // splosno.ts) in nobenega segmenta ni več, ki bi te module uporabljal.
-  // Ohranjeni bi bili mrtvi vnosi v registru.
-  //
-  // Trgovinski ostanejo: noben segment jih ne uporablja, so pa edina priča
-  // migracijskega testa skladnosti (lib/moduleEngine.test.ts → LEGACY_TRGOVINA),
-  // ki drži, da se matematika ob prepisu v register ni tiho spremenila.
   makeModuleB({
     id: 'B_trgovina',
     transactionsQuestion: 'Koliko pošiljk/naročil odpremite mesečno?',
@@ -321,5 +271,4 @@ export const LEGACY_MODULES: ModuleDefinition[] = [
   }),
   makeModuleC('C_trgovina', 'Kolikšna je povprečna vrednost vaših zalog (EUR)?', 0.04),
   makeModuleD('D_trgovina', 'Kolikšen je povprečen dejanski plačilni rok kupcev (dni)?'),
-  moduleE,
 ];

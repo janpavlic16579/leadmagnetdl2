@@ -1,4 +1,5 @@
 import {
+  DEFAULT_COST_CONTEXT,
   isUnknownAnswer,
   type ComputeContext,
   type ModuleDefinition,
@@ -6,25 +7,11 @@ import {
 } from '../config/modules/moduleTypes';
 
 /**
- * Zasilne predpostavke za module, ki jih uporabljajo, kadar jih klicatelj ne poda
- * (starejši segmenti in testi). Urne postavke namenoma niso 0 — ničla bi tiho
- * vrnila 0 EUR in izgledala kot veljaven izračun.
- *
- * Prihodek je izjema in je 0: je edina predpostavka, ki jo uporabnikov odstotek
- * množi in ne obratno, zato bi privzeta vrednost ustvarila znesek, ki ga ni vnesel
- * nihče (glej ComputeContext.annualRevenueEUR).
+ * Zasilne predpostavke živijo pri tipu, ki ga opisujejo (config/modules/moduleTypes).
+ * Tu se ponovno izvozijo, ker jih pod tem imenom uvaža več testov in ker je motor
+ * njihov glavni uporabnik.
  */
-export const DEFAULT_COST_CONTEXT: ComputeContext = {
-  // Operativna ura je NIŽJA od administrativne — v Sloveniji je operater plačan
-  // pod povprečjem, pisarniško in vodstveno delo pa nad njim. Prejšnja privzetka
-  // (45 / 35) sta imela razmerje obrnjeno. Izpeljava: docs/urne-postavke.md.
-  operationalHourCostEUR: 22,
-  adminHourCostEUR: 25,
-  chargeOutRateEUR: 55,
-  annualRevenueEUR: 0,
-  contributionMarginRate: 0.25,
-  capitalCostRate: 0.06,
-};
+export { DEFAULT_COST_CONTEXT };
 
 /**
  * Motor registra modulov. Vse funkcije so čiste — vsa logika (seštevanje po koših,

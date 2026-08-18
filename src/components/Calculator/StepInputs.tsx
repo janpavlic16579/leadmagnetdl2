@@ -3,6 +3,7 @@ import type { SegmentConfig } from '../../config/segments';
 import { formatEUR } from '../../lib/format';
 import type { ModuleInputsState } from '../../types';
 import { ModuleSection } from './ModuleSection';
+import { useStepHeading } from '../../lib/useStepHeading';
 import buttonStyles from '../../styles/buttons.module.css';
 import shellStyles from './StepShell.module.css';
 import styles from './StepInputs.module.css';
@@ -43,6 +44,21 @@ export function StepInputs({
   onBack,
   onChangeSegment,
 }: StepInputsProps) {
+  // Vsako področje je svoja stran z novim naslovom — fokus mora za njim.
+  const headingRef = useStepHeading(pageTitle);
+
+  /**
+   * Zadnja stran nosi diagnostiko in tvegane stroške — področja BREZ evrov.
+   *
+   * Opomba o plačni masi in tekoča vsota sta na njej govorili o nečem, česar na
+   * strani ni: obiskovalec je odgovarjal na štiri vprašanja o sledljivosti,
+   * spodaj pa gledal znesek, ki se ni premaknil, in pojasnilo o urah, ki jih ni
+   * vnašal. Vsota ostane le tam, kjer se ob vnosu res spreminja.
+   */
+  const hasMonetaryFields = modules.some((definition) =>
+    definition.fields.some((field) => field.kind !== 'choice' && field.kind !== 'checkbox'),
+  );
+
   const handleFieldChange = (moduleId: string, key: string, value: number) => {
     onChange({ ...raw, [moduleId]: { ...values[moduleId], [key]: value } });
   };
@@ -50,7 +66,9 @@ export function StepInputs({
   return (
     <div className={shellStyles.wrap}>
       <p className={shellStyles.stepLabel}>{stepLabel}</p>
-      <h1 className={shellStyles.title}>{pageTitle}</h1>
+      <h1 className={shellStyles.title} tabIndex={-1} ref={headingRef}>
+        {pageTitle}
+      </h1>
 
       <div className={styles.profileBanner}>
         <span>
@@ -75,10 +93,12 @@ export function StepInputs({
             hideTitle={modules.length === 1}
           />
         ))}
-        <p className={styles.moduleFootnote}>
-          Sproščene ure ne pomenijo nižje plačne mase — zaposleni ostane. Gre za čas, ki ga lahko usmerite v
-          drugo delo.
-        </p>
+        {hasMonetaryFields ? (
+          <p className={styles.moduleFootnote}>
+            Sproščene ure ne pomenijo nižje plačne mase — zaposleni ostane. Gre za čas, ki ga lahko
+            usmerite v drugo delo.
+          </p>
+        ) : null}
       </div>
 
       {plausibilityWarning ? (
@@ -101,10 +121,12 @@ export function StepInputs({
             prispevata nobene neposredne izgube, zato bi obiskovalec, ki izbere prav
             ti dve, ves čas vnašanja gledal 0 EUR.
           */}
-          <div className={styles.pinnedTotal}>
-            <span className={styles.pinnedLabel}>Trenutni letni strošek izbranih področij</span>
-            <span className={styles.pinnedValue}>{formatEUR(liveTotalEUR)}</span>
-          </div>
+          {hasMonetaryFields ? (
+            <div className={styles.pinnedTotal}>
+              <span className={styles.pinnedLabel}>Trenutni letni strošek izbranih področij</span>
+              <span className={styles.pinnedValue}>{formatEUR(liveTotalEUR)}</span>
+            </div>
+          ) : null}
 
           <div className={shellStyles.actions}>
             <button type="button" className={buttonStyles.secondaryButton} onClick={onBack}>

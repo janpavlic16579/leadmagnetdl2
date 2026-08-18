@@ -6,8 +6,6 @@ import {
   calculateModuleD,
   calculateAccountingCapacity,
   calculateTotalAnnualLoss,
-  findHighestModule,
-  hasAnyModuleERisk,
 } from './calculations';
 
 describe('Modul A — ročno delo', () => {
@@ -71,13 +69,6 @@ describe('Modul D — počasen denarni tok', () => {
   });
 });
 
-describe('Modul E — tvegani stroški', () => {
-  it('hasAnyModuleERisk vrne true, če je vsaj eno tveganje označeno', () => {
-    expect(hasAnyModuleERisk({ sqlServer2016: false, windowsServer2016: false, eInvoiceZierded: false })).toBe(false);
-    expect(hasAnyModuleERisk({ sqlServer2016: true, windowsServer2016: false, eInvoiceZierded: false })).toBe(true);
-  });
-});
-
 describe('Kapaciteta za računovodski servis (posebnost modula A)', () => {
   it('dodatne stranke = sproščene ure / ure na stranko', () => {
     const hoursFreed = calculateModuleA({ documentsPerMonth: 8000, minutesPerDocument: 1, hourlyLaborCostEUR: 25 }).hoursFreedPerMonth;
@@ -85,20 +76,10 @@ describe('Kapaciteta za računovodski servis (posebnost modula A)', () => {
   });
 });
 
-describe('Skupna letna izguba in najvišji modul', () => {
+describe('Skupna letna izguba', () => {
   it('C prispeva v skupno vsoto samo z annualEUR, ne z releasedCapitalEUR', () => {
     const c = calculateModuleC({ inventoryValueEUR: 400000, achievableReductionPercent: 0.15, capitalCostPercent: 0.1 });
     const total = calculateTotalAnnualLoss({ C: c });
     expect(total).toBeCloseTo(6000);
-  });
-
-  it('findHighestModule vrne modul z najvišjim letnim zneskom', () => {
-    const a = calculateModuleA({ documentsPerMonth: 800, minutesPerDocument: 3, hourlyLaborCostEUR: 25 }); // 12.000
-    const c = calculateModuleC({ inventoryValueEUR: 400000, achievableReductionPercent: 0.15, capitalCostPercent: 0.1 }); // 6.000
-    expect(findHighestModule({ A: a, C: c })).toBe('A');
-  });
-
-  it('findHighestModule vrne null, če ni nobenega neničelnega modula', () => {
-    expect(findHighestModule({})).toBeNull();
   });
 });

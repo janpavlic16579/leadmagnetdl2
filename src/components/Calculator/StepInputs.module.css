@@ -21,8 +21,13 @@
 .profileChange {
   background: none;
   border: none;
+  /* 44px tarča kot vse druge v vprašalniku — doslej je bila ta ≈26px visoka.
+     Negativni rob poskrbi, da povečana tarča pasu ne razpre. */
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
   padding: var(--space-1) var(--space-2);
-  margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-2));
+  margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2));
   font-size: var(--font-size-sm);
   color: var(--color-primary-text);
   text-decoration: underline;

@@ -5,7 +5,7 @@ import type { SegmentConfig } from '../config/segments';
 import { getActionPlan } from '../../content/actions/actions';
 import { groupByModule } from './moduleEngine';
 import type { ConfidenceLevel, ResultTotals } from './potential';
-import { formatEUR, formatEURRange, formatHours, formatNumber } from './format';
+import { formatEUR, formatEURRange, formatHours, formatNumber, isoDate } from './format';
 import { displayRange, type EURRange, type TotalsRange } from './range';
 import { slugify, type DownloadFile } from './download';
 import {
@@ -16,14 +16,15 @@ import {
   drawSectionTitle,
   drawTable,
   ensurePageSpace,
+  createPdfDocument,
   loadImage,
   MARGIN,
   PAGE_WIDTH,
   PALETTE,
   PDF_DISCLAIMER,
-  registerFonts,
   RISK_LEVEL_COLORS,
   RISK_LEVEL_LABEL,
+  RISK_LEVEL_UNRATED_LABEL,
   setFont,
   truncateToWidth,
 } from './pdfKit';
@@ -58,12 +59,6 @@ function heroAmount(value: number, range: EURRange | undefined, lowConfidence: b
 
 function moduleTitle(moduleId: string): string {
   return MODULE_REGISTRY[moduleId]?.title ?? moduleId;
-}
-
-/** YYYY-MM-DD po lokalnem času — toISOString bi zvečer vrnil jutrišnji datum. */
-function isoDate(date: Date): string {
-  const pad = (value: number) => String(value).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 /** Vrstice ene tabele: modul, postavka, znesek — enotno za vse denarne koše. */
@@ -123,8 +118,7 @@ function niceCeiling(value: number): number {
  * Vsebina dokumenta je nespremenjena.
  */
 export async function buildResultsPdfFile(params: GeneratePdfParams): Promise<DownloadFile> {
-  const doc = new jsPDF();
-  registerFonts(doc);
+  const doc = createPdfDocument();
   const dateStr = new Intl.DateTimeFormat('sl-SI').format(new Date());
   // Poti do public/ morajo iti prek BASE_URL — aplikacija se strežе izpod
   // /leadmagnetdl/ (glej vite.config.ts), zato bi trdo kodiran koren 404-iral.

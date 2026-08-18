@@ -27,3 +27,43 @@
   margin-bottom: var(--space-2);
   color: var(--color-text);
 }
+
+/* Napis se zamenja glede na stanje <details> — brez JS. */
+.summaryOpen {
+  display: none;
+}
+
+.details[open] .summaryClosed {
+  display: none;
+}
+
+.details[open] .summaryOpen {
+  display: inline;
+}
+
+.answersTitle {
+  margin: 0 0 var(--space-1);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* Vnesene vrednosti: oznaka levo, številka desno — isti vzorec kot razčlenitev
+   zneskov nad njo, da se bereta kot en stolpec. */
+.answers {
+  list-style: none;
+  margin: 0 0 var(--space-2);
+  padding: 0;
+}
+
+.answers li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 2px 0;
+}
+
+.answerValue {
+  color: var(--color-text);
+  font-weight: 600;
+  white-space: nowrap;
+}

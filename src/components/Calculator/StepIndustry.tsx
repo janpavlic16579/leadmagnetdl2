@@ -1,18 +1,26 @@
+import { useState } from 'react';
 import {
   DRUGO_ID,
   DRUGO_SUB_INDUSTRIES,
   INDUSTRIES,
   SUB_INDUSTRY_QUESTION,
   findSubIndustry,
+  getSegmentForIndustry,
   industryChoiceLabel,
 } from '../../config/industries';
 import type { BasicInfo } from '../../types';
+import { useStepHeading } from '../../lib/useStepHeading';
 import buttonStyles from '../../styles/buttons.module.css';
 import shellStyles from './StepShell.module.css';
 import styles from './StepIndustry.module.css';
 
 interface StepIndustryProps {
   value: BasicInfo;
+  /**
+   * Ali obstajajo odgovori, ki bi jih menjava vprašalnika zavrgla. Krmili
+   * opozorilo; brisanje samo opravi klicatelj, in sicer šele ob "Naprej".
+   */
+  answersAtRisk?: boolean;
   onChange: (value: BasicInfo) => void;
   onNext: () => void;
 }
@@ -32,7 +40,13 @@ interface StepIndustryProps {
  */
 const INDUSTRY_QUESTION = 'S čim se ukvarja vaše podjetje?';
 
-export function StepIndustry({ value, onChange, onNext }: StepIndustryProps) {
+export function StepIndustry({ value, answersAtRisk = false, onChange, onNext }: StepIndustryProps) {
+  /**
+   * Segment, s katerim je korak začel — z njim se primerja trenutna izbira, da
+   * opozorilo pove resnico: 'trgovina' in 'drugo_blago' vodita v isti vprašalnik,
+   * zato menjava med njima ničesar ne izgubi in opozorila ne sme sprožiti.
+   */
+  const [initialSegmentId] = useState(() => getSegmentForIndustry(value.industry));
   /**
    * Ko je izbrana pod-dejavnost, hrani basicInfo njen id (npr. 'drugo_storitve'),
    * spustni seznam pa mora še naprej kazati "Drugo" — sicer bi izbira izginila,
@@ -43,11 +57,16 @@ export function StepIndustry({ value, onChange, onNext }: StepIndustryProps) {
   const showSubQuestion = selectValue === DRUGO_ID;
 
   // Sam 'drugo' ni odgovor: brez podizbire ne vemo, kateri vprašalnik pokazati.
+  const headingRef = useStepHeading();
   const canProceed = value.industry.length > 0 && value.industry !== DRUGO_ID;
+  const willDiscardAnswers =
+    answersAtRisk && canProceed && getSegmentForIndustry(value.industry) !== initialSegmentId;
 
   return (
     <div className={shellStyles.wrap}>
-      <h1 className={shellStyles.introTitle}>Koliko vas stane sedanji način dela?</h1>
+      <h1 className={shellStyles.introTitle} tabIndex={-1} ref={headingRef}>
+        Koliko vas stane sedanji način dela?
+      </h1>
       {/*
        * Ocena trajanja mora držati. Prej je pisalo "v dveh minutah": že sam korak
        * triaže traja dlje, obiskovalec pa takrat še ni pri nobeni številki. Obljuba,
@@ -112,6 +131,15 @@ export function StepIndustry({ value, onChange, onNext }: StepIndustryProps) {
           </fieldset>
         ) : null}
       </div>
+
+      {willDiscardAnswers ? (
+        // role="status": opozorilo se pojavi šele ob spremembi izbire, zato ga mora
+        // bralnik zaslona prebrati, ne da bi mu obiskovalec šel iskat.
+        <p className={styles.discardWarning} role="status">
+          Ta dejavnost ima svoj vprašalnik, zato bodo vaši dosedanji odgovori ob koraku naprej
+          izbrisani. Če se premislite, izberite prejšnjo dejavnost — do tedaj ni izgubljeno nič.
+        </p>
+      ) : null}
 
       <p className={shellStyles.trustNote}>
         Ves izračun poteka v vašem brskalniku. Nič od vnesenih podatkov ne zapusti brskalnika, dokler se sami ne

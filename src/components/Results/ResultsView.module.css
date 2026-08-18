@@ -17,17 +17,38 @@
   margin: 0 0 var(--space-1);
 }
 
+/* Vprašanje segmenta je naslov strani (glej ResultsView) — ne več sivi pripis. */
 .headline {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-xl);
+  margin: 0 0 var(--space-3);
 }
 
-.totalValue {
+/* Odgovor na vprašanje v naslovu: ena številka, preden se razdeli na štiri. */
+.heroTotal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-2);
+}
+
+.heroLabel {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.heroValue {
   font-size: var(--font-size-xxl);
   font-weight: 700;
-  margin: 0 0 var(--space-4);
   color: var(--color-primary-text);
+  line-height: 1.1;
+}
+
+.heroSecondary {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  margin: 0 0 var(--space-2);
 }
 
 .card {
@@ -76,18 +97,6 @@
   padding: var(--space-3) 0;
 }
 
-.headlineNote {
-  margin: calc(-1 * var(--space-2)) 0 var(--space-4);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-}
-
-.bigValue {
-  font-size: var(--font-size-lg);
-  font-weight: 700;
-  margin: 0;
-}
-
 .cardNote {
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
@@ -133,12 +142,12 @@
   background: var(--color-warning-bg);
   border: 1px solid var(--color-warning-border);
   color: var(--color-warning-text);
-  font-size: var(--font-size-xs, 0.75rem);
+  font-size: var(--font-size-xs);
 }
 
 /* Pokritost izračuna — pripis takoj pod povzetkom, ne šele na dnu strani. */
 .coverageNote {
-  margin: var(--space-3) 0 0;
+  margin: 0 0 var(--space-3);
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
 }
@@ -147,4 +156,9 @@
   margin: var(--space-1) 0 0;
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
+}
+
+/* Prostor za graf, dokler se Recharts nalaga — brez njega vsebina pod njim poskoči. */
+.chartPlaceholder {
+  height: 260px;
 }

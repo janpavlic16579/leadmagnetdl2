@@ -1,5 +1,6 @@
 import type { ModuleDefinition } from '../../config/modules';
 import type { TriageScores } from '../../lib/moduleEngine';
+import { useStepHeading } from '../../lib/useStepHeading';
 import buttonStyles from '../../styles/buttons.module.css';
 import shellStyles from './StepShell.module.css';
 import styles from './StepTriage.module.css';
@@ -41,6 +42,8 @@ export function StepTriage({
   onNext,
   onBack,
 }: StepTriageProps) {
+  const headingRef = useStepHeading();
+
   const toggle = (id: string) => {
     if (selected.includes(id)) {
       onSelectedChange(selected.filter((selectedId) => selectedId !== id));
@@ -53,7 +56,9 @@ export function StepTriage({
   return (
     <div className={shellStyles.wrap}>
       <p className={shellStyles.stepLabel}>{stepLabel}</p>
-      <h1 className={shellStyles.title}>Kje vas najbolj tišči?</h1>
+      <h1 className={shellStyles.title} tabIndex={-1} ref={headingRef}>
+        Kje vas najbolj tišči?
+      </h1>
       <p className={styles.intro}>
         {/* Brez imena dejavnosti: ta zaslon uporabljata proizvodnja in logistika,
             imena področij pod njim pa že povesta, čigav vprašalnik je to. */}

@@ -6,11 +6,33 @@
     <link rel="icon" type="image/png" sizes="512x512" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Trajanje mora biti isto kot v Koraku 1 ("okoli deset minut"). Prej je tu
+      pisalo "v dveh minutah" — obljuba, ki se podre na koraku triaže, ko je
+      obiskovalec že vložil nekaj minut, in prav takrat je opustitev najdražja.
+    -->
     <meta
       name="description"
-      content="Vnesite nekaj svojih številk in v dveh minutah dobite razčlenjen izračun letnih skritih stroškov sedanjega načina dela."
+      content="Vnesite nekaj svojih številk in v približno desetih minutah dobite razčlenjen izračun letnih skritih stroškov sedanjega načina dela."
     />
+    <!-- Barva okrog naslovne vrstice na mobilnem; ločeno za obe temi. -->
+    <meta name="theme-color" content="#f7f8fa" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#171415" media="(prefers-color-scheme: dark)" />
     <title>Koliko vas stane sedanji način dela? — Datalab</title>
+    <!--
+      Predogled ob deljenju povezave. Lead magnet se širi po e-pošti, LinkedInu in
+      internih klepetih; brez teh oznak se je povsod prikazal kot gola povezava
+      brez naslova in opisa.
+    -->
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="sl_SI" />
+    <meta property="og:site_name" content="Datalab PANTHEON" />
+    <meta property="og:title" content="Koliko vas stane sedanji način dela?" />
+    <meta
+      property="og:description"
+      content="Razčlenjen izračun letnih skritih stroškov vašega poslovanja — brez vnosa e-naslova."
+    />
+    <meta name="twitter:card" content="summary" />
     <script>
       // Tema se postavi še pred izrisom, sicer bi ob nalaganju bliskala napačna
       // različica, preden se React zažene. Logika mora ostati enaka kot v

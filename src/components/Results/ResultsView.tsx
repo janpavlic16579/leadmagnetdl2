@@ -1,15 +1,30 @@
+import { lazy, Suspense } from 'react';
 import { getModules, type ModuleDefinition, type ModuleOutput } from '../../config/modules';
 import type { SegmentConfig } from '../../config/segments';
 import { triageScoreLabel } from '../../lib/answerLabels';
+import { formatAmount, formatDecimal } from '../../lib/format';
+import { useStepHeading } from '../../lib/useStepHeading';
 import type { TriageScores } from '../../lib/moduleEngine';
 import type { ResultTotals } from '../../lib/potential';
 import type { TotalsRange } from '../../lib/range';
 import { Breakdown } from './Breakdown';
-import { BreakdownChart, type BreakdownChartDatum } from './BreakdownChart';
+import type { BreakdownChartDatum } from './BreakdownChart';
 import { ResultsSummary } from './ResultsSummary';
 import { RiskCard } from './RiskCard';
 import buttonStyles from '../../styles/buttons.module.css';
 import styles from './ResultsView.module.css';
+
+/**
+ * Recharts se naloži šele tu.
+ *
+ * Knjižnica z odvisnostmi vred je 341 kB od 798 kB glavnega svežnja — 43 % kode,
+ * ki jo je obiskovalec prenesel ob prvem obisku, čeprav je graf šele na desetem
+ * koraku in ga velik del obiskovalcev sploh ne doseže. Rezervat prostora med
+ * nalaganjem prepreči, da bi vsebina pod grafom poskočila.
+ */
+const BreakdownChart = lazy(() =>
+  import('./BreakdownChart').then((module) => ({ default: module.BreakdownChart })),
+);
 
 interface ResultsViewProps {
   segment: SegmentConfig;
@@ -22,6 +37,8 @@ interface ResultsViewProps {
   unmeasuredModules: ModuleDefinition[];
   /** Triažne ocene 0–3 — pri neizmerjenih področjih pokažejo, kaj po lastni oceni boli. */
   triageScores: TriageScores;
+  /** Razrešeni vnosi po modulu — razčlenitev iz njih pokaže, iz česa znesek nastane. */
+  valuesByModule: Record<string, Record<string, number>>;
   stepLabel: string;
   onMeasureModule: (id: string) => void;
   onProceedToEmail: () => void;
@@ -36,13 +53,34 @@ export function ResultsView({
   accountingCapacity,
   unmeasuredModules,
   triageScores,
+  valuesByModule,
   stepLabel,
   onMeasureModule,
   onProceedToEmail,
   onBack,
 }: ResultsViewProps) {
+  const headingRef = useStepHeading();
   const isAccounting = segment.id === 'racunovodstvo';
   const modules = getModules(segment.moduleIds);
+
+  /**
+   * Skupni letni znesek — ista formula kot tekoča vsota v pasu med vnosi
+   * (StepInputs.liveTotalEUR). Enkratni kapital namenoma ni zraven: sešteti
+   * enkraten učinek z letnimi je prav napaka, ki jo ločeni koši preprečujejo.
+   */
+  const heroValueEUR = totals.directLossEUR + totals.lostMarginEUR + totals.capacityEUR;
+  const heroRange = totalsRange
+    ? {
+        minEUR:
+          totalsRange.directLoss.minEUR + totalsRange.lostMargin.minEUR + totalsRange.capacity.minEUR,
+        maxEUR:
+          totalsRange.directLoss.maxEUR + totalsRange.lostMargin.maxEUR + totalsRange.capacity.maxEUR,
+      }
+    : null;
+  const heroTotal = formatAmount(heroValueEUR, {
+    range: heroRange,
+    lowConfidence: totals.confidence === 'low',
+  });
 
   /**
    * Pokritost izračuna: hero številka meri samo izbrana in izpolnjena področja,
@@ -81,13 +119,36 @@ export function ResultsView({
       <p className={styles.stepLabel}>
         {stepLabel} · {segment.displayName}
       </p>
-      <p className={styles.headline}>{segment.headlineStory}</p>
+      {/*
+        Vprašanje segmenta je naslov strani in ne opomba pod njo.
+        Doslej je bilo drobno sivo besedilo, h1 pa je imel samo računovodski
+        segment — stran, ki naj odgovori na eno vprašanje, se je torej začela
+        brez tega vprašanja, hierarhija naslovov pa pri h2 kartic.
+      */}
+      <h1 className={styles.headline} tabIndex={-1} ref={headingRef}>
+        {segment.headlineStory}
+      </h1>
+
+      {/*
+        Ena številka pred štirimi.
+
+        Med vnašanjem je obiskovalec ves čas gledal "Trenutni letni strošek
+        izbranih področij", ki je rasel z vsakim odgovorom — na rezultatih pa je
+        ta številka izginila in namesto nje so ga pričakale štiri enakovredne
+        kartice z dolgimi pojasnili. Vsota je ista kot v pasu med vnosi
+        (neposredno + marža + kapaciteta); enkratni kapital ostane zunaj, ker se
+        z letnimi zneski ne sešteva.
+      */}
+      <p className={styles.heroTotal}>
+        <span className={styles.heroLabel}>Skupaj na leto</span>
+        <span className={styles.heroValue}>{heroTotal}</span>
+      </p>
 
       {isAccounting && accountingCapacity !== undefined ? (
-        <h1 className={styles.totalValue}>+{accountingCapacity.toFixed(1)} strank brez nove zaposlitve</h1>
+        <p className={styles.heroSecondary}>
+          To je {formatDecimal(accountingCapacity)} dodatnih strank brez nove zaposlitve.
+        </p>
       ) : null}
-
-      <ResultsSummary totals={totals} totalsRange={totalsRange} directLossNote={segment.directLossNote} />
 
       {triageableCount > 0 && measuredCount < triageableCount ? (
         <p className={styles.coverageNote}>
@@ -98,10 +159,14 @@ export function ResultsView({
         </p>
       ) : null}
 
+      <ResultsSummary totals={totals} totalsRange={totalsRange} directLossNote={segment.directLossNote} />
+
       {chartData.length > 0 ? (
         <div className={styles.card}>
           <h2 className={styles.sectionTitle}>Razčlenitev po področjih</h2>
-          <BreakdownChart data={chartData} />
+          <Suspense fallback={<div className={styles.chartPlaceholder} aria-hidden="true" />}>
+            <BreakdownChart data={chartData} />
+          </Suspense>
           {/* Oba letna denarna koša v istem seznamu: postavke so poimenovane tako,
               da je razlika vidna, ločena razdelka pa bi isto področje razbila na
               dva bloka in razčlenitev bi izgubila smisel. */}
@@ -109,6 +174,7 @@ export function ResultsView({
             modules={modules}
             outputsByModule={outputsByModule}
             buckets={['directLoss', 'lostMargin']}
+            valuesByModule={valuesByModule}
           />
         </div>
       ) : null}
@@ -116,7 +182,12 @@ export function ResultsView({
       {totals.capacityEUR > 0 ? (
         <div className={styles.card}>
           <h2 className={styles.sectionTitle}>Kje se izgublja kapaciteta</h2>
-          <Breakdown modules={modules} outputsByModule={outputsByModule} buckets={['capacity']} />
+          <Breakdown
+            modules={modules}
+            outputsByModule={outputsByModule}
+            buckets={['capacity']}
+            valuesByModule={valuesByModule}
+          />
         </div>
       ) : null}
 
@@ -171,7 +242,9 @@ export function ResultsView({
               Nazaj na vnos
             </button>
             <button type="button" className={buttonStyles.primaryButton} onClick={onProceedToEmail}>
-              Dobite PDF poročilo in akcijski načrt
+              {/* Isto besedilo kot naslov naslednjega zaslona — prej je gumb obljubljal
+                  "PDF poročilo", pristalo pa se je na "Razširjen rezultat". */}
+              Prenesi PDF poročilo
             </button>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { formatEUR, formatEURRange, formatHours } from '../../lib/format';
+import { formatAmount, formatEUR, formatEURRange, formatHours } from '../../lib/format';
 import type { ConfidenceLevel, ResultTotals } from '../../lib/potential';
 import { displayRange, type EURRange, type TotalsRange } from '../../lib/range';
 import styles from './ResultsSummary.module.css';
@@ -12,6 +12,17 @@ interface ResultsSummaryProps {
 }
 
 const DEFAULT_DIRECT_LOSS_NOTE = 'Denar, ki dejansko odteka, ne izgubljen čas.';
+
+/**
+ * Pod tem zneskom postavka ne dobi svoje kartice.
+ *
+ * "Sprostljiv obratni kapital: 1 EUR" ali "Nezaslužena letna marža: najmanj 45
+ * EUR" pod polnim naslovom in tremi vrsticami pojasnila ne izgleda kot majhna
+ * številka, ampak kot pokvarjen izračun — in vse druge zneske na strani potegne
+ * s seboj v dvom. Postavka iz vsote ne izpade, le svojega poudarka ne dobi;
+ * v razčlenitvi spodaj ostane vidna.
+ */
+const MIN_FIGURE_EUR = 100;
 
 const CONFIDENCE_LABEL: Record<ConfidenceLevel, string> = {
   high: 'Visoka zanesljivost',
@@ -37,13 +48,8 @@ const CONFIDENCE_NOTE: Record<ConfidenceLevel, string> = {
  */
 export function ResultsSummary({ totals, totalsRange, directLossNote }: ResultsSummaryProps) {
   const confidence = totals.confidence;
-  // Pri nizki zanesljivosti je navidezno natančen znesek slabši od poštenega "najmanj".
-  // Razpon ima prednost pred obojim: "X – Y" negotovost že pove, "najmanj" bi jo podvojil.
-  const amount = (value: number, range?: EURRange) => {
-    const span = displayRange(range);
-    if (span) return formatEURRange(span.minEUR, span.maxEUR);
-    return confidence === 'low' ? `najmanj ${formatEUR(value)}` : formatEUR(value);
-  };
+  const amount = (value: number, range?: EURRange) =>
+    formatAmount(value, { range: displayRange(range), lowConfidence: confidence === 'low' });
 
   return (
     <>
@@ -67,7 +73,7 @@ export function ResultsSummary({ totals, totalsRange, directLossNote }: ResultsS
           mora prenesti ugovor "tega nakupa morda sploh ne bi bilo", ne da bi s seboj
           odnesla tudi dokazljivi del zneska.
         */}
-        {totals.lostMarginEUR > 0 ? (
+        {totals.lostMarginEUR >= MIN_FIGURE_EUR ? (
           <Figure
             title="Nezaslužena letna marža"
             value={amount(totals.lostMarginEUR, totalsRange?.lostMargin)}
@@ -86,7 +92,7 @@ export function ResultsSummary({ totals, totalsRange, directLossNote }: ResultsS
           />
         ) : null}
 
-        {totals.oneTimeCapitalEUR > 0 ? (
+        {totals.oneTimeCapitalEUR >= MIN_FIGURE_EUR ? (
           <Figure
             title="Sprostljiv obratni kapital"
             value={

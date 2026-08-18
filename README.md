@@ -15,7 +15,22 @@ npm run dev
 | `npm run dev` | razvojni strežnik |
 | `npm run test` | unit testi formul in motorja |
 | `npm run lint` | oxlint |
-| `npm run build` | produkcijski build |
+| `npm run typecheck` | `tsc -b` — vitest tipov NE preverja, zato je to svoj korak |
+| `npm run build` | produkcijski build (typecheck + Vite) |
+
+Iste štiri ukaze požene `.github/workflows/ci.yml` ob vsakem PR. Obstaja zato, ker je prej tekel samo
+deploy ob potisku na `main`: napaka tipov se je pokazala šele ob objavi. Različica Node je v `.nvmrc`.
+
+### Build spremenljivke
+
+| Spremenljivka | Kaj naredi, če manjka |
+|---|---|
+| `VITE_LEAD_WEBHOOK_URL` | prodajna priprava se ne sestavi in lead nima poti do Datalaba (glej **Kaj se zgodi ob oddaji**) |
+| `VITE_PUBLIC_URL` | `canonical`, `og:url` in `og:image` se ne izpišejo — napačen kanonični naslov je slabši od nobenega |
+
+Obe se v objavi bereta iz repozitorijskih spremenljivk (`vars`) v `.github/workflows/deploy.yml`.
+Predpona `VITE_` pomeni, da vrednost pristane v javnem svežnju — webhook se mora zato braniti sam
+(omejevanje hitrosti, CORS, preverjanje izvora) in ne s skrivnostjo naslova.
 
 Aplikacija se objavlja na podpot `/leadmagnetdl/` (`base` v `vite.config.ts`). Poti do datotek v `public/`
 je zato treba sestaviti prek `import.meta.env.BASE_URL` — Vite prepiše samo poti v `index.html`, ne pa
@@ -348,9 +363,12 @@ poslovnih modelov pa je malo. Štiri izbire preusmerijo v obstoječ segment, pet
 Oznake pod-dejavnosti se v izvoznem zapisu začnejo z „Drugo — ", ker mora prodajnik videti, da se
 obiskovalec ni prepoznal v nobeni panogi, tudi če je nato odgovarjal na storitvena vprašanja.
 
-Trgovinski moduli `A_trgovina`–`D_trgovina` v `src/config/modules/legacy.ts` ostajajo, čeprav jih noben
-segment ne uporablja: so edina priča migracijskega testa skladnosti v `src/lib/moduleEngine.test.ts`, ki
-drži, da se matematika ob prepisu v register ni tiho spremenila.
+Trgovinski moduli `A_trgovina`–`D_trgovina` živijo v `src/config/modules/legacyTrgovina.ts` in **niso v
+registru**: noben segment jih ne uporablja, so pa edina priča migracijskega testa skladnosti v
+`src/lib/moduleEngine.test.ts`, ki drži, da se matematika ob prepisu v register ni tiho spremenila. Test
+jih uvozi neposredno iz te datoteke — ker jih register ne pozna, njihova besedila tudi ne potujejo v
+produkcijski sveženj. Modul `E`, edini še živ iz nekdanje serije A–E, je zato v svoji
+`src/config/modules/moduleE.ts`.
 
 ### Koši
 
@@ -403,11 +421,44 @@ Izpeljava, sidra in datumi poizvedb: [`docs/urne-postavke.md`](docs/urne-postavk
 | Potencial in ocena zanesljivosti | `src/lib/potential.ts` |
 | Razlage metodologije | `content/methodology.ts` |
 | "3 ukrepi ta teden" | `content/actions/actions.ts` |
+| Branje števil s slovensko vejico (vsa številska polja) | `src/lib/numberInput.ts` + `src/components/Calculator/NumberField.tsx` |
+| Barve serij v grafu | `--color-chart-*` v `src/styles/tokens.css` |
+| Dogodki lijaka | `src/lib/analytics.ts` |
+| Ohranjanje napredka ob osvežitvi | `src/lib/progressStorage.ts` |
 
 ## Zaupanjska zasnova
 
 Ves izračun teče v brskalniku. Nič poslovnih podatkov ne zapusti naprave, dokler uporabnik sam ne odda
 obrazca — to je na strani tudi izrecno napisano.
+
+Napredek se hrani v `sessionStorage` (`src/lib/progressStorage.ts`), da osvežitev strani ne izbriše
+desetih minut dela. Trditev zgoraj s tem ostane resnična: zapis ne zapusti naprave, velja za en
+zavihek in eno sejo, kontaktnih podatkov iz obrazca pa ne vsebuje — ti nastanejo šele z oddajo, ki je
+zavestna odločitev. Ob oddaji se zapis pobriše.
+
+## Ohranjanje toka
+
+Trije mehanizmi, ki jih je lahko spregledati, ker se pokažejo šele ob napaki:
+
+- **`sessionStorage`** (zgoraj) — obnovi korak, odgovore, triažo in finančno osnovo.
+- **Zgodovina brskalnika** — vsak korak (in vsaka stran vnosov) dobi svoj vnos prek `pushState`,
+  `popstate` pa vrne korak nazaj. Brez tega je bil gib "swipe back" na telefonu najbolj naraven način,
+  da obiskovalec zapusti vprašalnik in izgubi vse.
+- **`beforeunload`** — opozorilo ob zapiranju zavihka, a samo kadar so vnosi neprazni in obrazec še
+  ni oddan. Opozorilo brez vsebine se ga nehajo brati in ne deluje takrat, ko bi moralo.
+
+## Merjenje lijaka
+
+`src/lib/analytics.ts` potisne dogodke v `window.dataLayer` (Google Tag Manager). Aplikacija ne naloži
+nobene zunanje skripte in ne postavi nobenega piškotka — brez nameščenega GTM se dogodki naberejo v
+polju in nikamor ne odidejo.
+
+Dogodki: `lm10_step_view`, `lm10_industry_selected`, `lm10_triage_done`, `lm10_results_view`,
+`lm10_email_gate_view`, `lm10_lead_submitted`, `lm10_report_redownload`.
+
+**Osebnih podatkov in zneskov med njimi ni** — samo korak, segment in razredi (oznaka zanesljivosti,
+število izmerjenih področij). Kar potrebuje prodaja, potuje po webhooku s privolitvijo; analitika meri
+lijak in ne strank.
 
 ## Obrazec za prevzem poročila
 
@@ -440,31 +491,43 @@ teče na podpoti `/leadmagnetdl/`.
 
 ## Kaj se zgodi ob oddaji obrazca
 
+**Ob delujočem webhooku dobi stranka natanko eno datoteko: svoje poročilo.** Prodajna priprava je
+interni dokument — napisan je O stranki (ocena ustreznosti, priporočilo licenc, pričakovani ugovori
+z odgovori) in ne ZANJO — zato tedaj na njeno napravo ne gre. Dokler webhooka ni, se prenese tudi
+njej; glej razlago pod tabelo.
+
 Dostava je odvisna od build spremenljivke **`VITE_LEAD_WEBHOOK_URL`** (`.env`):
 
 - **Webhook nastavljen:** ob oddaji se na naslov POST-a JSON (`src/lib/submitLead.ts`) z izvoznim
-  zapisom (`buildLeadExportRecord`, `src/lib/exportRecord.ts`) in prodajno pripravo kot HTML. Stranka
-  tedaj dobi **samo svoje poročilo** — prodajna priprava je interni dokument in ne pristane na njeni
-  napravi. S tem se prvič lahko zaprejo kalibracijske zanke ("preveriti po ~50 vnosih").
-- **Webhook ni nastavljen (privzeto):** oddaja **ne kliče strežnika** in vse konča v lokalno
-  prenesenih datotekah, kot doslej. Napaka webhooka pade nazaj na ta način — strankino poročilo mora
-  priti vedno.
+  zapisom (`buildLeadExportRecord`, `src/lib/exportRecord.ts`) in prodajno pripravo kot HTML. S tem
+  se prvič lahko zaprejo kalibracijske zanke ("preveriti po ~50 vnosih"). Zahteva ima osemsekundno
+  omejitev in `keepalive`: viseč strežnik ne sme zadrževati strankinega prenosa, zaprt zavihek pa ne
+  sme pobrisati leada.
+- **Webhook ni nastavljen (privzeto) ali dostava ne uspe:** prodajna priprava se prenese k stranki,
+  zahvalni zaslon pa jo prosi, naj jo posreduje pred sestankom. To je **začasno stanje**: dokler
+  naslova ni, je posredovanje po stranki edina pot, po kateri svetovalec pripravo sploh dobi. Cena
+  je, da ima stranka na disku dokument, napisan o njej. Ko naslov nastavite, prenos ugasne sam —
+  preklop je uspeh dostave in ne dodatna zastavica.
+- **Interni način `?debug=1`:** pripravo prenese tudi ob delujočem webhooku. Namenjen razvoju in
+  pregledu vsebine; na zahvalnem zaslonu je označen z „[interno]".
 
 | Datoteka | Za koga | Kaj vsebuje |
 |---|---|---|
 | `datalab-analiza-skritih-stroskov-<podjetje>-<datum>.pdf` | stranka | `src/lib/pdf.ts` — hero zneski, graf, razčlenitev, tveganja, 3 ukrepi |
-| `datalab-prodajna-priprava-<podjetje>-<datum>.pdf` | svetovalec (samo brez webhooka) | `src/lib/pdfSales.ts` |
-| `datalab-prodajna-priprava-<podjetje>-<datum>.html` | svetovalec (samo brez webhooka) | `src/lib/salesReportHtml.ts` — ista vsebina za branje na telefonu |
+| `datalab-prodajna-priprava-<podjetje>-<datum>.pdf` | svetovalec (webhook; brez njega prek stranke) | `src/lib/pdfSales.ts` |
+| `datalab-prodajna-priprava-<podjetje>-<datum>.html` | svetovalec (webhook; brez njega prek stranke) | `src/lib/salesReportHtml.ts` — ista vsebina za branje na telefonu |
 
-**Vse tri se prenesejo samodejno, a ZAPOREDNO in z razmikom ~1,2 s** (`downloadSequentially` v
+Interni datoteki se preneseta **ZAPOREDNO in z razmikom ~1,2 s** (`downloadSequentially` v
 `src/lib/download.ts`). Brskalnik iz ene geste zanesljivo dovoli en prenos; naslednje bodisi pogojuje
-z dovoljenjem ("Prenesti več datotek?") bodisi jih tiho zavrže. Trije klici v isti niti so zato
-loterija — in v praksi je izpadlo prav strankino poročilo.
+z dovoljenjem ("Prenesti več datotek?") bodisi jih tiho zavrže.
 
 Dve pravili, ki ju ni dovoljeno razveljaviti:
 
-- **Strankina datoteka je vedno prva v vrsti** in se sestavi izven `try/catch`. Prvi prenos je edini
-  zajamčen, napaka v prodajnem delu pa je ne sme odnesti s seboj.
+- **Strankina datoteka se prenese PRVA**, takoj ko je sestavljena, in izven `try/catch` — pred
+  prodajnim delom in pred webhookom. Prvi prenos je edini zajamčen (najbliže je uporabnikovi gesti),
+  napaka ali zamuda v internem delu pa ga ne sme zadrževati. Zahvalni zaslon ponudi še gumb za
+  ponovni prenos: prenosa bloba na iOS Safari ni mogoče jamčiti in trditev "datoteka je v mapi za
+  prenose" ni bila preverljiva.
 - **Generatorji dokumenta ne prenašajo — vrnejo `DownloadFile`.** Dokler je vsak klical
   `doc.save()`, je dokument prenašal sam sebe po poti jsPDF, ki je ni mogoče ne zakasniti ne uvrstiti
   v vrsto. Zdaj vodi do prenosa ena sama pot, ki tudi `URL.revokeObjectURL` pokliče **zakasnjeno**:
