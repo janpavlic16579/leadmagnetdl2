@@ -418,6 +418,7 @@ Izpeljava, sidra in datumi poizvedb: [`docs/urne-postavke.md`](docs/urne-postavk
 | Naslovljivi deleži po vzroku | `src/config/modules/addressableShare.ts` |
 | Kontekstna vprašanja, pasovi izboljšave, razponi urnih postavk, vidnost modula E | `src/config/contexts/` |
 | Izpeljava in viri urnih postavk (preden jih spreminjate) | [`docs/urne-postavke.md`](docs/urne-postavke.md) |
+| Zapisnik preverbe postavk proti trgu 2026 (od kod je prišla sprememba) | [`docs/urne-postavke-raziskava-2026.md`](docs/urne-postavke-raziskava-2026.md) |
 | Potencial in ocena zanesljivosti | `src/lib/potential.ts` |
 | Razlage metodologije | `content/methodology.ts` |
 | "3 ukrepi ta teden" | `content/actions/actions.ts` |

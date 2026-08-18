@@ -8,6 +8,11 @@ ure v vseh modulskih formulah, zato se napaka v njih prenese v vsak prikazan zne
 
 Poizvedbe so bile opravljene **18. avgusta 2026**. Vse številke veljajo za Slovenijo.
 
+Ta dokument pove, **kaj velja zdaj**. Kaj smo primerjali, kaj se ni ujemalo in zakaj se je
+postavka premaknila, pove zapisnik preverbe:
+[`urne-postavke-raziskava-2026.md`](urne-postavke-raziskava-2026.md). Tam so tudi klici
+API-jev, s katerimi preverbo ponovite.
+
 ---
 
 ## Kaj postavka pomeni
