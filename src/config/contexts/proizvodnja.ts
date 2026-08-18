@@ -8,15 +8,16 @@ import {
 import type { CostBand, SegmentContext } from './contextTypes';
 
 /**
- * Sidro: operater na stroju 19,9 EUR/h, panožno povprečje predelovalnih dejavnosti 23,6.
+ * Sidro 2026: operater na stroju 22,0 EUR/h, varilec 21,4, orodjar 23,2, strugar 23,7;
+ * panožno povprečje predelovalnih dejavnosti 24,3 (C25 kovinski izdelki 22,3).
  * Zgornja pasova pokrijeta izmenske in nevarnostne dodatke ter specializirane profile
  * (CNC, varilec z atestom). Izpeljava in viri: docs/urne-postavke.md.
  */
 const PRODUCTION_HOUR_BANDS: CostBand[] = [
-  { id: 'do18', label: 'Do 18 EUR', midpointEUR: 16, minEUR: 13, maxEUR: 18 },
-  { id: '18do25', label: '18–25 EUR', midpointEUR: 21, minEUR: 18, maxEUR: 25 },
-  { id: '25do33', label: '25–33 EUR', midpointEUR: 29, minEUR: 25, maxEUR: 33 },
-  { id: 'nad33', label: 'Več kot 33 EUR', midpointEUR: 38, minEUR: 33, maxEUR: 46 },
+  { id: 'do20', label: 'Do 20 EUR', midpointEUR: 18, minEUR: 15, maxEUR: 20 },
+  { id: '20do26', label: '20–26 EUR', midpointEUR: 22, minEUR: 20, maxEUR: 26 },
+  { id: '26do34', label: '26–34 EUR', midpointEUR: 30, minEUR: 26, maxEUR: 34 },
+  { id: 'nad34', label: 'Več kot 34 EUR', midpointEUR: 39, minEUR: 34, maxEUR: 46 },
 ];
 
 export const PROIZVODNJA_CONTEXT: SegmentContext = {
@@ -64,7 +65,7 @@ export const PROIZVODNJA_CONTEXT: SegmentContext = {
     help: 'Operater, varilec, monter — kdor dela na delovnem nalogu.',
     explainer: HOURLY_COST_EXPLAINER,
     bands: PRODUCTION_HOUR_BANDS,
-    fallbackEUR: 22,
+    fallbackEUR: 23,
   },
 
   adminHour: {
@@ -72,7 +73,7 @@ export const PROIZVODNJA_CONTEXT: SegmentContext = {
     help: 'Planer, vodja proizvodnje, nabava, priprava dela.',
     explainer: ADMIN_HOUR_EXPLAINER,
     bands: ADMIN_HOUR_BANDS,
-    fallbackEUR: 25,
+    fallbackEUR: 27,
   },
 
   /**

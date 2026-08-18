@@ -20,33 +20,40 @@ import type { CostBand, SegmentContext } from './contextTypes';
  * Izvedbena ura je dražja od proizvodne: svetovalec in inženir sta višje plačana.
  *
  * Nabor je NAMENOMA širši od vseh ostalih, ker segment pokriva najširši razpon
- * poklicev v kalkulatorju: monter in serviser (~20 EUR/h) na eni strani, senior IT
- * svetovalec (35+) na drugi. Spodnja pasova zajameta terensko ekipo, zgornja
- * svetovalca in inženirja (inženir/tehnolog 30,2 EUR/h, panoga IKT 31,1). Cena te
+ * poklicev v kalkulatorju: mehanik in serviser (~25 EUR/h) na eni strani, inženir
+ * strojništva in programer (35+) na drugi. Spodnja pasova zajameta terensko ekipo,
+ * zgornja svetovalca in inženirja (inženir/tehnolog 33,2 EUR/h, tehnik strojništva
+ * 28,4, programer 34,7; panoga K62 33,5, N71.12 inženiring 27,3). Zgornji pas je
+ * odrezan pri 60 in ne 68 EUR: 68 EUR/h ustreza bruto plači 8.100 EUR, kar ni
+ * izvedbena ura, ampak partner. Cena te
  * izbire je zavestna: širši pas pomeni, da se rezultat pogosteje prikaže kot razpon
  * in ne kot ena številka. Izpeljava in viri: docs/urne-postavke.md.
  */
 const DELIVERY_HOUR_BANDS: CostBand[] = [
-  { id: 'do24', label: 'Do 24 EUR', midpointEUR: 20, minEUR: 16, maxEUR: 24 },
-  { id: '24do33', label: '24–33 EUR', midpointEUR: 28, minEUR: 24, maxEUR: 33 },
-  { id: '33do45', label: '33–45 EUR', midpointEUR: 38, minEUR: 33, maxEUR: 45 },
-  { id: 'nad45', label: 'Več kot 45 EUR', midpointEUR: 55, minEUR: 45, maxEUR: 68 },
+  { id: 'do24', label: 'Do 24 EUR', midpointEUR: 21, minEUR: 17, maxEUR: 24 },
+  { id: '24do31', label: '24–31 EUR', midpointEUR: 27, minEUR: 24, maxEUR: 31 },
+  { id: '31do42', label: '31–42 EUR', midpointEUR: 36, minEUR: 31, maxEUR: 42 },
+  { id: 'nad42', label: 'Več kot 42 EUR', midpointEUR: 50, minEUR: 42, maxEUR: 60 },
 ];
 
 /**
  * Zaračunana postavka je cena, ne strošek — zato so razponi višji od izvedbene ure
- * in zato je sidro drugo: ne plače, ampak objavljeni ceniki. IZS priporoča osnovno
- * vrednost storitve 70 EUR/h (±15 %) za licencirano projektiranje, ZING zahtevno
- * svetovanje 67 EUR/h (47 EUR za člane), računovodsko svetovanje sega od 81 do
- * 180 EUR/h, samostojni razvijalec pa dela za 25–45 EUR/h. Sredina trga za splošno
- * storitveno podjetje je zato 45–70 EUR/h, ne 75–90.
+ * in zato je sidro drugo: ne plače, ampak objavljeni ceniki. IZS za 2026 priporoča
+ * temeljno vrednost storitve 72,52 EUR/h (±15 %), po storitvenih razredih od 50,76
+ * do 152,29; referenčni cenik GZS za IKT gre od 32 EUR (pomožna dela) prek 58
+ * (programer I) in 79 (analitik) do 143 EUR za ekspertno svetovanje; računovodsko
+ * knjiženje stane 50–88 EUR/h, svetovanje 81–190; povprečen programer na trgu 50
+ * EUR/h. Sredina trga za splošno storitveno podjetje je zato 50–72 EUR/h.
+ *
+ * Najnižji pas se začne pri 30 in ne 25 EUR: pod 32 EUR (pomožna dela po ceniku
+ * GZS) ni nobene objavljene postavke, tudi ne za najpreprostejše delo.
  *
  * Sredine morajo biti različne od vseh drugih znotraj istega vprašanja: StepCostBasis
  * prepozna izbrani pas po sredini, enaki vrednosti bi označili dva radia hkrati.
  */
 const CHARGE_OUT_BANDS: CostBand[] = [
-  { id: 'do40', label: 'Do 40 EUR', midpointEUR: 33, minEUR: 25, maxEUR: 40 },
-  { id: '40do60', label: '40–60 EUR', midpointEUR: 50, minEUR: 40, maxEUR: 60 },
+  { id: 'do42', label: 'Do 42 EUR', midpointEUR: 36, minEUR: 30, maxEUR: 42 },
+  { id: '42do60', label: '42–60 EUR', midpointEUR: 50, minEUR: 42, maxEUR: 60 },
   { id: '60do85', label: '60–85 EUR', midpointEUR: 72, minEUR: 60, maxEUR: 85 },
   { id: 'nad85', label: 'Več kot 85 EUR', midpointEUR: 105, minEUR: 85, maxEUR: 130 },
 ];
@@ -110,7 +117,7 @@ export const STORITVE_CONTEXT: SegmentContext = {
     help: 'Svetovalec, inženir, tehnik, oblikovalec — kdor dela na projektu za naročnika.',
     explainer: HOURLY_COST_EXPLAINER,
     bands: DELIVERY_HOUR_BANDS,
-    fallbackEUR: 30,
+    fallbackEUR: 32,
   },
 
   adminHour: {
@@ -118,7 +125,7 @@ export const STORITVE_CONTEXT: SegmentContext = {
     help: 'Vodja projektov, priprava ponudb, obračun, podpora prodaji.',
     explainer: ADMIN_HOUR_EXPLAINER,
     bands: ADMIN_HOUR_BANDS,
-    fallbackEUR: 25,
+    fallbackEUR: 27,
   },
 
   chargeOutRate: {

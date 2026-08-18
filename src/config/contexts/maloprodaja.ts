@@ -13,16 +13,17 @@ import type { CostBand, ScaleBand, SegmentContext } from './contextTypes';
  * Če bi maloprodaja podedovala proizvodne, bi vsak kapacitetni znesek pretiraval
  * za faktor dve — in prav pretiravanje je tisto, kar direktor najprej opazi.
  *
- * Sidro: prodajalec in blagajnik 17,6 EUR/h, skladiščnik 20,0. Spodnji pas je
+ * Sidro 2026: prodajalec 19,5 EUR/h, blagajnik 22,0; panožno povprečje trgovine
+ * na drobno (G47) 21,0. Spodnji pas je
  * namenoma nad golo izpeljavo iz plače: poslovalnica dela ob sobotah, praznikih in
  * v izmenah, dodatki pa to uro sistematično dvignejo.
  * Izpeljava in viri: docs/urne-postavke.md.
  */
 const SHOP_HOUR_BANDS: CostBand[] = [
-  { id: 'do17', label: 'Do 17 EUR', midpointEUR: 15, minEUR: 12, maxEUR: 17 },
-  { id: '17do22', label: '17–22 EUR', midpointEUR: 19, minEUR: 17, maxEUR: 22 },
-  { id: '22do29', label: '22–29 EUR', midpointEUR: 25, minEUR: 22, maxEUR: 29 },
-  { id: 'nad29', label: 'Več kot 29 EUR', midpointEUR: 33, minEUR: 29, maxEUR: 40 },
+  { id: 'do19', label: 'Do 19 EUR', midpointEUR: 17, minEUR: 15, maxEUR: 19 },
+  { id: '19do24', label: '19–24 EUR', midpointEUR: 22, minEUR: 19, maxEUR: 24 },
+  { id: '24do31', label: '24–31 EUR', midpointEUR: 27, minEUR: 24, maxEUR: 31 },
+  { id: 'nad31', label: 'Več kot 31 EUR', midpointEUR: 36, minEUR: 31, maxEUR: 42 },
 ];
 
 /**
@@ -114,7 +115,7 @@ export const MALOPRODAJA_CONTEXT: SegmentContext = {
     help: 'Prodajalec, blagajnik, skladiščnik — kdor dela z blagom in kupci.',
     explainer: HOURLY_COST_EXPLAINER,
     bands: SHOP_HOUR_BANDS,
-    fallbackEUR: 20,
+    fallbackEUR: 21,
   },
 
   adminHour: {
@@ -122,7 +123,7 @@ export const MALOPRODAJA_CONTEXT: SegmentContext = {
     help: 'Vodja poslovalnice, nabava, kategorijski vodja, priprava cen in akcij.',
     explainer: ADMIN_HOUR_EXPLAINER,
     bands: ADMIN_HOUR_BANDS,
-    fallbackEUR: 25,
+    fallbackEUR: 27,
   },
 
   annualRevenue: {

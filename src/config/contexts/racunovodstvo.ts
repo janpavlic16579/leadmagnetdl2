@@ -12,15 +12,15 @@ import type { CostBand, SegmentContext } from './contextTypes';
  * kot je trdil prejšnji komentar. Knjigovodja je v Sloveniji plačan približno na
  * ravni povprečja vseh zaposlenih, operater pa pod njim.
  *
- * Sidro: knjigovodja 23,8 EUR/h, računovodski uradnik 23,3; panožno povprečje
- * strokovnih dejavnosti 27,2. Edini nabor v kalkulatorju, ki je bil že prej
- * približno pravilno umerjen. Izpeljava in viri: docs/urne-postavke.md.
+ * Sidro 2026: knjigovodja 26,2 EUR/h, računovodski uradnik 25,7; panožno povprečje
+ * računovodskih dejavnosti (N69.20) 23,7, strokovnih dejavnosti 26,9.
+ * Izpeljava in viri: docs/urne-postavke.md.
  */
 const OPERATIONAL_HOUR_BANDS: CostBand[] = [
-  { id: 'do20', label: 'Do 20 EUR', midpointEUR: 17, minEUR: 14, maxEUR: 20 },
-  { id: '20do27', label: '20–27 EUR', midpointEUR: 23, minEUR: 20, maxEUR: 27 },
-  { id: '27do35', label: '27–35 EUR', midpointEUR: 31, minEUR: 27, maxEUR: 35 },
-  { id: 'nad35', label: 'Več kot 35 EUR', midpointEUR: 40, minEUR: 35, maxEUR: 48 },
+  { id: 'do22', label: 'Do 22 EUR', midpointEUR: 19, minEUR: 16, maxEUR: 22 },
+  { id: '22do28', label: '22–28 EUR', midpointEUR: 25, minEUR: 22, maxEUR: 28 },
+  { id: '28do36', label: '28–36 EUR', midpointEUR: 32, minEUR: 28, maxEUR: 36 },
+  { id: 'nad36', label: 'Več kot 36 EUR', midpointEUR: 41, minEUR: 36, maxEUR: 48 },
 ];
 
 /**
@@ -101,7 +101,7 @@ export const RACUNOVODSTVO_CONTEXT: SegmentContext = {
     help: 'Računovodja, referent, knjigovodja — kdor obdeluje listine stranke.',
     explainer: HOURLY_COST_EXPLAINER,
     bands: OPERATIONAL_HOUR_BANDS,
-    fallbackEUR: 24,
+    fallbackEUR: 26,
   },
 
   adminHour: {
@@ -111,8 +111,8 @@ export const RACUNOVODSTVO_CONTEXT: SegmentContext = {
     bands: ADMIN_HOUR_BANDS,
     // Višje od administrativne ure v drugih dejavnostih: podpis pod obračun nosi
     // odgovornost, ki je referent ne more prevzeti, zato ta ura ni zamenljiva z
-    // operativno. Sidro: računovodski strokovnjak 31,6 EUR/h.
-    fallbackEUR: 30,
+    // operativno. Sidro 2026: računovodski strokovnjak 34,8 EUR/h.
+    fallbackEUR: 34,
   },
 
   /** KALIBRACIJA: sredine so geometrijske, preveriti po prvih ~50 vnosih. */

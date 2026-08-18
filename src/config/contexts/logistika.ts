@@ -8,20 +8,21 @@ import {
 import type { CostBand, SegmentContext } from './contextTypes';
 
 /**
- * Voznik in skladiščnik sta cenejša ura od operaterja na stroju, zato logistika
- * ne sme podedovati proizvodnih razponov. To je edini razlog za lasten nabor —
- * vprašanje je isto, kalibracija ni.
+ * Logistika ima lasten nabor, ker vprašanje meri tri različno plačane poklice
+ * hkrati. Sidro NI voznik, čeprav ga vprašanje našteje prvega: dva od treh
+ * naštetih poklicev sta dražja od njega, zato sredina pripada skladiščniku.
  *
- * Sidro: voznik težkega tovornjaka 17,6 EUR/h, skladiščnik 20,0, komisionar 19,3;
- * panožno povprečje prometa in skladiščenja 21,6. Zgornja pasova nista teoretična:
+ * Sidro 2026: skladiščnik 22,1 EUR/h, prekladalna dela 21,9, preprosta transportna
+ * dela 21,4, voznik težkega tovornjaka 19,5; panožno povprečje prevoza in
+ * skladiščenja 22,3. Zgornja pasova nista teoretična:
  * mednarodni prevoz z dnevnicami uro dvigne bistveno nad plačilno listo.
  * Izpeljava in viri: docs/urne-postavke.md.
  */
 const OPERATIONAL_HOUR_BANDS: CostBand[] = [
-  { id: 'do17', label: 'Do 17 EUR', midpointEUR: 15, minEUR: 12, maxEUR: 17 },
-  { id: '17do23', label: '17–23 EUR', midpointEUR: 20, minEUR: 17, maxEUR: 23 },
-  { id: '23do31', label: '23–31 EUR', midpointEUR: 27, minEUR: 23, maxEUR: 31 },
-  { id: 'nad31', label: 'Več kot 31 EUR', midpointEUR: 36, minEUR: 31, maxEUR: 43 },
+  { id: 'do19', label: 'Do 19 EUR', midpointEUR: 17, minEUR: 15, maxEUR: 19 },
+  { id: '19do25', label: '19–25 EUR', midpointEUR: 21, minEUR: 19, maxEUR: 25 },
+  { id: '25do33', label: '25–33 EUR', midpointEUR: 29, minEUR: 25, maxEUR: 33 },
+  { id: 'nad33', label: 'Več kot 33 EUR', midpointEUR: 38, minEUR: 33, maxEUR: 45 },
 ];
 
 /**
@@ -94,7 +95,7 @@ export const LOGISTIKA_CONTEXT: SegmentContext = {
     help: 'Voznik, skladiščnik, komisionar — kdor pošiljko dejansko premakne.',
     explainer: HOURLY_COST_EXPLAINER,
     bands: OPERATIONAL_HOUR_BANDS,
-    fallbackEUR: 19,
+    fallbackEUR: 22,
   },
 
   adminHour: {
@@ -102,7 +103,7 @@ export const LOGISTIKA_CONTEXT: SegmentContext = {
     help: 'Disponent, prodaja, prevozna dokumentacija, vodja logistike.',
     explainer: ADMIN_HOUR_EXPLAINER,
     bands: ADMIN_HOUR_BANDS,
-    fallbackEUR: 25,
+    fallbackEUR: 27,
   },
 
   /** KALIBRACIJA: sredine so geometrijske, preveriti po prvih ~50 vnosih. */

@@ -55,7 +55,7 @@ describe('buildComputeContextRange', () => {
 
   it('prevzeto povprečje panoge da meji pasu, v katerem povprečje leži', () => {
     /**
-     * Povprečje je točka, a točka z razpršenostjo — operater za 22 EUR/h je ocena
+     * Povprečje je točka, a točka z razpršenostjo — operater za 23 EUR/h je ocena
      * za dejavnost in ne meritev tega podjetja. Zato mora tudi ta vir dati razpon;
      * če bi dal točko, bi se naša ocena prikazala z natančnostjo, ki je nima.
      *

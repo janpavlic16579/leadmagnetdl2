@@ -12,13 +12,15 @@ import type { CostBand } from './contextTypes';
 /**
  * Vodstveno in pisarniško delo se med dejavnostmi razlikuje bistveno manj kot operativno.
  *
- * Sidro: pisarniški uradnik 20,6 EUR/h → nabavni referent 25,9 → komercialist 27,2 →
- * vodja proizvodnje 37,0. Izpeljava in viri: docs/urne-postavke.md.
+ * Sidro 2026: pisarniški uradnik 22,8 EUR/h → nabavni referent 28,6 → špediter 29,4 →
+ * komercialist 30,0 → vodja proizvodnje 40,7. Spodnja meja 16 EUR ni okrogla številka,
+ * ampak zakonska: pod polnim stroškom ure na minimalni plači (15,07 EUR/h) ne more biti
+ * nihče. Izpeljava in viri: docs/urne-postavke.md.
  */
 export const ADMIN_HOUR_BANDS: CostBand[] = [
-  { id: 'do20', label: 'Do 20 EUR', midpointEUR: 17, minEUR: 14, maxEUR: 20 },
-  { id: '20do28', label: '20–28 EUR', midpointEUR: 24, minEUR: 20, maxEUR: 28 },
-  { id: '28do38', label: '28–38 EUR', midpointEUR: 33, minEUR: 28, maxEUR: 38 },
+  { id: 'do22', label: 'Do 22 EUR', midpointEUR: 19, minEUR: 16, maxEUR: 22 },
+  { id: '22do29', label: '22–29 EUR', midpointEUR: 25, minEUR: 22, maxEUR: 29 },
+  { id: '29do38', label: '29–38 EUR', midpointEUR: 33, minEUR: 29, maxEUR: 38 },
   { id: 'nad38', label: 'Več kot 38 EUR', midpointEUR: 45, minEUR: 38, maxEUR: 55 },
 ];
 
@@ -41,7 +43,7 @@ export const ADMIN_HOUR_BANDS: CostBand[] = [
  */
 export const HOURLY_COST_EXPLAINER =
   'Ni neto izplačilo in ne le bruto plača, ni pa tudi režija (prostor, oprema, vodenje) — ta teče naprej, ' +
-  'tudi ko uro sprostite. Bruto plači prištejte prispevke delodajalca (16,1 %) ter regres, malico in prevoz, ' +
+  'tudi ko uro sprostite. Bruto plači prištejte prispevke delodajalca (17,1 %) ter regres, malico in prevoz, ' +
   'nato delite s približno 140 opravljenimi urami na mesec — leto ima okoli 1.700 produktivnih ur, ne 2.088 ' +
   'plačanih. Primer: bruto 2.100 EUR → približno 20 EUR na uro. Če postavke ne poznate, izberite razpon spodaj.';
 

@@ -13,14 +13,15 @@ import type { CostBand, SegmentContext } from './contextTypes';
  * terenski delavec. Razponi so zato širši od proizvodnih in nižje zasidrani —
  * privzetek naj raje podceni kot preceni, ker podjetja ne poznamo.
  *
- * Sidro: povprečje vseh zaposlenih 24,3 EUR/h, neposredno delo pod njim (~20).
+ * Sidro 2026: povprečje vseh zaposlenih 26,8 EUR/h (z vodstvom), neposredno delo
+ * pod njim (~21–24).
  * Izpeljava in viri: docs/urne-postavke.md.
  */
 const OPERATIONAL_HOUR_BANDS: CostBand[] = [
-  { id: 'do18', label: 'Do 18 EUR', midpointEUR: 15, minEUR: 12, maxEUR: 18 },
-  { id: '18do25', label: '18–25 EUR', midpointEUR: 21, minEUR: 18, maxEUR: 25 },
-  { id: '25do35', label: '25–35 EUR', midpointEUR: 30, minEUR: 25, maxEUR: 35 },
-  { id: 'nad35', label: 'Več kot 35 EUR', midpointEUR: 42, minEUR: 35, maxEUR: 50 },
+  { id: 'do20', label: 'Do 20 EUR', midpointEUR: 18, minEUR: 15, maxEUR: 20 },
+  { id: '20do26', label: '20–26 EUR', midpointEUR: 22, minEUR: 20, maxEUR: 26 },
+  { id: '26do35', label: '26–35 EUR', midpointEUR: 30, minEUR: 26, maxEUR: 35 },
+  { id: 'nad35', label: 'Več kot 35 EUR', midpointEUR: 41, minEUR: 35, maxEUR: 48 },
 ];
 
 /**
@@ -101,7 +102,7 @@ export const SPLOSNO_CONTEXT: SegmentContext = {
     help: 'Kdor dela na izdelku, blagu ali pri stranki — ne pisarniško oziroma vodstveno delo.',
     explainer: HOURLY_COST_EXPLAINER,
     bands: OPERATIONAL_HOUR_BANDS,
-    fallbackEUR: 22,
+    fallbackEUR: 23,
   },
 
   adminHour: {
@@ -109,7 +110,7 @@ export const SPLOSNO_CONTEXT: SegmentContext = {
     help: 'Uprava, finance, nabava, prodaja, priprava dela.',
     explainer: ADMIN_HOUR_EXPLAINER,
     bands: ADMIN_HOUR_BANDS,
-    fallbackEUR: 25,
+    fallbackEUR: 27,
   },
 
   /**
