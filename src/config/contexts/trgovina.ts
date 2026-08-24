@@ -42,7 +42,7 @@ const WHOLESALE_HOUR_BANDS: CostBand[] = [
 export const TRGOVINA_CONTEXT: SegmentContext = {
   title: 'Nekaj o vaši veleprodaji',
   intro:
-    'Tri vprašanja, ki ne sprašujejo po številkah. Iz njih izpeljemo, koliko od izmerjenega stroška je realno mogoče nasloviti — podjetje, ki skladišče že vodi po lokacijah in s terminali, je lažje izboljšave namreč večinoma že pobralo.',
+    'Tri vprašanja, ki ne sprašujejo po številkah. Iz njih izvemo, kako danes delate — to nam pove, o čem se je smiselno pogovoriti, in nam pomaga razumeti, zakaj stroški sploh nastajajo. V izračun zneskov ta odgovor ne vstopa.',
   costBasisIntro:
     'Pet številk, ki veljajo za vsa področja. Polni strošek ure pomeni bruto plačo s prispevki delodajalca ter regresom, malico in prevozom — ne neto izplačila in ne režije. Prihodek in maržo vprašamo enkrat — iz prihodka se med drugim izračuna strošek plačilnih zamud.',
 
