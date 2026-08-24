@@ -113,7 +113,7 @@ stikalo, zato zastavice brez konfiguracije (ki bi prikazala prazen korak) ni ve�
 tega, zato dodajanje koraka ne pomeni urejanja verige pogojev.
 
 Kontekst določa tudi besedila: "Kako pretežno proizvajate?" prevozniku ne pomeni ničesar, zato ima vsaka
-dejavnost svoja vprašanja, svoje možnosti sistema (in s tem pasove izboljšave) ter svoje razpone urnih
+dejavnost svoja vprašanja, svoje možnosti sistema (in s tem vrzeli sedanjega sistema) ter svoje razpone urnih
 postavk — voznikova ura ni operaterjeva. Od kod so številke v teh razponih, pove
 [`docs/urne-postavke.md`](docs/urne-postavke.md): izpeljane so iz plač po poklicih v zasebnem sektorju
 (SURS, strukturna statistika plač, oktober 2025) in preverjene proti izmerjenemu strošku dela iz nacionalnih
@@ -386,17 +386,26 @@ Vsak izid gre v natanko en koš, kar strukturno prepreči dvojno štetje:
 `compute()` vrne **dejanski sedanji strošek**. Koliko od tega je realno mogoče nasloviti, izračuna motor:
 
 ```
-potencial = strošek × naslovljiv delež × pas izboljšave
+naslovljiv potencial = strošek × naslovljiv delež
 ```
+
+**En sam koeficient.** Najprej izmerimo celotno ekonomsko velikost problema, nato samo enkrat ocenimo,
+kolikšen del je realistično naslovljiv:
 
 - **naslovljiv delež** izhaja iz odgovora "Kaj je glavni vzrok?" v vsakem modulu
   (`src/config/modules/addressableShare.ts`) — vzrok v podatkih je 0,75, okvara stroja 0,15
-- **pas izboljšave** visi na izbrani možnosti sistema v `src/config/contexts/<dejavnost>.ts` —
-  Excel/papir 25–40 %, podjetje z ustreznim domenskim modulom 8–20 %. Ker je pas zapisan pri možnosti in
-  ne v ločeni tabeli, možnosti brez pasu ni mogoče dodati
 
-Rezultat je zato **razpon, ne obljuba**. Modul si pasu izboljšave ne more sam vračunati v znesek, ker
-sedanjega sistema sploh ne pozna.
+Do avgusta 2026 se je vsota množila še z **pasom izboljšave** iz odgovora o sedanjem sistemu. Ker
+naslovljiv delež in ta pas merita isto stvar — koliko problema je sploh odpravljivega — je bil isti
+problem zmanjšan dvakrat in podjetju smo od 10.000 EUR izgube pokazali 1.875 EUR namesto 7.500 EUR.
+
+Odgovor o sedanjem sistemu ostane vprašan, a je odslej **prodajni signal** (`SystemGap` v
+`src/config/contexts/<dejavnost>.ts`): hrani ga ocena ICP in prodajni playbook, v evre ne vstopa.
+Modul si ga tudi ne more vračunati v znesek, ker sedanjega sistema sploh ne pozna.
+
+Rezultat je **konservativen, ne obljuba**: prikaže se kot točka z oznako zanesljivosti, razpon pa
+nastane samo tam, kjer je obiskovalec skupno predpostavko izbral kot razpon (urna postavka, prihodek,
+marža). Zanesljivost je oznaka in nikoli drug odbitek od zneska.
 
 ## Zanesljivost
 
@@ -420,7 +429,7 @@ Izpeljava, sidra in datumi poizvedb: [`docs/urne-postavke.md`](docs/urne-postavk
 | Kateri moduli so v segmentu (tudi katere horizontale), prag visoke izgube | `src/config/segments.ts` |
 | Dejavnost → segment (spustni seznam) | `src/config/industries.ts` |
 | Naslovljivi deleži po vzroku | `src/config/modules/addressableShare.ts` |
-| Kontekstna vprašanja, pasovi izboljšave, razponi urnih postavk, vidnost modula E | `src/config/contexts/` |
+| Kontekstna vprašanja, vrzeli sedanjega sistema, razponi urnih postavk, vidnost modula E | `src/config/contexts/` |
 | Izpeljava in viri urnih postavk (preden jih spreminjate) | [`docs/urne-postavke.md`](docs/urne-postavke.md) |
 | Zapisnik zadnje preverbe postavk proti trgu (od kod je prišla sprememba) | [`docs/urne-postavke-raziskava-2026-08.md`](docs/urne-postavke-raziskava-2026-08.md) |
 | Zapisnik prve preverbe (prejšnje stanje) | [`docs/urne-postavke-raziskava-2026.md`](docs/urne-postavke-raziskava-2026.md) |
@@ -640,13 +649,15 @@ sekvenco zapis sodi, ključ pa potuje v izvoznem zapisu (`followUpSequence`), da
 ## Odprta vprašanja pred objavo
 
 1. Kateri CRM in ali ima API/webhook za lead s custom polji.
-2. Kdo interno potrdi naslovljive deleže in pasove izboljšave — bodo javno vidne.
+2. Kdo interno potrdi naslovljive deleže — bodo javno vidni.
 3. Domena: samostojna landing stran ali podstran datalab.si.
 4. Strokovna potrditev besedil "3 ukrepov".
 5. Ponudba "15-min pregled s svetovalcem" — kdo izvaja in kakšna je kapaciteta.
 
-**Kalibracija:** naslovljivi deleži, pasovi izboljšave in prag visoke izgube v `segments.ts` so **začetne
-ocene**, ne empirija. Po prvih ~50 vnosih jih je treba preveriti na realnih podatkih.
+**Kalibracija:** naslovljivi deleži, vrzeli sedanjega sistema (`SystemGap`, prodajni signal) in prag
+visoke izgube v `segments.ts` so **začetne ocene**, ne empirija. Po prvih ~50 vnosih jih je treba
+preveriti na realnih podatkih. Pri naslovljivih deležih je to najbolj nujno: odkar so edini koeficient
+nad zneskom, gre napaka v njih naravnost v prikazano številko.
 
 ## Namerno izven obsega (faza 2)
 
