@@ -147,12 +147,12 @@ describe('Poročilo se sestavi za vsako dejavnost', () => {
   it('vrzel sedanjega sistema in status uporabnika PANTHEON sta izpolnjena', () => {
     const pantheon = reportFor('trgovina', { currentSystem: 'pantheonWms' });
     expect(pantheon.qualification.isPantheonCustomer).toBe(true);
-    expect(pantheon.qualification.improvementBand.max).toBeLessThan(0.25);
+    expect(pantheon.qualification.systemGap.max).toBeLessThan(0.25);
 
     const excel = reportFor('trgovina', { currentSystem: 'excelPaper' });
     expect(excel.qualification.isPantheonCustomer).toBe(false);
-    expect(excel.qualification.improvementBand.max).toBeGreaterThan(
-      pantheon.qualification.improvementBand.max,
+    expect(excel.qualification.systemGap.max).toBeGreaterThan(
+      pantheon.qualification.systemGap.max,
     );
   });
 

@@ -69,22 +69,22 @@ export const SPLOSNO_CONTEXT: SegmentContext = {
       {
         id: 'pantheonPoln',
         label: 'PANTHEON za večino procesov',
-        band: { min: 0.08, max: 0.18 },
+        gap: { min: 0.08, max: 0.18 },
         isPantheon: true,
       },
       {
         id: 'pantheonDelno',
         label: 'PANTHEON ob veliko Excela',
-        band: { min: 0.12, max: 0.25 },
+        gap: { min: 0.12, max: 0.25 },
         isPantheon: true,
       },
-      { id: 'otherErp', label: 'Drug ERP ali poslovni program', band: { min: 0.12, max: 0.25 } },
+      { id: 'otherErp', label: 'Drug ERP ali poslovni program', gap: { min: 0.12, max: 0.25 } },
       {
         id: 'erpExcelPaper',
         label: 'Kombinacija programa, Excela in papirja',
-        band: { min: 0.2, max: 0.35 },
+        gap: { min: 0.2, max: 0.35 },
       },
-      { id: 'excelPaper', label: 'Večinoma Excel, papir ali sprotni dogovor', band: { min: 0.2, max: 0.35 } },
+      { id: 'excelPaper', label: 'Večinoma Excel, papir ali sprotni dogovor', gap: { min: 0.2, max: 0.35 } },
     ],
   },
 

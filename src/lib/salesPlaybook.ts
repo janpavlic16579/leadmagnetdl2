@@ -173,7 +173,7 @@ function buildObjections(report: PlaybookInput): SalesPlaybook['objections'] {
 
   const painEUR =
     report.summary.directLossEUR + report.summary.lostMarginEUR + report.summary.capacityEUR;
-  if (painEUR > 0 && report.qualification.improvementBand.max >= 0.25) {
+  if (painEUR > 0 && report.qualification.systemGap.max >= 0.25) {
     triggered.push('noTimeToImplement');
   }
 
@@ -181,7 +181,7 @@ function buildObjections(report: PlaybookInput): SalesPlaybook['objections'] {
   const role = report.qualification.roleLabel ?? '';
   if (role && !/direktor|lastnik/i.test(role)) triggered.push('notMyDecision');
 
-  if (report.qualification.improvementBand.max <= 0.2) triggered.push('triedBefore');
+  if (report.qualification.systemGap.max <= 0.2) triggered.push('triedBefore');
 
   return triggered.map((id) => ({ id, ...OBJECTIONS[id] }));
 }

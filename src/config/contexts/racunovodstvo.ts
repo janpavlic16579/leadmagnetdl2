@@ -68,22 +68,22 @@ export const RACUNOVODSTVO_CONTEXT: SegmentContext = {
       {
         id: 'pantheonZajem',
         label: 'PANTHEON s samodejnim zajemom listin in izmenjavo dokumentov',
-        band: { min: 0.08, max: 0.2 },
+        gap: { min: 0.08, max: 0.2 },
         isPantheon: true,
       },
       {
         id: 'pantheonRocno',
         label: 'PANTHEON, listine vnašamo ročno',
-        band: { min: 0.15, max: 0.3 },
+        gap: { min: 0.15, max: 0.3 },
         isPantheon: true,
       },
-      { id: 'drugProgram', label: 'Drug računovodski program', band: { min: 0.15, max: 0.3 } },
+      { id: 'drugProgram', label: 'Drug računovodski program', gap: { min: 0.15, max: 0.3 } },
       {
         id: 'programExcel',
         label: 'Kombinacija programa, Excela in papirja',
-        band: { min: 0.25, max: 0.4 },
+        gap: { min: 0.25, max: 0.4 },
       },
-      { id: 'rocno', label: 'Večinoma ročno, Excel in papir', band: { min: 0.25, max: 0.4 } },
+      { id: 'rocno', label: 'Večinoma ročno, Excel in papir', gap: { min: 0.25, max: 0.4 } },
     ],
   },
 

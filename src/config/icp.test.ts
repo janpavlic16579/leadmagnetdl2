@@ -19,7 +19,7 @@ const NOW = '2026-08-06T09:00:00.000Z';
 
 const EMPTY: IcpSignals = {
   employeeCount: 0,
-  improvementBandMax: 0.3,
+  systemGapMax: 0.3,
   isPantheonCustomer: false,
   roleId: null,
   measuredLossEUR: 0,
@@ -36,7 +36,7 @@ const EMPTY: IcpSignals = {
 
 const IDEAL: IcpSignals = {
   employeeCount: 120,
-  improvementBandMax: 0.4,
+  systemGapMax: 0.4,
   isPantheonCustomer: false,
   roleId: 'direktor',
   measuredLossEUR: 60_000,
@@ -76,8 +76,8 @@ describe('Meje ocene', () => {
     const extremes: IcpSignals[] = [
       EMPTY,
       IDEAL,
-      { ...EMPTY, employeeCount: 100_000, measuredLossEUR: 9_000_000, improvementBandMax: 1 },
-      { ...EMPTY, measuredLossEUR: -5, improvementBandMax: 0, employeeCount: -3 },
+      { ...EMPTY, employeeCount: 100_000, measuredLossEUR: 9_000_000, systemGapMax: 1 },
+      { ...EMPTY, measuredLossEUR: -5, systemGapMax: 0, employeeCount: -3 },
       { ...EMPTY, highLossThresholdEUR: undefined, offeredAreaCount: 0 },
       { ...EMPTY, confidence: undefined, roleId: 'nekaj-cisto-novega' },
     ];
@@ -137,7 +137,7 @@ describe('Posamezne dimenzije', () => {
 
   it('večja vrzel v sistemu da višjo oceno priložnosti', () => {
     const opportunity = (max: number) =>
-      scoreIcp({ ...EMPTY, improvementBandMax: max }).dimensions.find(
+      scoreIcp({ ...EMPTY, systemGapMax: max }).dimensions.find(
         (d) => d.key === 'opportunity',
       )!.value;
 
@@ -148,7 +148,7 @@ describe('Posamezne dimenzije', () => {
   it('status uporabnika PANTHEON je dejstvo v utemeljitvi, ne kazen v oceni', () => {
     // Smer te ocene je poslovna odločitev, ki še ni sprejeta. Dokler ni, uporabnik
     // PANTHEON pri enaki vrzeli ne sme dobiti drugačnega števila točk.
-    const base = { ...EMPTY, improvementBandMax: 0.2 };
+    const base = { ...EMPTY, systemGapMax: 0.2 };
     const pantheon = scoreIcp({ ...base, isPantheonCustomer: true });
     const other = scoreIcp({ ...base, isPantheonCustomer: false });
 

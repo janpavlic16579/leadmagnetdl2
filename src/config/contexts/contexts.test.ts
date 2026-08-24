@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  FALLBACK_IMPROVEMENT_BAND,
+  FALLBACK_SYSTEM_GAP,
   SEGMENT_CONTEXTS,
   emptyProfileFor,
   industryAverageBand,
@@ -72,23 +72,23 @@ describe('Register kontekstov dejavnosti', () => {
     }
   });
 
-  it('pas izboljšave je smiseln in ne obljublja preveč', () => {
+  it('vrzel sedanjega sistema je smiselna in ne obljublja preveč', () => {
     for (const [segmentId, context] of ENTRIES) {
       for (const option of context.currentSystem.options) {
         const where = `${segmentId}/${option.id}`;
-        expect(option.band.min, where).toBeGreaterThan(0);
-        expect(option.band.min, where).toBeLessThan(option.band.max);
-        expect(option.band.max, where).toBeLessThan(1);
+        expect(option.gap.min, where).toBeGreaterThan(0);
+        expect(option.gap.min, where).toBeLessThan(option.gap.max);
+        expect(option.gap.max, where).toBeLessThan(1);
       }
     }
   });
 
-  it('nadomestni pas ni ugodnejši od nobene ponujene možnosti', () => {
-    // "Brez odgovora vzamemo srednji pas — nikoli najugodnejšega." Doslej je bilo
+  it('nadomestna vrzel ni ugodnejša od nobene ponujene možnosti', () => {
+    // "Brez odgovora vzamemo srednjo vrzel — nikoli najugodnejše." Doslej je bilo
     // to zapisano samo v komentarju.
     for (const [segmentId, context] of ENTRIES) {
-      const widest = Math.max(...context.currentSystem.options.map((option) => option.band.max));
-      expect(FALLBACK_IMPROVEMENT_BAND.max, segmentId).toBeLessThan(widest);
+      const widest = Math.max(...context.currentSystem.options.map((option) => option.gap.max));
+      expect(FALLBACK_SYSTEM_GAP.max, segmentId).toBeLessThan(widest);
     }
   });
 

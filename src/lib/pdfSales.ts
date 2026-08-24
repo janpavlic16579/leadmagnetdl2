@@ -115,7 +115,7 @@ function drawHeader(
 
 function drawQualification(doc: jsPDF, report: SalesReport, startY: number): number {
   const q = report.qualification;
-  const band = `${formatPercent(q.improvementBand.min)} – ${formatPercent(q.improvementBand.max)}`;
+  const band = `${formatPercent(q.systemGap.min)} – ${formatPercent(q.systemGap.max)}`;
 
   // Zrcali vrstice v salesReportHtml.ts, isti vrstni red — svetovalec bere obe
   // datoteki in razlika med njima bi izgledala kot razlika v podatkih.

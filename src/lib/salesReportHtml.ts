@@ -292,7 +292,7 @@ function sectionIcp(report: SalesReport): string {
 
 function sectionQualification(report: SalesReport): string {
   const q = report.qualification;
-  const band = `${formatPercent(q.improvementBand.min)} – ${formatPercent(q.improvementBand.max)}`;
+  const band = `${formatPercent(q.systemGap.min)} – ${formatPercent(q.systemGap.max)}`;
 
   const rows: [string, string][] = [
     // Kontakt gre na vrh: svetovalec najprej potrebuje, koga pokliče.

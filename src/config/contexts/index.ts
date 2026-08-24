@@ -7,8 +7,8 @@ import { SPLOSNO_CONTEXT } from './splosno';
 import { STORITVE_CONTEXT } from './storitve';
 import { TRGOVINA_CONTEXT } from './trgovina';
 import {
-  FALLBACK_IMPROVEMENT_BAND,
-  type ImprovementBand,
+  FALLBACK_SYSTEM_GAP,
+  type SystemGap,
   type SegmentContext,
 } from './contextTypes';
 
@@ -37,12 +37,12 @@ export function getSegmentContext(id: SegmentId): SegmentContext | undefined {
 }
 
 /** Pas izboljšave izbranega sistema; brez odgovora srednji pas, nikoli najugodnejši. */
-export function improvementBandFor(
+export function systemGapFor(
   context: SegmentContext | undefined,
   systemId: string | null,
-): ImprovementBand {
+): SystemGap {
   const option = context?.currentSystem.options.find((candidate) => candidate.id === systemId);
-  return option?.band ?? FALLBACK_IMPROVEMENT_BAND;
+  return option?.gap ?? FALLBACK_SYSTEM_GAP;
 }
 
 /**

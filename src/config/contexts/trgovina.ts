@@ -63,18 +63,18 @@ export const TRGOVINA_CONTEXT: SegmentContext = {
       {
         id: 'pantheonWms',
         label: 'PANTHEON s skladiščnim modulom in lokacijami',
-        band: { min: 0.08, max: 0.2 },
+        gap: { min: 0.08, max: 0.2 },
         isPantheon: true,
       },
       {
         id: 'pantheonNoWms',
         label: 'PANTHEON brez vodenja skladiščnih lokacij',
-        band: { min: 0.15, max: 0.3 },
+        gap: { min: 0.15, max: 0.3 },
         isPantheon: true,
       },
-      { id: 'otherErp', label: 'Drug ERP, povezan s skladiščem', band: { min: 0.15, max: 0.3 } },
-      { id: 'erpExcelPaper', label: 'Kombinacija ERP-ja, Excela in papirja', band: { min: 0.25, max: 0.4 } },
-      { id: 'excelPaper', label: 'Večinoma Excel, papir ali sprotni dogovor', band: { min: 0.25, max: 0.4 } },
+      { id: 'otherErp', label: 'Drug ERP, povezan s skladiščem', gap: { min: 0.15, max: 0.3 } },
+      { id: 'erpExcelPaper', label: 'Kombinacija ERP-ja, Excela in papirja', gap: { min: 0.25, max: 0.4 } },
+      { id: 'excelPaper', label: 'Večinoma Excel, papir ali sprotni dogovor', gap: { min: 0.25, max: 0.4 } },
     ],
   },
 

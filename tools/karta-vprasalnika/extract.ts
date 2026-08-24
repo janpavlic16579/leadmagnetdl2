@@ -123,7 +123,7 @@ const out = {
               options: ctx.currentSystem.options.map((o) => ({
                 id: o.id,
                 label: o.label,
-                band: o.band,
+                gap: o.gap,
                 isPantheon: o.isPantheon === true,
               })),
             },

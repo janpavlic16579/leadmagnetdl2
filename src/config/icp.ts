@@ -28,7 +28,7 @@ export interface IcpSignals {
    * unikatni (pantheonMfMt, pantheonWms, pantheonRetail …), pas pa je primerljiv.
    * 0,40 pomeni Excel in papir, 0,08 PANTHEON z ustreznim modulom.
    */
-  improvementBandMax: number;
+  systemGapMax: number;
   isPantheonCustomer: boolean;
   /** Id vloge iz konteksta dejavnosti; segmentno unikaten, zato preslikan spodaj. */
   roleId: string | null;
@@ -192,13 +192,13 @@ export const ICP_DIMENSIONS: IcpDimension[] = [
      * izboljšati — status uporabnika PANTHEON pa je izpisan kot ločeno dejstvo.
      * Ob odločitvi se spremeni samo ta funkcija.
      */
-    rate: ({ improvementBandMax, isPantheonCustomer }) => {
+    rate: ({ systemGapMax, isPantheonCustomer }) => {
       // Pas je med 0,08 in 0,40; preslikamo ga na 0–1 čez ta razpon.
-      const value = clamp01((improvementBandMax - 0.08) / (0.4 - 0.08));
+      const value = clamp01((systemGapMax - 0.08) / (0.4 - 0.08));
       const gap =
-        improvementBandMax >= 0.3
+        systemGapMax >= 0.3
           ? 'Velika vrzel — večino vodijo zunaj sistema.'
-          : improvementBandMax >= 0.2
+          : systemGapMax >= 0.2
             ? 'Srednja vrzel — sistem imajo, a ne za vse.'
             : 'Majhna vrzel — ustrezen modul že uporabljajo.';
       const who = isPantheonCustomer

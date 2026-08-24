@@ -12,7 +12,7 @@ const NOW = '2026-08-06T09:00:00.000Z';
 
 const SIGNALS: IcpSignals = {
   employeeCount: 30,
-  improvementBandMax: 0.4,
+  systemGapMax: 0.4,
   isPantheonCustomer: false,
   roleId: 'direktor',
   measuredLossEUR: 100_000,
@@ -52,7 +52,7 @@ const BASE: PlaybookInput = {
     businessTypeLabel: 'Veleprodaja poslovnim kupcem',
     currentSystemLabel: 'Večinoma Excel, papir ali sprotni dogovor',
     isPantheonCustomer: false,
-    improvementBand: { min: 0.25, max: 0.4 },
+    systemGap: { min: 0.25, max: 0.4 },
     followUpSequence: 'high-loss-no-risk',
   },
   summary: {

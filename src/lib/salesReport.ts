@@ -2,9 +2,9 @@ import type {
   AssumptionSource,
   SegmentContext,
   BusinessProfile,
-  ImprovementBand,
+  SystemGap,
 } from '../config/contexts';
-import { improvementBandFor, isTechnicalRiskModuleVisible } from '../config/contexts';
+import { systemGapFor, isTechnicalRiskModuleVisible } from '../config/contexts';
 import { getIndustryLabel } from '../config/industries';
 import type { ModuleDefinition, ModuleOutput } from '../config/modules/moduleTypes';
 import type { SegmentConfig } from '../config/segments';
@@ -89,7 +89,7 @@ export interface SalesReportQualification {
   currentSystemLabel: string | null;
   /** Od tega je odvisno, ali so tehnična opozorila (ZIERDED, SQL Server) sploh smiselna. */
   isPantheonCustomer: boolean;
-  improvementBand: ImprovementBand;
+  systemGap: SystemGap;
   followUpSequence: FollowUpSequence;
 }
 
@@ -295,7 +295,7 @@ export function buildSalesReport(params: BuildSalesReportParams): SalesReport {
       businessTypeLabel: contextOptionLabel(context?.businessType, profile.businessType),
       currentSystemLabel: contextOptionLabel(context?.currentSystem, profile.currentSystem),
       isPantheonCustomer: isPantheonCustomer(context, profile.currentSystem),
-      improvementBand: improvementBandFor(context, profile.currentSystem),
+      systemGap: systemGapFor(context, profile.currentSystem),
       followUpSequence: params.followUpSequence,
     },
 
@@ -367,7 +367,7 @@ function buildIcpSignals(
 
   return {
     employeeCount: params.employeeCount,
-    improvementBandMax: base.qualification.improvementBand.max,
+    systemGapMax: base.qualification.systemGap.max,
     isPantheonCustomer: base.qualification.isPantheonCustomer,
     roleId: params.profile.role,
     measuredLossEUR:
