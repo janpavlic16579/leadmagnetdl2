@@ -20,20 +20,22 @@ import type { CostBand, SegmentContext } from './contextTypes';
  * Izvedbena ura je dražja od proizvodne: svetovalec in inženir sta višje plačana.
  *
  * Nabor je NAMENOMA širši od vseh ostalih, ker segment pokriva najširši razpon
- * poklicev v kalkulatorju: mehanik in serviser (~25 EUR/h) na eni strani, inženir
- * strojništva in programer (35+) na drugi. Spodnja pasova zajameta terensko ekipo,
- * zgornja svetovalca in inženirja (inženir/tehnolog 33,2 EUR/h, tehnik strojništva
- * 28,4, programer 34,7; panoga K62 33,5, N71.12 inženiring 27,3). Zgornji pas je
- * odrezan pri 60 in ne 68 EUR: 68 EUR/h ustreza bruto plači 8.100 EUR, kar ni
- * izvedbena ura, ampak partner. Cena te
+ * poklicev v kalkulatorju: grafični oblikovalec (24,0 EUR/h) in mehanik-serviser
+ * (25,0) na eni strani, inženir strojništva in programer (35+) na drugi. Spodnja
+ * pasova zajameta terensko ekipo, zgornja svetovalca in inženirja — sidro 2026
+ * (SURS, zasebni sektor, oktober 2025, prevrednoteno): tehnik za strojništvo 27,7,
+ * strokovnjak tehnično-tehnoloških strok 32,0, inženir/tehnolog 33,2, programer
+ * aplikacij 34,6, inženir strojništva 35,8; panoga K62 33,5, N71.12 inženiring 27,4.
+ * Zgornji pas je odrezan pri 46 in ne višje: nad tem ni več izvedbena ura, ampak
+ * partner. Cena te
  * izbire je zavestna: širši pas pomeni, da se rezultat pogosteje prikaže kot razpon
  * in ne kot ena številka. Izpeljava in viri: docs/urne-postavke.md.
  */
 const DELIVERY_HOUR_BANDS: CostBand[] = [
-  { id: 'do24', label: 'Do 24 EUR', midpointEUR: 21, minEUR: 17, maxEUR: 24 },
-  { id: '24do31', label: '24–31 EUR', midpointEUR: 27, minEUR: 24, maxEUR: 31 },
-  { id: '31do42', label: '31–42 EUR', midpointEUR: 36, minEUR: 31, maxEUR: 42 },
-  { id: 'nad42', label: 'Več kot 42 EUR', midpointEUR: 50, minEUR: 42, maxEUR: 60 },
+  { id: 'do22', label: 'Do 22 EUR', midpointEUR: 18, minEUR: 15, maxEUR: 22 },
+  { id: '22do28', label: '22–28 EUR', midpointEUR: 25, minEUR: 22, maxEUR: 28 },
+  { id: '28do35', label: '28–35 EUR', midpointEUR: 32, minEUR: 28, maxEUR: 35 },
+  { id: 'nad35', label: 'Več kot 35 EUR', midpointEUR: 40, minEUR: 35, maxEUR: 46 },
 ];
 
 /**
@@ -117,7 +119,7 @@ export const STORITVE_CONTEXT: SegmentContext = {
     help: 'Svetovalec, inženir, tehnik, oblikovalec — kdor dela na projektu za naročnika.',
     explainer: HOURLY_COST_EXPLAINER,
     bands: DELIVERY_HOUR_BANDS,
-    fallbackEUR: 32,
+    fallbackEUR: 29,
   },
 
   adminHour: {
@@ -125,7 +127,7 @@ export const STORITVE_CONTEXT: SegmentContext = {
     help: 'Vodja projektov, priprava ponudb, obračun, podpora prodaji.',
     explainer: ADMIN_HOUR_EXPLAINER,
     bands: ADMIN_HOUR_BANDS,
-    fallbackEUR: 27,
+    fallbackEUR: 26,
   },
 
   chargeOutRate: {

@@ -13,17 +13,20 @@ import type { CostBand, ScaleBand, SegmentContext } from './contextTypes';
  * Če bi maloprodaja podedovala proizvodne, bi vsak kapacitetni znesek pretiraval
  * za faktor dve — in prav pretiravanje je tisto, kar direktor najprej opazi.
  *
- * Sidro 2026: prodajalec 19,5 EUR/h, blagajnik 22,0; panožno povprečje trgovine
- * na drobno (G47) 21,0. Spodnji pas je
+ * Sidro 2026 (SURS, zasebni sektor, oktober 2025, prevrednoteno): polnjenje polic
+ * 16,4 EUR/h, prodajalec 18,4, blagajnik 18,6, skladiščnik 20,8; panožno povprečje
+ * trgovine na drobno (G47) 20,6. Prodajalčev spodnji kvartil je bil oktobra 2025
+ * (1.425 EUR) pod minimalno plačo 2026, zato je dvig v tem poklicu večji od
+ * panožnega povprečja — korekcija je v privzetku upoštevana. Spodnji pas je
  * namenoma nad golo izpeljavo iz plače: poslovalnica dela ob sobotah, praznikih in
  * v izmenah, dodatki pa to uro sistematično dvignejo.
  * Izpeljava in viri: docs/urne-postavke.md.
  */
 const SHOP_HOUR_BANDS: CostBand[] = [
-  { id: 'do19', label: 'Do 19 EUR', midpointEUR: 17, minEUR: 15, maxEUR: 19 },
-  { id: '19do24', label: '19–24 EUR', midpointEUR: 22, minEUR: 19, maxEUR: 24 },
-  { id: '24do31', label: '24–31 EUR', midpointEUR: 27, minEUR: 24, maxEUR: 31 },
-  { id: 'nad31', label: 'Več kot 31 EUR', midpointEUR: 36, minEUR: 31, maxEUR: 42 },
+  { id: 'do17', label: 'Do 17 EUR', midpointEUR: 16, minEUR: 15, maxEUR: 17 },
+  { id: '17do20', label: '17–20 EUR', midpointEUR: 18, minEUR: 17, maxEUR: 20 },
+  { id: '20do24', label: '20–24 EUR', midpointEUR: 22, minEUR: 20, maxEUR: 24 },
+  { id: 'nad24', label: 'Več kot 24 EUR', midpointEUR: 27, minEUR: 24, maxEUR: 31 },
 ];
 
 /**
@@ -115,7 +118,7 @@ export const MALOPRODAJA_CONTEXT: SegmentContext = {
     help: 'Prodajalec, blagajnik, skladiščnik — kdor dela z blagom in kupci.',
     explainer: HOURLY_COST_EXPLAINER,
     bands: SHOP_HOUR_BANDS,
-    fallbackEUR: 21,
+    fallbackEUR: 19,
   },
 
   adminHour: {
@@ -123,7 +126,7 @@ export const MALOPRODAJA_CONTEXT: SegmentContext = {
     help: 'Vodja poslovalnice, nabava, kategorijski vodja, priprava cen in akcij.',
     explainer: ADMIN_HOUR_EXPLAINER,
     bands: ADMIN_HOUR_BANDS,
-    fallbackEUR: 27,
+    fallbackEUR: 26,
   },
 
   annualRevenue: {

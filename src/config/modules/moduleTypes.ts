@@ -280,8 +280,13 @@ export const DEFAULT_COST_CONTEXT: ComputeContext = {
   // Operativna ura je NIŽJA od administrativne — v Sloveniji je operater plačan
   // pod povprečjem, pisarniško in vodstveno delo pa nad njim. Prejšnja privzetka
   // (45 / 35) sta imela razmerje obrnjeno. Izpeljava: docs/urne-postavke.md.
-  operationalHourCostEUR: 22,
-  adminHourCostEUR: 25,
+  //
+  // Vrednosti se ujemajo s segmentom `splosno` v config/contexts/splosno.ts: ta
+  // rezerva se uporabi prav takrat, ko dejavnosti ne poznamo. Do avgusta 2026 sta
+  // bili 22 in 25 — vrednosti izpred kalibracije, ki se z dokumentacijo nista več
+  // ujemali, ker ju kalibracija ni zajela.
+  operationalHourCostEUR: 20,
+  adminHourCostEUR: 26,
   chargeOutRateEUR: 55,
   annualRevenueEUR: 0,
   contributionMarginRate: 0.25,

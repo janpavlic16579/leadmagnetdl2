@@ -14,17 +14,18 @@ import type { CostBand, SegmentContext } from './contextTypes';
  * pretiraval — in prav pretiravanje je tisto, kar skeptičen direktor najprej opazi
  * in zaradi česar zavrne cel izračun.
  *
- * Sidro 2026: skladiščnik in komisionar 22,1 EUR/h, prekladalna dela 21,9; panožno
- * povprečje trgovine na debelo (G46) 25,9. Vprašanje voznika ne omenja, zato sidro
- * ni več voznikovo.
+ * Sidro 2026 (SURS, zasebni sektor, oktober 2025, prevrednoteno): preprosta
+ * skladiščna dela 19,9 EUR/h, prekladalna dela 20,0, skladiščnik in komisionar 20,8;
+ * panožno povprečje trgovine na debelo (G46) 25,8 — a to je povprečje cele panoge z
+ * vodstvom, ne skladiščne ure. Vprašanje voznika ne omenja, zato sidro ni voznikovo.
  * Enak nabor kot v logistiki — isti poklici, ista kalibracija.
  * Izpeljava in viri: docs/urne-postavke.md.
  */
 const WHOLESALE_HOUR_BANDS: CostBand[] = [
-  { id: 'do19', label: 'Do 19 EUR', midpointEUR: 17, minEUR: 15, maxEUR: 19 },
-  { id: '19do25', label: '19–25 EUR', midpointEUR: 21, minEUR: 19, maxEUR: 25 },
-  { id: '25do33', label: '25–33 EUR', midpointEUR: 29, minEUR: 25, maxEUR: 33 },
-  { id: 'nad33', label: 'Več kot 33 EUR', midpointEUR: 38, minEUR: 33, maxEUR: 45 },
+  { id: 'do17', label: 'Do 17 EUR', midpointEUR: 16, minEUR: 15, maxEUR: 17 },
+  { id: '17do19', label: '17–19 EUR', midpointEUR: 18, minEUR: 17, maxEUR: 19 },
+  { id: '19do23', label: '19–23 EUR', midpointEUR: 21, minEUR: 19, maxEUR: 23 },
+  { id: 'nad23', label: 'Več kot 23 EUR', midpointEUR: 26, minEUR: 23, maxEUR: 30 },
 ];
 
 /**
@@ -93,7 +94,7 @@ export const TRGOVINA_CONTEXT: SegmentContext = {
     help: 'Skladiščnik, komisionar, viličarist — kdor blago dejansko premakne.',
     explainer: HOURLY_COST_EXPLAINER,
     bands: WHOLESALE_HOUR_BANDS,
-    fallbackEUR: 22,
+    fallbackEUR: 20,
   },
 
   adminHour: {
@@ -101,7 +102,7 @@ export const TRGOVINA_CONTEXT: SegmentContext = {
     help: 'Komercialist, vodja prodaje, nabava, finance, reklamacije.',
     explainer: ADMIN_HOUR_EXPLAINER,
     bands: ADMIN_HOUR_BANDS,
-    fallbackEUR: 27,
+    fallbackEUR: 26,
   },
 
   /**

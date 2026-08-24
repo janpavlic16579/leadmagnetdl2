@@ -115,7 +115,9 @@ tega, zato dodajanje koraka ne pomeni urejanja verige pogojev.
 Kontekst določa tudi besedila: "Kako pretežno proizvajate?" prevozniku ne pomeni ničesar, zato ima vsaka
 dejavnost svoja vprašanja, svoje možnosti sistema (in s tem pasove izboljšave) ter svoje razpone urnih
 postavk — voznikova ura ni operaterjeva. Od kod so številke v teh razponih, pove
-[`docs/urne-postavke.md`](docs/urne-postavke.md): izpeljane so iz plač po poklicih (SURS), ne ocenjene.
+[`docs/urne-postavke.md`](docs/urne-postavke.md): izpeljane so iz plač po poklicih v zasebnem sektorju
+(SURS, strukturna statistika plač, oktober 2025) in preverjene proti izmerjenemu strošku dela iz nacionalnih
+računov — ne ocenjene.
 
 ## Moduli
 
@@ -405,6 +407,8 @@ navidezno natančnega zneska.
 Postavka pomeni **strošek dela in ne strošek dela z režijo**: bruto plača s prispevki delodajalca ter
 regresom, malico in prevozom, deljeno s približno 1.700 produktivnimi urami na leto. Sproščena ura prihrani
 plačo, ne najemnine — in strošek dela je edina od obeh številk, ki jo je mogoče preveriti pri javnem viru.
+Privzetki niso izpeljani samo iz te formule, ampak kot sredina med njo in izmerjenim stroškom dela na
+opravljeno uro (nacionalni računi), ker formula sama izmerjeni strošek podceni za približno desetino.
 Izpeljava, sidra in datumi poizvedb: [`docs/urne-postavke.md`](docs/urne-postavke.md).
 
 ## Kje kaj urejati
@@ -418,7 +422,8 @@ Izpeljava, sidra in datumi poizvedb: [`docs/urne-postavke.md`](docs/urne-postavk
 | Naslovljivi deleži po vzroku | `src/config/modules/addressableShare.ts` |
 | Kontekstna vprašanja, pasovi izboljšave, razponi urnih postavk, vidnost modula E | `src/config/contexts/` |
 | Izpeljava in viri urnih postavk (preden jih spreminjate) | [`docs/urne-postavke.md`](docs/urne-postavke.md) |
-| Zapisnik preverbe postavk proti trgu 2026 (od kod je prišla sprememba) | [`docs/urne-postavke-raziskava-2026.md`](docs/urne-postavke-raziskava-2026.md) |
+| Zapisnik zadnje preverbe postavk proti trgu (od kod je prišla sprememba) | [`docs/urne-postavke-raziskava-2026-08.md`](docs/urne-postavke-raziskava-2026-08.md) |
+| Zapisnik prve preverbe (prejšnje stanje) | [`docs/urne-postavke-raziskava-2026.md`](docs/urne-postavke-raziskava-2026.md) |
 | Potencial in ocena zanesljivosti | `src/lib/potential.ts` |
 | Razlage metodologije | `content/methodology.ts` |
 | "3 ukrepi ta teden" | `content/actions/actions.ts` |

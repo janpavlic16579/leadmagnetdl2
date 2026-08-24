@@ -12,16 +12,17 @@ import type { CostBand } from './contextTypes';
 /**
  * Vodstveno in pisarniško delo se med dejavnostmi razlikuje bistveno manj kot operativno.
  *
- * Sidro 2026: pisarniški uradnik 22,8 EUR/h → nabavni referent 28,6 → špediter 29,4 →
- * komercialist 30,0 → vodja proizvodnje 40,7. Spodnja meja 16 EUR ni okrogla številka,
- * ampak zakonska: pod polnim stroškom ure na minimalni plači (15,07 EUR/h) ne more biti
- * nihče. Izpeljava in viri: docs/urne-postavke.md.
+ * Sidro 2026 (SURS, zasebni sektor, oktober 2025, prevrednoteno): pisarniški uradnik
+ * 20,9 EUR/h → prometni odpravnik 24,6 → nabavni referent 27,9 → špediter 28,0 →
+ * komercialist 28,6 → nadzornik v proizvodnji 29,6. Spodnja meja 15 EUR ni okrogla
+ * številka, ampak zakonska: pod polnim stroškom ure na minimalni plači (15,06 EUR/h)
+ * ne more biti nihče. Izpeljava in viri: docs/urne-postavke.md.
  */
 export const ADMIN_HOUR_BANDS: CostBand[] = [
-  { id: 'do22', label: 'Do 22 EUR', midpointEUR: 19, minEUR: 16, maxEUR: 22 },
-  { id: '22do29', label: '22–29 EUR', midpointEUR: 25, minEUR: 22, maxEUR: 29 },
-  { id: '29do38', label: '29–38 EUR', midpointEUR: 33, minEUR: 29, maxEUR: 38 },
-  { id: 'nad38', label: 'Več kot 38 EUR', midpointEUR: 45, minEUR: 38, maxEUR: 55 },
+  { id: 'do20', label: 'Do 20 EUR', midpointEUR: 18, minEUR: 15, maxEUR: 20 },
+  { id: '20do25', label: '20–25 EUR', midpointEUR: 22, minEUR: 20, maxEUR: 25 },
+  { id: '25do31', label: '25–31 EUR', midpointEUR: 28, minEUR: 25, maxEUR: 31 },
+  { id: 'nad31', label: 'Več kot 31 EUR', midpointEUR: 36, minEUR: 31, maxEUR: 41 },
 ];
 
 /*

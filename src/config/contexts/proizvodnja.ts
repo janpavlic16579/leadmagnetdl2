@@ -8,16 +8,18 @@ import {
 import type { CostBand, SegmentContext } from './contextTypes';
 
 /**
- * Sidro 2026: operater na stroju 22,0 EUR/h, varilec 21,4, orodjar 23,2, strugar 23,7;
- * panožno povprečje predelovalnih dejavnosti 24,3 (C25 kovinski izdelki 22,3).
+ * Sidro 2026 (SURS, zasebni sektor, oktober 2025, prevrednoteno): sestavljavec 18,5
+ * EUR/h, varilec 20,7, operater na stroju 20,9, orodjar 21,8, strugar 23,1,
+ * elektromehanik 25,2; panožno povprečje predelovalnih dejavnosti 23,9 (C25 kovinski
+ * izdelki 22,2).
  * Zgornja pasova pokrijeta izmenske in nevarnostne dodatke ter specializirane profile
  * (CNC, varilec z atestom). Izpeljava in viri: docs/urne-postavke.md.
  */
 const PRODUCTION_HOUR_BANDS: CostBand[] = [
-  { id: 'do20', label: 'Do 20 EUR', midpointEUR: 18, minEUR: 15, maxEUR: 20 },
-  { id: '20do26', label: '20–26 EUR', midpointEUR: 22, minEUR: 20, maxEUR: 26 },
-  { id: '26do34', label: '26–34 EUR', midpointEUR: 30, minEUR: 26, maxEUR: 34 },
-  { id: 'nad34', label: 'Več kot 34 EUR', midpointEUR: 39, minEUR: 34, maxEUR: 46 },
+  { id: 'do17', label: 'Do 17 EUR', midpointEUR: 16, minEUR: 15, maxEUR: 17 },
+  { id: '17do20', label: '17–20 EUR', midpointEUR: 18, minEUR: 17, maxEUR: 20 },
+  { id: '20do25', label: '20–25 EUR', midpointEUR: 22, minEUR: 20, maxEUR: 25 },
+  { id: 'nad25', label: 'Več kot 25 EUR', midpointEUR: 29, minEUR: 25, maxEUR: 33 },
 ];
 
 export const PROIZVODNJA_CONTEXT: SegmentContext = {
@@ -65,7 +67,7 @@ export const PROIZVODNJA_CONTEXT: SegmentContext = {
     help: 'Operater, varilec, monter — kdor dela na delovnem nalogu.',
     explainer: HOURLY_COST_EXPLAINER,
     bands: PRODUCTION_HOUR_BANDS,
-    fallbackEUR: 23,
+    fallbackEUR: 21,
   },
 
   adminHour: {
@@ -73,7 +75,7 @@ export const PROIZVODNJA_CONTEXT: SegmentContext = {
     help: 'Planer, vodja proizvodnje, nabava, priprava dela.',
     explainer: ADMIN_HOUR_EXPLAINER,
     bands: ADMIN_HOUR_BANDS,
-    fallbackEUR: 27,
+    fallbackEUR: 26,
   },
 
   /**
