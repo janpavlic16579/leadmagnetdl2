@@ -170,6 +170,8 @@ const NAPAKE_CAUSES: CauseOption[] = [
   { label: 'Podatki o pošiljki so nepopolni ali napačni', category: 'data' },
   { label: 'Naročilo se ročno prepisuje med orodji', category: 'data' },
   { label: 'Blago ni zanesljivo označeno oziroma ni sledljivo', category: 'data' },
+  // Ostaja people: sistemski del ('Blago ni zanesljivo označeno') je svoja možnost,
+  // ta pa opisuje napako kljub kontrolam in pomanjkanje usposabljanja.
   { label: 'Napake pri komisioniranju oziroma pomanjkanje usposabljanja', category: 'people' },
   { label: 'Poškodbe pri prevozu, embalaža ali oprema', category: 'physical' },
 ];
@@ -404,7 +406,7 @@ const DOKUMENTACIJA_CAUSES: CauseOption[] = [
   { label: 'Listine so večinoma papirne', category: 'data' },
   { label: 'Vsaka stranka zahteva svoj portal oziroma obrazec', category: 'external' },
   { label: 'Podatki se ne vnašajo sproti', category: 'data' },
-  { label: 'Odgovornosti niso jasne', category: 'people' },
+  { label: 'Odgovornosti niso jasne', category: 'planning' },
 ];
 
 export const dokumentacija: ModuleDefinition = {

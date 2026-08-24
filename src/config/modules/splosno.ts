@@ -41,7 +41,8 @@ const PODATKI_CAUSES: CauseOption[] = [
   { label: 'Isti podatek vnašamo večkrat', category: 'data' },
   { label: 'Poročila sestavljamo ročno v preglednicah', category: 'data' },
   { label: 'Dokumenti prihajajo v papirni ali slikovni obliki', category: 'external' },
-  { label: 'Odgovornosti za podatke niso jasne', category: 'people' },
+  // Lastništvo določi en vir resnice s pravicami, ne dogovor o odgovornosti.
+  { label: 'Odgovornosti za podatke niso jasne', category: 'data' },
 ];
 
 export const podatkiSp: ModuleDefinition = {
@@ -359,7 +360,8 @@ const DENAR_CAUSES: CauseOption[] = [
   { label: 'Odprte postavke niso sproti vidne', category: 'data' },
   { label: 'Račun izdamo z zamikom po opravljenem delu', category: 'planning' },
   { label: 'Kupci plačujejo slabo ne glede na opomine', category: 'external' },
-  { label: 'Nihče nima izterjave med svojimi nalogami', category: 'people' },
+  // Sistematično opominjanje prevzame sistem; sosednji vzrok o opominjanju je že planning.
+  { label: 'Nihče nima izterjave med svojimi nalogami', category: 'planning' },
 ];
 
 export const denarSp: ModuleDefinition = {
@@ -457,7 +459,8 @@ export const denarSp: ModuleDefinition = {
 const ZALOGE_CAUSES: CauseOption[] = [
   { label: 'Stanje zalog ni zanesljivo', category: 'data' },
   { label: 'Naročanje ni vezano na dejansko porabo', category: 'planning' },
-  { label: 'Zalogo zavestno držimo kot varovalko', category: 'people' },
+  // Varnostna zaloga je planska odločitev ob negotovosti, ne vprašanje discipline.
+  { label: 'Zalogo zavestno držimo kot varovalko', category: 'planning' },
   { label: 'Dobavitelji so nezanesljivi', category: 'external' },
   { label: 'Blago zastara ali se pokvari', category: 'physical' },
 ];

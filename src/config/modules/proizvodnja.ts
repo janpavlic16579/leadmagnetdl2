@@ -241,7 +241,7 @@ const ZALOGE_CAUSES: CauseOption[] = [
   { label: 'Stanje zalog oziroma lokacij ni zanesljivo', category: 'data' },
   { label: 'Nabava ni dovolj povezana s planom proizvodnje', category: 'planning' },
   { label: 'Dobavitelji so nezanesljivi', category: 'external' },
-  { label: 'Zalogo zavestno držimo kot varovalko', category: 'people' },
+  { label: 'Zalogo zavestno držimo kot varovalko', category: 'planning' },
 ];
 
 export const zaloge: ModuleDefinition = {
@@ -349,7 +349,8 @@ const NALOGI_CAUSES: CauseOption[] = [
   { label: 'Podatke vodimo v več različnih orodjih', category: 'data' },
   { label: 'Delovni nalogi so večinoma papirni', category: 'data' },
   { label: 'Podatki se ne vnašajo sproti', category: 'data' },
-  { label: 'Odgovornosti niso jasne', category: 'people' },
+  // Nejasna odgovornost je nepostavljen proces; sistem z delovnimi tokovi jo določi in sledi.
+  { label: 'Odgovornosti niso jasne', category: 'planning' },
 ];
 
 export const nalogi: ModuleDefinition = {

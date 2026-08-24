@@ -358,7 +358,7 @@ const ADMINISTRACIJA_CAUSES: CauseOption[] = [
   { label: 'Podatke vodimo v več različnih orodjih', category: 'data' },
   { label: 'Ponudbe in poročila nastajajo ročno', category: 'data' },
   { label: 'Podatki se ne vnašajo sproti', category: 'data' },
-  { label: 'Odgovornosti niso jasne', category: 'people' },
+  { label: 'Odgovornosti niso jasne', category: 'planning' },
 ];
 
 export const administracija: ModuleDefinition = {

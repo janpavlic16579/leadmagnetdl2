@@ -27,7 +27,8 @@ import { MONTHS_PER_YEAR } from './shared';
 
 const ANALITIKA_CAUSES: CauseOption[] = [
   { label: 'Podatki so v več sistemih in preglednicah', category: 'data' },
-  { label: 'Poročila ročno sestavlja ena oseba', category: 'people' },
+  // Ne gre za osebo, ampak za vir: poročilo, ki ga sestavi sistem, tega dela nima.
+  { label: 'Poročila ročno sestavlja ena oseba', category: 'data' },
   { label: 'Vsak oddelek ima svoje številke', category: 'data' },
   { label: 'Zahteve po poročilih se pogosto spreminjajo', category: 'planning' },
   { label: 'Podatke dobimo od zunanjega računovodstva', category: 'external' },
@@ -139,7 +140,8 @@ const FINANCE_CAUSES: CauseOption[] = [
   { label: 'Isti podatek vnašamo v več sistemov', category: 'data' },
   { label: 'Napake odkrijemo šele pri usklajevanju', category: 'planning' },
   { label: 'Odvisni smo od zunanjega servisa', category: 'external' },
-  { label: 'Nihče nima financ v celoti za svojo nalogo', category: 'people' },
+  // Proces ni postavljen; z enotnim sistemom ročno usklajevanje odpade.
+  { label: 'Nihče nima financ v celoti za svojo nalogo', category: 'planning' },
 ];
 
 export const financeHz: ModuleDefinition = {
@@ -258,7 +260,8 @@ const KADRI_CAUSES: CauseOption[] = [
   { label: 'Podatki za plače pridejo iz več virov', category: 'data' },
   { label: 'Pravila za dodatke in nadomestila so zapletena', category: 'planning' },
   { label: 'Zunanji obračun plač zahteva ročno pripravo podatkov', category: 'external' },
-  { label: 'Kadrovska evidenca ni nikogaršnja glavna naloga', category: 'people' },
+  // Ob urejeni evidenci naloga skoraj izgine — vzrok je nepostavljen proces, ne človek.
+  { label: 'Kadrovska evidenca ni nikogaršnja glavna naloga', category: 'planning' },
 ];
 
 export const kadriHz: ModuleDefinition = {
@@ -371,7 +374,8 @@ const DOKUMENTI_CAUSES: CauseOption[] = [
   { label: 'Potrjevanje poteka ročno, po e-pošti ali na papirju', category: 'data' },
   { label: 'Dokumenti prihajajo papirno ali kot skeni', category: 'external' },
   { label: 'Ni jasno, katera različica dokumenta je veljavna', category: 'data' },
-  { label: 'Le ena oseba ve, kje kaj je', category: 'people' },
+  // Znanje v glavi je posledica neurejenih dokumentov — urejen sistem lokacijo pove sam.
+  { label: 'Le ena oseba ve, kje kaj je', category: 'data' },
 ];
 
 export const dokumentiHz: ModuleDefinition = {
