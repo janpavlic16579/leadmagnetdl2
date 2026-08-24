@@ -125,7 +125,7 @@ describe('buildTotalsRange', () => {
         },
       }),
       context: PROIZVODNJA,
-      band: { min: 0.15, max: 0.3 },
+      includePotential: true,
     })!;
 
     // 100 h × [18, 25] × 12 — sredina 21 je vmes.
@@ -135,8 +135,10 @@ describe('buildTotalsRange', () => {
     expect(range.capacity.maxEUR).toBeGreaterThan(100 * band.midpointEUR * 12);
 
     // Potencial: min iz spodnjega konteksta, max iz zgornjega (vzrok 0 = planning → 0,65).
-    expect(range.potential!.minEUR).toBeCloseTo(range.capacity.minEUR * 0.65 * 0.15, 5);
-    expect(range.potential!.maxEUR).toBeCloseTo(range.capacity.maxEUR * 0.65 * 0.3, 5);
+    // Razpon izvira SAMO iz razpršenosti urne postavke — odpravljivost je ocenjena
+    // enkrat, zato drugega množitelja ni.
+    expect(range.potential!.minEUR).toBeCloseTo(range.capacity.minEUR * 0.65, 5);
+    expect(range.potential!.maxEUR).toBeCloseTo(range.capacity.maxEUR * 0.65, 5);
   });
 
   it('brez izbranega pasu vrne null', () => {

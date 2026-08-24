@@ -336,14 +336,11 @@ function drawHeroSection(doc: jsPDF, params: GeneratePdfParams, startY: number):
       note: 'Enkraten učinek, ne letni prihranek — se z zneski zgoraj ne sešteva.',
     });
   }
-  if (params.totals.potential) {
+  if (params.totals.addressablePotentialEUR !== undefined) {
     figures.push({
-      title: 'REALISTIČNI POTENCIAL',
-      value: formatEURRange(
-        params.totalsRange?.potential?.minEUR ?? params.totals.potential.minEUR,
-        params.totalsRange?.potential?.maxEUR ?? params.totals.potential.maxEUR,
-      ),
-      note: 'Letno, konservativna ocena — ni obljuba prihranka.',
+      title: 'OCENJEN NASLOVLJIV POTENCIAL',
+      value: cardValue(params.totals.addressablePotentialEUR, params.totalsRange?.potential),
+      note: 'Letno, po glavnih vzrokih — konservativna ocena, ne obljuba prihranka.',
     });
   }
 

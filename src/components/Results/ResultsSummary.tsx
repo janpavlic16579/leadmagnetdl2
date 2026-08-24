@@ -104,14 +104,15 @@ export function ResultsSummary({ totals, totalsRange, directLossNote }: ResultsS
           />
         ) : null}
 
-        {totals.potential ? (
+        {totals.addressablePotentialEUR !== undefined ? (
           <Figure
-            title="Realistični potencial izboljšave"
-            value={formatEURRange(
-              totalsRange?.potential?.minEUR ?? totals.potential.minEUR,
-              totalsRange?.potential?.maxEUR ?? totals.potential.maxEUR,
-            )}
-            note="Letno. Izpeljano iz glavnih vzrokov, ki ste jih navedli, in sistemov, ki jih danes uporabljate. Ni obljuba prihranka, ampak konservativen poslovni potencial, ki ga je mogoče preveriti na uvodnem sestanku."
+            title="Ocenjen naslovljiv potencial"
+            value={
+              displayRange(totalsRange?.potential)
+                ? formatEURRange(totalsRange!.potential!.minEUR, totalsRange!.potential!.maxEUR)
+                : formatEUR(totals.addressablePotentialEUR)
+            }
+            note="Letno. Del izmerjenega stroška, ki ga je po glavnih vzrokih, ki ste jih navedli, realno mogoče odpraviti. Ni obljuba prihranka, ampak konservativen poslovni potencial, ki ga je mogoče preveriti na uvodnem sestanku."
           />
         ) : null}
       </div>

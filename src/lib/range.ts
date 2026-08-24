@@ -3,14 +3,13 @@ import type {
   BusinessProfile,
   CostAssumption,
   CostQuestion,
-  ImprovementBand,
   ScaleAssumption,
   ScaleQuestion,
   SegmentContext,
 } from '../config/contexts';
 import type { ComputeContext, ModuleDefinition } from '../config/modules/moduleTypes';
 import { aggregateBuckets, computeModules } from './moduleEngine';
-import { computePotentialRange } from './potential';
+import { computeAddressablePotentialEUR } from './potential';
 
 /**
  * Rezultat kot razpon, kadar finančna osnova stoji na izbranih razponih.
@@ -41,7 +40,12 @@ export interface TotalsRange {
   lostMargin: EURRange;
   capacity: EURRange;
   oneTimeCapital: EURRange;
-  /** Min iz spodnjega konteksta × band.min, max iz zgornjega × band.max. */
+  /**
+   * Naslovljiv potencial iz spodnjega in zgornjega konteksta. Razpon izvira SAMO iz
+   * razpršenosti skupnih predpostavk — odpravljivost je ocenjena enkrat, z naslovljivim
+   * deležem glavnega vzroka. Kadar so vse predpostavke vnesene, sta meji enaki in
+   * displayRange prikaz vrne na točko.
+   */
   potential?: EURRange;
 }
 
@@ -132,7 +136,8 @@ export interface BuildTotalsRangeParams {
   values: Record<string, Record<string, number>>;
   profile: BusinessProfile;
   context: SegmentContext | undefined;
-  band?: ImprovementBand;
+  /** Ali segment potencial sploh računa — enako stikalo kot pri aggregateResults. */
+  includePotential?: boolean;
 }
 
 export function buildTotalsRange(params: BuildTotalsRangeParams): TotalsRange | null {
@@ -149,10 +154,10 @@ export function buildTotalsRange(params: BuildTotalsRangeParams): TotalsRange | 
     lostMargin: { minEUR: low.lostMarginEUR, maxEUR: high.lostMarginEUR },
     capacity: { minEUR: low.capacityEUR, maxEUR: high.capacityEUR },
     oneTimeCapital: { minEUR: low.oneTimeCapitalEUR, maxEUR: high.oneTimeCapitalEUR },
-    potential: params.band
+    potential: params.includePotential
       ? {
-          minEUR: computePotentialRange(outputsLow, params.band).minEUR,
-          maxEUR: computePotentialRange(outputsHigh, params.band).maxEUR,
+          minEUR: computeAddressablePotentialEUR(outputsLow),
+          maxEUR: computeAddressablePotentialEUR(outputsHigh),
         }
       : undefined,
   };

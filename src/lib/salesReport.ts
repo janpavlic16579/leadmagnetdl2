@@ -106,8 +106,8 @@ export interface SalesReportSummary {
   rangeEUR: TotalsRange | null;
   capacityHoursPerMonth: number;
   oneTimeCapitalEUR: number;
-  potentialMinEUR?: number;
-  potentialMaxEUR?: number;
+  /** Točka; razpon prinesejo izbrani pasovi predpostavk prek `rangeEUR.potential`. */
+  addressablePotentialEUR?: number;
   confidence?: ConfidenceLevel;
   /** Zakaj ta oznaka — brez tega je "nizka zanesljivost" očitek brez naslova. */
   confidenceReason: string;
@@ -306,8 +306,7 @@ export function buildSalesReport(params: BuildSalesReportParams): SalesReport {
       rangeEUR: params.totalsRange ?? null,
       capacityHoursPerMonth: params.totals.capacityHoursPerMonth,
       oneTimeCapitalEUR: params.totals.oneTimeCapitalEUR,
-      potentialMinEUR: params.totals.potential?.minEUR,
-      potentialMaxEUR: params.totals.potential?.maxEUR,
+      addressablePotentialEUR: params.totals.addressablePotentialEUR,
       confidence: params.totals.confidence,
       confidenceReason: buildConfidenceReason(params),
     },

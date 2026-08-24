@@ -131,7 +131,7 @@ function drawQualification(doc: jsPDF, report: SalesReport, startY: number): num
     ['Pretežno dela', q.businessTypeLabel ?? '—'],
     ['Sedanji sistem', q.currentSystemLabel ?? '—'],
     ['Obstoječi uporabnik PANTHEON', q.isPantheonCustomer ? 'Da' : 'Ne'],
-    ['Pas realistične izboljšave', band],
+    ['Vrzel sedanjega sistema (prodajni signal)', `${band} — v izračun ne vstopa`],
     ['Vir obiska', report.meta.utmSource ?? 'neposredno'],
     ['Privolitev — obdelava osebnih podatkov', report.meta.consentProcessing ? 'Da' : 'Ne'],
     ['Privolitev — ponudbe PANTHEON', report.meta.consentOffers ? 'Da' : 'Ne'],
@@ -180,14 +180,11 @@ function drawSummary(doc: jsPDF, report: SalesReport, startY: number): number {
       'Enkraten učinek, se z letnimi zneski ne sešteva',
     ]);
   }
-  if (s.potentialMinEUR !== undefined && s.potentialMaxEUR !== undefined) {
+  if (s.addressablePotentialEUR !== undefined) {
     rows.push([
-      'Realistični potencial',
-      formatEURRange(
-        s.rangeEUR?.potential?.minEUR ?? s.potentialMinEUR,
-        s.rangeEUR?.potential?.maxEUR ?? s.potentialMaxEUR,
-      ),
-      'Letno, konservativno — ni obljuba prihranka',
+      'Naslovljiv potencial',
+      value(s.addressablePotentialEUR, s.rangeEUR?.potential),
+      'Letno, po glavnih vzrokih — ni obljuba prihranka',
     ]);
   }
 

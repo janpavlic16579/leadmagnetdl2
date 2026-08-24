@@ -36,7 +36,7 @@ export const OBJECTIONS: Record<ObjectionId, ObjectionEntry> = {
     objection: '„Ta številka je pretirana."',
     trigger: 'Nizka zanesljivost — večina ključnih podatkov je privzetih ali izbranih iz razpona.',
     answer:
-      'Strinjajte se in obrnite: izračun je spodnja meja, ne ocena navzgor. Nedotaknjena polja vstopajo z ničlo, „Ne vem" pade na najkonservativnejšo vrednost, potencial pa se množi še z naslovljivim deležem in pasom izboljšave. Ponudite, da skupaj vnesete dve pravi številki — znesek se bo zvišal, ne znižal.',
+      'Strinjajte se in obrnite: izračun je spodnja meja, ne ocena navzgor. Nedotaknjena polja vstopajo z ničlo, „Ne vem" pade na najkonservativnejšo vrednost, prikazani potencial pa je le tisti del izmerjenega stroška, ki ga po njihovem lastnem glavnem vzroku sploh je mogoče odpraviti. Ponudite, da skupaj vnesete dve pravi številki — znesek se bo zvišal, ne znižal.',
   },
 
   noData: {
@@ -57,7 +57,7 @@ export const OBJECTIONS: Record<ObjectionId, ObjectionEntry> = {
     objection: '„PANTHEON že imamo."',
     trigger: 'Stranka je obstoječi uporabnik PANTHEON.',
     answer:
-      'Prav zato je pas izboljšave pri njej najnižji — izračun to že upošteva. Pogovor ni o zamenjavi sistema, ampak o modulu, ki ga nima: znesek, ki ostane kljub najnižjemu pasu, je tisto, česar sedanja postavitev ne pokriva.',
+      'Prav zato je vrzel njihovega sistema najmanjša med vsemi — a prikazani znesek iz nje ne izhaja. Meri stroške, ki so jih navedli sami, in vzroke, ki jih je po njihovem odgovoru mogoče odpraviti. Pogovor torej ni o zamenjavi sistema, ampak o modulu, ki ga nimajo: ta znesek je tisto, česar sedanja postavitev ne pokriva.',
   },
 
   triedBefore: {

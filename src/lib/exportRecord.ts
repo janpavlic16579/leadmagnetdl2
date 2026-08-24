@@ -50,7 +50,14 @@ export interface LeadExportRecord {
     capacityEUR: number;
     capacityHoursPerMonth: number;
     oneTimeCapitalEUR: number;
-    /** Odsotna pri segmentih, ki pasu izboljšave ne poznajo. */
+    /**
+     * Naslovljiv potencial. Odsoten pri segmentih brez konteksta, ki ga ne računajo.
+     *
+     * Imeni stolpcev ostajata min/max, ker je shema CRM zamrznjena. Odkar odpravljivost
+     * ocenimo enkrat (naslovljiv delež glavnega vzroka), sta enaki vrednosti — razlikujeta
+     * se le, kadar razpon prinesejo izbrani pasovi skupnih predpostavk (urna postavka,
+     * prihodek, marža).
+     */
     potentialMinEUR?: number;
     potentialMaxEUR?: number;
   };
@@ -117,8 +124,9 @@ export function buildLeadExportRecord(params: BuildLeadExportRecordParams): Lead
       capacityEUR: params.totals.capacityEUR,
       capacityHoursPerMonth: params.totals.capacityHoursPerMonth,
       oneTimeCapitalEUR: params.totals.oneTimeCapitalEUR,
-      potentialMinEUR: params.totals.potential?.minEUR,
-      potentialMaxEUR: params.totals.potential?.maxEUR,
+      // Ista vrednost v obeh stolpcih: odpravljivost je ocenjena enkrat (glej tip zgoraj).
+      potentialMinEUR: params.totals.addressablePotentialEUR,
+      potentialMaxEUR: params.totals.addressablePotentialEUR,
     },
     confidence: params.totals.confidence,
     profile: params.profile,

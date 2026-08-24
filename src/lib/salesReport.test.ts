@@ -5,7 +5,6 @@ import { aggregateResults, assessConfidence, buildComputeContext } from './poten
 import {
   emptyProfileFor,
   getSegmentContext,
-  improvementBandFor,
   industryAverageBand,
 } from '../config/contexts';
 import { getModules } from '../config/modules';
@@ -70,7 +69,7 @@ function reportFor(segmentId: SegmentId, options: ScenarioOptions = {}) {
 
   const outputs = computeModules(activeModules, values, buildComputeContext(profile));
   const totals = aggregateResults(outputs, {
-    band: context ? improvementBandFor(context, profile.currentSystem) : undefined,
+    includePotential: context !== undefined,
     confidence: context
       ? assessConfidence({ profile, context, modules: activeModules, values, outputs })
       : undefined,
@@ -145,7 +144,7 @@ describe('Poročilo se sestavi za vsako dejavnost', () => {
     );
   });
 
-  it('pas izboljšave in status uporabnika PANTHEON sta izpolnjena', () => {
+  it('vrzel sedanjega sistema in status uporabnika PANTHEON sta izpolnjena', () => {
     const pantheon = reportFor('trgovina', { currentSystem: 'pantheonWms' });
     expect(pantheon.qualification.isPantheonCustomer).toBe(true);
     expect(pantheon.qualification.improvementBand.max).toBeLessThan(0.25);
@@ -154,6 +153,24 @@ describe('Poročilo se sestavi za vsako dejavnost', () => {
     expect(excel.qualification.isPantheonCustomer).toBe(false);
     expect(excel.qualification.improvementBand.max).toBeGreaterThan(
       pantheon.qualification.improvementBand.max,
+    );
+  });
+
+  it('vrzel sistema je prodajni signal in prikazanega zneska ne zmanjša', () => {
+    // Ista dejavnost, isti vnosi, različen sedanji sistem: kvalifikacijski signal se
+    // razlikuje, naslovljiv potencial pa ne. Varovalo proti vrnitvi dvojnega diskonta
+    // po poti prodajnega poročila.
+    const scenarij = {
+      selectedIds: ['terjatve_trgovina'],
+      inputs: { terjatve_trgovina: { dunningHoursPerMonth: 30, mainCause: 0 } },
+    };
+    const pantheon = reportFor('trgovina', { currentSystem: 'pantheonWms', ...scenarij });
+    const excel = reportFor('trgovina', { currentSystem: 'excelPaper', ...scenarij });
+
+    expect(excel.summary.addressablePotentialEUR).toBeGreaterThan(0);
+    expect(pantheon.summary.addressablePotentialEUR).toBeCloseTo(
+      excel.summary.addressablePotentialEUR!,
+      6,
     );
   });
 

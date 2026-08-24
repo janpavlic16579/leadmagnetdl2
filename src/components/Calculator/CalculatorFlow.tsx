@@ -4,7 +4,6 @@ import { getModules } from '../../config/modules';
 import {
   emptyProfileFor,
   getSegmentContext,
-  improvementBandFor,
   isTechnicalRiskModuleVisible,
   type BusinessProfile,
 } from '../../config/contexts';
@@ -337,8 +336,8 @@ export function CalculatorFlow({
   const totals = useMemo(
     () =>
       aggregateResults(outputs, {
-        // Potencial pozna le segment, ki vpraša za sedanji sistem; drugod kartica odpade.
-        band: context ? improvementBandFor(context, profile.currentSystem) : undefined,
+        // Potencial pozna le segment s kontekstom; drugod kartica odpade.
+        includePotential: context !== undefined,
         confidence: context
           ? assessConfidence({
               profile,
@@ -366,7 +365,7 @@ export function CalculatorFlow({
         values: resolvedValues,
         profile,
         context,
-        band: context ? improvementBandFor(context, profile.currentSystem) : undefined,
+        includePotential: context !== undefined,
       }),
     [activeModules, resolvedValues, profile, context],
   );

@@ -1,4 +1,4 @@
-import type { BusinessProfile, ImprovementBand, SegmentContext } from '../config/contexts';
+import type { BusinessProfile, SegmentContext } from '../config/contexts';
 import {
   isUnknownAnswer,
   type ComputeContext,
@@ -15,27 +15,33 @@ import { aggregateBuckets, isModuleAnswered, ANNUAL_BUCKETS, type BucketTotals }
  * ga za to razširili, bi test popravljali prav takrat, ko bi moral opozarjati.
  */
 
-export interface PotentialRange {
-  minEUR: number;
-  maxEUR: number;
-}
-
 export type ConfidenceLevel = 'high' | 'medium' | 'low';
 
 /** Vsota po koših, razširjena s potencialom in zanesljivostjo, kadar ju segment pozna. */
 export interface ResultTotals extends BucketTotals {
-  potential?: PotentialRange;
+  /**
+   * Ocenjen naslovljiv potencial — TOČKA, ne pas. Razpon nastane samo iz razponov
+   * skupnih predpostavk (lib/range.ts), nikoli iz druge ocene odpravljivosti.
+   */
+  addressablePotentialEUR?: number;
   confidence?: ConfidenceLevel;
 }
 
 /**
- * Σ (znesek × naslovljiv delež × pas izboljšave) čez vse LETNE koše.
+ * Σ (znesek × naslovljiv delež) čez vse LETNE koše.
+ *
+ * EN sam koeficient. Doslej se je vsota množila še z "pasom izboljšave" iz odgovora
+ * o sedanjem sistemu — a naslovljiv delež in pas merita isto stvar: koliko problema
+ * je sploh odpravljivega. Isti problem je bil zato zmanjšan dvakrat in podjetju smo
+ * od 10.000 EUR izgube pokazali 1.875 EUR namesto 7.500 EUR. Vrzel sedanjega sistema
+ * ostane vprašana, a je odslej prodajni signal (kvalifikacija, ICP) in ne množitelj —
+ * glej SystemGap v config/contexts/contextTypes.ts.
  *
  * Enkratni kapital je izpuščen iz dveh razlogov: enkraten znesek se ne meša med
  * letne, pri zalogah pa je ta znesek že sam potencial in ne sedanji strošek —
  * množenje bi ga štelo dvakrat.
  */
-export function computePotentialRange(outputs: ModuleOutput[], band: ImprovementBand): PotentialRange {
+export function computeAddressablePotentialEUR(outputs: ModuleOutput[]): number {
   let addressableEUR = 0;
 
   for (const output of outputs) {
@@ -44,10 +50,7 @@ export function computePotentialRange(outputs: ModuleOutput[], band: Improvement
     addressableEUR += (output.valueEUR ?? 0) * output.addressableShare;
   }
 
-  return {
-    minEUR: addressableEUR * band.min,
-    maxEUR: addressableEUR * band.max,
-  };
+  return addressableEUR;
 }
 
 /** Skupne predpostavke za module. Ocenjena vrednost je sredina pasu, nikoli 0. */
@@ -250,8 +253,12 @@ function annualEurByModule(outputs: ModuleOutput[]): Map<string, number> {
 }
 
 export interface AggregateResultsOptions {
-  /** Odsoten = segment potenciala ne računa; kartica se ne prikaže. */
-  band?: ImprovementBand;
+  /**
+   * Ali segment potencial sploh računa. Doslej je to vlogo opravljal podan pas
+   * izboljšave; odkar pasu ni več, mora biti stikalo izrecno — sicer bi kartica
+   * tiho izginila vsakemu segmentu hkrati z odstranjenim množiteljem.
+   */
+  includePotential?: boolean;
   confidence?: ConfidenceLevel;
 }
 
@@ -260,7 +267,7 @@ export function aggregateResults(
   options: AggregateResultsOptions = {},
 ): ResultTotals {
   const totals: ResultTotals = aggregateBuckets(outputs);
-  if (options.band) totals.potential = computePotentialRange(outputs, options.band);
+  if (options.includePotential) totals.addressablePotentialEUR = computeAddressablePotentialEUR(outputs);
   if (options.confidence) totals.confidence = options.confidence;
   return totals;
 }
