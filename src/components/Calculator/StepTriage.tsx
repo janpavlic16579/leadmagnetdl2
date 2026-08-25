@@ -1,11 +1,17 @@
 import type { ModuleDefinition } from '../../config/modules';
 import type { TriageScores } from '../../lib/moduleEngine';
+import type { ResolvedSegmentCopy } from '../../config/copy';
 import { useStepHeading } from '../../lib/useStepHeading';
 import buttonStyles from '../../styles/buttons.module.css';
 import shellStyles from './StepShell.module.css';
 import styles from './StepTriage.module.css';
 
 interface StepTriageProps {
+  /**
+   * Naslov in uvod izbrane dejavnosti. Pozivi področij ostanejo v definicijah
+   * modulov — to so vprašanja in korak jih le izriše.
+   */
+  copy: ResolvedSegmentCopy['triage'];
   /** Samo moduli s triažo — diagnostični se prikažejo vedno in se tu ne ocenjujejo. */
   modules: ModuleDefinition[];
   scores: TriageScores;
@@ -32,6 +38,7 @@ const NUMERALS = ['nič', 'eno', 'dve', 'tri', 'štiri', 'pet'];
 const numeral = (count: number) => NUMERALS[count] ?? String(count);
 
 export function StepTriage({
+  copy,
   modules,
   scores,
   onScoresChange,
@@ -57,14 +64,12 @@ export function StepTriage({
     <div className={shellStyles.wrap}>
       <p className={shellStyles.stepLabel}>{stepLabel}</p>
       <h1 className={shellStyles.title} tabIndex={-1} ref={headingRef}>
-        Kje vas najbolj tišči?
+        {copy.title}
       </h1>
-      <p className={styles.intro}>
-        {/* Brez imena dejavnosti: ta zaslon uporabljata proizvodnja in logistika,
-            imena področij pod njim pa že povesta, čigav vprašalnik je to. */}
-        Na hitro ocenite vsako področje. Podrobna vprašanja vam nato zastavimo samo za največje težave — tako
-        vprašalnik ostane kratek, izračun pa specifičen za vaše podjetje.
-      </p>
+      {/* Ime dejavnosti je zdaj v naslovu: doslej je bilo namenoma izpuščeno, ker
+          je isti zaslon služil vsem, uvod pa je zato govoril o "vašem podjetju"
+          tudi tam, kjer smo že vedeli, da gre za proizvodnjo ali servis. */}
+      <p className={styles.intro}>{copy.intro}</p>
 
       <div className={shellStyles.card}>
         {modules.map((definition) => {

@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { getModules, type ModuleDefinition, type ModuleOutput } from '../../config/modules';
 import type { SegmentConfig } from '../../config/segments';
+import { SHARED_COPY, type ResolvedSegmentCopy } from '../../config/copy';
 import { triageScoreLabel } from '../../lib/answerLabels';
 import { formatAmount, formatDecimal } from '../../lib/format';
 import { useStepHeading } from '../../lib/useStepHeading';
@@ -27,7 +28,10 @@ const BreakdownChart = lazy(() =>
 );
 
 interface ResultsViewProps {
+  /** Nabor in vrstni red področij; besedila so v copy. */
   segment: SegmentConfig;
+  /** Naslovi, opombe in besedila kartic izbrane dejavnosti. */
+  copy: ResolvedSegmentCopy;
   outputsByModule: Record<string, ModuleOutput[]>;
   totals: ResultTotals;
   /** Razpon, kadar finančna osnova stoji na izbranih pasovih (lib/range.ts). */
@@ -47,6 +51,7 @@ interface ResultsViewProps {
 
 export function ResultsView({
   segment,
+  copy,
   outputsByModule,
   totals,
   totalsRange,
@@ -117,7 +122,7 @@ export function ResultsView({
   return (
     <div className={styles.wrap}>
       <p className={styles.stepLabel}>
-        {stepLabel} · {segment.displayName}
+        {stepLabel} · {copy.displayName}
       </p>
       {/*
         Vprašanje segmenta je naslov strani in ne opomba pod njo.
@@ -126,7 +131,7 @@ export function ResultsView({
         brez tega vprašanja, hierarhija naslovov pa pri h2 kartic.
       */}
       <h1 className={styles.headline} tabIndex={-1} ref={headingRef}>
-        {segment.headlineStory}
+        {copy.results.headline}
       </h1>
 
       {/*
@@ -140,13 +145,21 @@ export function ResultsView({
         z letnimi zneski ne sešteva.
       */}
       <p className={styles.heroTotal}>
-        <span className={styles.heroLabel}>Skupaj na leto</span>
+        <span className={styles.heroLabel}>{copy.results.heroLabel}</span>
         <span className={styles.heroValue}>{heroTotal}</span>
       </p>
+      {/*
+        Iz česa je vsota sestavljena, tik ob njej.
+        Doslej je bila razlaga razpršena po opombah štirih kartic pod njo — kdor
+        je prebral samo veliko številko, je odnesel vtis enega samega zneska,
+        čeprav so v njem tri različne vrste denarja. Prav ta vtis je tisto, kar
+        izračunu vzame verodostojnost, ko ga nekdo začne preverjati.
+      */}
+      <p className={styles.heroNote}>{copy.results.heroNote}</p>
 
-      {isAccounting && accountingCapacity !== undefined ? (
+      {isAccounting && accountingCapacity !== undefined && copy.results.capacitySecondary ? (
         <p className={styles.heroSecondary}>
-          To je {formatDecimal(accountingCapacity)} dodatnih strank brez nove zaposlitve.
+          {copy.results.capacitySecondary.replace('{count}', formatDecimal(accountingCapacity))}
         </p>
       ) : null}
 
@@ -159,11 +172,11 @@ export function ResultsView({
         </p>
       ) : null}
 
-      <ResultsSummary totals={totals} totalsRange={totalsRange} directLossNote={segment.directLossNote} />
+      <ResultsSummary totals={totals} totalsRange={totalsRange} figures={copy.figures} />
 
       {chartData.length > 0 ? (
         <div className={styles.card}>
-          <h2 className={styles.sectionTitle}>Razčlenitev po področjih</h2>
+          <h2 className={styles.sectionTitle}>{copy.results.breakdownTitle}</h2>
           <Suspense fallback={<div className={styles.chartPlaceholder} aria-hidden="true" />}>
             <BreakdownChart data={chartData} />
           </Suspense>
@@ -181,7 +194,7 @@ export function ResultsView({
 
       {totals.capacityEUR > 0 ? (
         <div className={styles.card}>
-          <h2 className={styles.sectionTitle}>Kje se izgublja kapaciteta</h2>
+          <h2 className={styles.sectionTitle}>{copy.results.capacityTitle}</h2>
           <Breakdown
             modules={modules}
             outputsByModule={outputsByModule}
@@ -193,7 +206,7 @@ export function ResultsView({
 
       {totals.risks.length > 0 ? (
         <div className={styles.card}>
-          <h2 className={styles.sectionTitle}>Podatki in procesna tveganja</h2>
+          <h2 className={styles.sectionTitle}>{copy.results.risksTitle}</h2>
           <p className={styles.cardNote}>
             Ta ocena namenoma nima zneska. Kjer ni kalkulacije ali sledljivosti, natančnega zneska ni mogoče
             izračunati — navidezno natančna številka bi prav to težavo skrila.
@@ -204,7 +217,7 @@ export function ResultsView({
 
       {unmeasuredModules.length > 0 ? (
         <div className={styles.card}>
-          <h2 className={styles.sectionTitle}>Česa nismo izmerili</h2>
+          <h2 className={styles.sectionTitle}>{copy.results.unmeasuredTitle}</h2>
           <p className={styles.cardNote}>
             Za ta področja nimamo vaših številk — bodisi jih niste izbrali, bodisi ste jih pustili prazna.
             V zgornji izračun zato ne vstopajo z nobenim zneskom. Nobene številke si nismo izmislili.
@@ -244,7 +257,7 @@ export function ResultsView({
             <button type="button" className={buttonStyles.primaryButton} onClick={onProceedToEmail}>
               {/* Isto besedilo kot naslov naslednjega zaslona — prej je gumb obljubljal
                   "PDF poročilo", pristalo pa se je na "Razširjen rezultat". */}
-              Prenesi PDF poročilo
+              {SHARED_COPY.resultsPrimaryCta}
             </button>
           </div>
         </div>

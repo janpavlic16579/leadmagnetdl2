@@ -5,6 +5,7 @@ import type {
   ContextQuestion,
   SegmentContext,
 } from '../../config/contexts';
+import type { ResolvedSegmentCopy } from '../../config/copy';
 import { useStepHeading } from '../../lib/useStepHeading';
 import buttonStyles from '../../styles/buttons.module.css';
 import shellStyles from './StepShell.module.css';
@@ -20,8 +21,10 @@ function selectedOption(
 }
 
 interface StepContextProps {
-  /** Besedila in možnosti dejavnosti — korak sam ne pozna nobene panoge. */
+  /** Vprašanja in možnosti dejavnosti — korak sam ne pozna nobene panoge. */
   context: SegmentContext;
+  /** Naslov in uvod iste dejavnosti; vprašanja ostanejo v context. */
+  copy: ResolvedSegmentCopy['context'];
   profile: BusinessProfile;
   onChange: (profile: BusinessProfile) => void;
   stepLabel: string;
@@ -41,7 +44,7 @@ interface StepContextProps {
  *
  * Dejavnosti ne sprašujemo znova: izbrana je bila v prvem koraku.
  */
-export function StepContext({ context, profile, onChange, stepLabel, onNext, onBack }: StepContextProps) {
+export function StepContext({ context, copy, profile, onChange, stepLabel, onNext, onBack }: StepContextProps) {
   const headingRef = useStepHeading();
   const fieldId = useId();
   const roleNeedsOwnText = selectedOption(context.role, profile.role)?.freeText === true;
@@ -104,9 +107,9 @@ export function StepContext({ context, profile, onChange, stepLabel, onNext, onB
     <div className={shellStyles.wrap}>
       <p className={shellStyles.stepLabel}>{stepLabel}</p>
       <h1 className={shellStyles.title} tabIndex={-1} ref={headingRef}>
-        {context.title}
+        {copy.title}
       </h1>
-      <p className={styles.intro}>{context.intro}</p>
+      <p className={styles.intro}>{copy.intro}</p>
 
       <div className={shellStyles.card}>
         {group(context.businessType, profile.businessType, (businessType) =>

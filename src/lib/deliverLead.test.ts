@@ -46,7 +46,7 @@ function scenario(): DeliverLeadInput {
       phone: '',
       taxNumber: '',
     },
-    consents: { consentProcessing: true, consentOffers: false, consentContent: false },
+    consents: { consentProcessing: true, consentOffers: false, consentContent: false, consentConsulting: false },
     utmSource: null,
     internalMode: false,
     segment,
@@ -70,11 +70,15 @@ function scenario(): DeliverLeadInput {
 /** Prestrežene poti navzven: prenosi, stanje in webhook. */
 function harness(overrides: Partial<DeliverLeadModules>, real: DeliverLeadModules) {
   const downloaded: DownloadFile[] = [];
+  /** Prenosi po svežnjih: ravni seznam ne pove, ali sta datoteki šli iz ENE geste. */
+  const batches: DownloadFile[][] = [];
+  /** Vrstni red poti navzven — lovi, ali webhook stoji pred prenosoma. */
+  const order: ('download' | 'webhook')[] = [];
   const posted: { record: LeadExportRecord; salesReportHtml: string }[] = [];
   let salesReportSet = false;
   let submitted = false;
 
-  const modules: DeliverLeadModules = {
+  const merged: DeliverLeadModules = {
     ...real,
     leadWebhookUrl: () => null,
     submitLead: async (submission) => {
@@ -84,10 +88,26 @@ function harness(overrides: Partial<DeliverLeadModules>, real: DeliverLeadModule
     ...overrides,
   };
 
+  // Sled se ovije OKOLI morebitne zamenjave: test, ki podtakne svoj submitLead,
+  // sicer tiho izgubi zapis o webhooku in trditev o vrstnem redu ne pove ničesar.
+  const modules: DeliverLeadModules = {
+    ...merged,
+    submitLead: async (submission, url) => {
+      order.push('webhook');
+      return merged.submitLead(submission, url);
+    },
+  };
+
   const hooks = {
-    downloadFile: (file: DownloadFile) => downloaded.push(file),
+    downloadFile: (file: DownloadFile) => {
+      order.push('download');
+      downloaded.push(file);
+      batches.push([file]);
+    },
     downloadSequentially: async (files: DownloadFile[]) => {
+      order.push('download');
       downloaded.push(...files);
+      batches.push(files);
     },
     onCustomerFile: () => {},
     onSalesReport: () => {
@@ -102,6 +122,8 @@ function harness(overrides: Partial<DeliverLeadModules>, real: DeliverLeadModule
     modules,
     hooks,
     downloaded,
+    batches,
+    order,
     posted,
     state: () => ({ salesReportSet, submitted }),
   };
@@ -118,7 +140,7 @@ describe('Dostava po oddaji', () => {
 
     // Strankino poročilo je prvo — je edino, ki mora priti vedno.
     expect(h.downloaded[0]?.filename).toContain('analiza-skritih-stroskov');
-    expect(h.downloaded.filter(isSalesFile)).toHaveLength(2);
+    expect(h.downloaded.filter(isSalesFile)).toHaveLength(1);
     // Gumba za ponovni prenos na zahvalnem zaslonu visita na tem stanju.
     expect(h.state().salesReportSet).toBe(true);
     expect(h.state().submitted).toBe(true);
@@ -150,7 +172,7 @@ describe('Dostava po oddaji', () => {
 
     await deliverLead(scenario(), h.modules, h.hooks);
 
-    expect(h.downloaded.filter(isSalesFile)).toHaveLength(2);
+    expect(h.downloaded.filter(isSalesFile)).toHaveLength(1);
   });
 
   it('interni način: priprava se prenese in ponudi za ponovni prenos', async () => {
@@ -160,8 +182,40 @@ describe('Dostava po oddaji', () => {
     await deliverLead({ ...scenario(), internalMode: true }, h.modules, h.hooks);
 
     const salesFiles = h.downloaded.filter(isSalesFile);
-    expect(salesFiles.map((file) => file.filename.split('.').pop())).toEqual(['pdf', 'html']);
+    expect(salesFiles.map((file) => file.filename.split('.').pop())).toEqual(['pdf']);
     expect(h.state().salesReportSet).toBe(true);
+  });
+
+  /**
+   * Doslej je strankino poročilo odšlo takoj, priprava pa šele za webhookom in
+   * gradnjo PDF-ja. Med prenosoma je minilo do deset sekund, brskalnik pa v tem
+   * času geste ne prizna več in drugi prenos tiho zavrže. Ta dva testa sta edina,
+   * ki to regresijo ujameta — ravni seznam prenosov je ne pokaže.
+   */
+  it('obe poročili gresta iz ene geste, strankino prvo', async () => {
+    const real = await loadDeliveryModules();
+    const h = harness({}, real);
+
+    await deliverLead(scenario(), h.modules, h.hooks);
+
+    expect(h.batches).toHaveLength(1);
+    expect(h.batches[0]).toHaveLength(2);
+    expect(h.batches[0][0].filename).toContain('analiza-skritih-stroskov');
+    expect(h.batches[0][1].filename).toContain('prodajna-priprava');
+  });
+
+  it('webhook ne stoji pred prenosoma', async () => {
+    const real = await loadDeliveryModules();
+    const h = harness(
+      { leadWebhookUrl: () => 'https://example.test/webhook', submitLead: async () => false },
+      real,
+    );
+
+    await deliverLead(scenario(), h.modules, h.hooks);
+
+    // Prvi stik z zunanjim svetom mora biti prenos, ne osemsekundni rok webhooka.
+    expect(h.order[0]).toBe('download');
+    expect(h.order).toContain('webhook');
   });
 
   it('napaka v prodajnem delu ne odnese strankinega poročila', async () => {

@@ -415,6 +415,7 @@ Izpeljava, sidra in datumi poizvedb: [`docs/urne-postavke.md`](docs/urne-postavk
 
 | Kaj | Datoteka |
 |---|---|
+| Marketinško besedilo po dejavnosti (naslovi, uvodi, kartice, obrazec) | `src/config/copy/` |
 | Vprašanja, privzete vrednosti in formule modulov | `src/config/modules/` |
 | Horizontalna področja (analitika, finance, kadri, dokumenti, servis) | `src/config/modules/horizontal.ts` |
 | Kateri moduli so v segmentu (tudi katere horizontale), prag visoke izgube | `src/config/segments.ts` |
@@ -431,6 +432,16 @@ Izpeljava, sidra in datumi poizvedb: [`docs/urne-postavke.md`](docs/urne-postavk
 | Barve serij v grafu | `--color-chart-*` v `src/styles/tokens.css` |
 | Dogodki lijaka | `src/lib/analytics.ts` |
 | Ohranjanje napredka ob osvežitvi | `src/lib/progressStorage.ts` |
+
+**Delitev, po kateri je mogoče besedilo urejati brez pregleda razvijalca:** *vprašanja* so v
+`src/config/modules/` in v vprašalnih poljih `src/config/contexts/` — vezana so na formule in na
+izvozni zapis za CRM, zato jih ni mogoče prepisati brez domenskega pregleda. *Nagovor* je v
+`src/config/copy/`, ena datoteka na dejavnost, in se sme prepisati prosto.
+
+Kar mora biti v vseh dejavnostih enako (vprašanja, pravne in metodološke ograde, oznake
+kontrolnikov, slovenska dvojina), je v `SHARED_COPY`; kar dejavnost lahko prepiše, a ni nujno, se
+razreši proti `NEUTRAL_COPY`. `src/config/copy/copy.test.ts` med drugim pade, če je isto besedilo
+napisano sedemkrat — tak niz sodi med skupna in ne v sedem datotek.
 
 ## Zaupanjska zasnova
 
@@ -462,9 +473,12 @@ polju in nikamor ne odidejo.
 Dogodki: `lm10_step_view`, `lm10_industry_selected`, `lm10_triage_done`, `lm10_results_view`,
 `lm10_email_gate_view`, `lm10_lead_submitted`, `lm10_report_redownload`.
 
+`lm10_lead_submitted` nosi tudi lastnost `consulting` (`da`/`ne`) — ali je obiskovalec obkljukal poziv
+za svetovanje na zadnjem koraku. Brez nje o učinku tega poziva ni znano nič.
+
 **Osebnih podatkov in zneskov med njimi ni** — samo korak, segment in razredi (oznaka zanesljivosti,
-število izmerjenih področij). Kar potrebuje prodaja, potuje po webhooku s privolitvijo; analitika meri
-lijak in ne strank.
+število izmerjenih področij, obkljukan poziv). Kar potrebuje prodaja, potuje po webhooku s privolitvijo;
+analitika meri lijak in ne strank.
 
 ## Obrazec za prevzem poročila
 
@@ -478,10 +492,17 @@ Tri odločitve, ki jih je vredno poznati pred urejanjem:
   mrtev gumb za obiskovalca napaka — in nevidna, ker onemogočen gumb ne pove, katero polje ga
   ustavlja. Namig se pokaže ob `blur`, dvom pa potuje naprej: `meta.taxNumberLooksValid` v poročilu
   izpiše "12345678 (ni videti veljavna)", kjer ga vidi svetovalec, ki lahko ukrepa.
-- **Privolitve so tri in ločene** (`LeadConsents` v `src/types.ts`): obvezna obdelava osebnih
-  podatkov ter neobvezni obveščanje o ponudbah in o vsebinah/dogodkih. Ena skupna zastavica ne bi
-  mogla odgovoriti na revizijsko vprašanje "ali je privolil v trženje?". Neobvezni sta privzeto
-  neoznačeni — vnaprej odkljukana privolitev ni veljavna privolitev.
+- **Privolitve so štiri in ločene** (`LeadConsents` v `src/types.ts`): obvezna obdelava osebnih
+  podatkov ter neobvezne obveščanje o ponudbah, obveščanje o vsebinah/dogodkih in prošnja za
+  svetovanje. Ena skupna zastavica ne bi mogla odgovoriti na revizijsko vprašanje "ali je privolil
+  v trženje?". Neobvezne so privzeto neoznačene — vnaprej odkljukana privolitev ni veljavna
+  privolitev.
+- **`consentConsulting` je poziv k dejanju in ne drobni tisk.** Meri NAMERO ("prosil je, naj ga
+  pokličemo"), ne dovoljenja ("smemo pošiljati ponudbe") — zato je ločen od `consentOffers` in
+  zato stoji v svoji obarvani kartici zunaj obrazčeve, tik nad gumboma. Ostane neobvezen: ovira
+  na zadnjem koraku lijaka stane več, kot prinese. Ob obkljukanem in praznem telefonu se pokaže
+  namig, ki oddaje **ne** ustavi. V CRM izvoz gre kot zadnji stolpec (`src/lib/exportRecord.ts`);
+  v pripravo za svetovalca zaenkrat ni izpisan.
 - **Obrazec je pravi `<form>` z `preventDefault()`.** Brez tega bi Enter v besedilnem polju sprožil
   privzeto oddajo, ta pa bi brez zaledja in usmerjevalnika ponovno naložila SPA in uničila vse
   module, triažne ocene in odgovore. "Nazaj" zato ostane `type="button"`: sicer bi postal privzeti
@@ -521,26 +542,38 @@ Dostava je odvisna od build spremenljivke **`VITE_LEAD_WEBHOOK_URL`** (`.env`):
 |---|---|---|
 | `datalab-analiza-skritih-stroskov-<podjetje>-<datum>.pdf` | stranka | `src/lib/pdf.ts` — hero zneski, graf, razčlenitev, tveganja, 3 ukrepi |
 | `datalab-prodajna-priprava-<podjetje>-<datum>.pdf` | svetovalec (webhook; brez njega prek stranke) | `src/lib/pdfSales.ts` |
-| `datalab-prodajna-priprava-<podjetje>-<datum>.html` | svetovalec (webhook; brez njega prek stranke) | `src/lib/salesReportHtml.ts` — ista vsebina za branje na telefonu |
 
-Interni datoteki se preneseta **ZAPOREDNO in z razmikom ~1,2 s** (`downloadSequentially` v
-`src/lib/download.ts`). Brskalnik iz ene geste zanesljivo dovoli en prenos; naslednje bodisi pogojuje
-z dovoljenjem ("Prenesti več datotek?") bodisi jih tiho zavrže.
+HTML različico prodajne priprave nosi **samo webhook payload** (`buildSalesReportHtml`); z zahvalnega
+zaslona se je umaknila. Tretji prenos iz iste geste je brskalnik najpogosteje zavrgel, PDF pa vsebino
+nosi enako dobro.
 
-Dve pravili, ki ju ni dovoljeno razveljaviti:
+Obe datoteki gresta skozi **en** `downloadSequentially` (`src/lib/download.ts`), z razmikom ~1,2 s.
+Brskalnik iz ene geste zanesljivo dovoli en prenos; naslednje bodisi pogojuje z dovoljenjem
+("Prenesti več datotek?") bodisi jih tiho zavrže.
 
-- **Strankina datoteka se prenese PRVA**, takoj ko je sestavljena, in izven `try/catch` — pred
-  prodajnim delom in pred webhookom. Prvi prenos je edini zajamčen (najbliže je uporabnikovi gesti),
-  napaka ali zamuda v internem delu pa ga ne sme zadrževati. Zahvalni zaslon ponudi še gumb za
-  ponovni prenos: prenosa bloba na iOS Safari ni mogoče jamčiti in trditev "datoteka je v mapi za
+Tri pravila, ki jih ni dovoljeno razveljaviti:
+
+- **Strankina datoteka je PRVA v svežnju.** Prvi prenos je edini zajamčen (najbliže je uporabnikovi
+  gesti), napaka ali zamuda v internem delu pa ga ne sme zadrževati — zato prodajni del stoji v
+  `try/catch` in prenos se zgodi tudi, če ta odpade. Zahvalni zaslon ponudi še gumb za ponovni
+  prenos: prenosa bloba na iOS Safari ni mogoče jamčiti in trditev "datoteka je v mapi za
   prenose" ni bila preverljiva.
+- **Webhook gre ZA prenosoma, nikoli mednju.** Doslej je strankino poročilo odšlo takoj, priprava pa
+  šele za osemsekundnim rokom webhooka in gradnjo PDF-ja; do tedaj je gesta ugasnila in drugi prenos
+  je tiho odpadel. Zato se priprava zgradi **pred** prenosom in odide skupaj s poročilom, POST pa
+  sledi. Ko webhook deluje, prodajne datoteke sploh ni v svežnju in vprašanje odpade. Varujeta ju
+  testa "obe poročili gresta iz ene geste" in "webhook ne stoji pred prenosoma"
+  (`src/lib/deliverLead.test.ts`).
 - **Generatorji dokumenta ne prenašajo — vrnejo `DownloadFile`.** Dokler je vsak klical
   `doc.save()`, je dokument prenašal sam sebe po poti jsPDF, ki je ni mogoče ne zakasniti ne uvrstiti
   v vrsto. Zdaj vodi do prenosa ena sama pot, ki tudi `URL.revokeObjectURL` pokliče **zakasnjeno**:
   takojšen preklic je vir podatkov odstranil, preden ga je brskalnik prebral, in prenos je odpovedal.
 
-Gumba "Povzetek v PDF" in "Povzetek v HTML" na zahvalnem zaslonu ostaneta kot rezerva, če bi kdo
-dovoljenje za več datotek zavrnil.
+Gumb "Priprava v PDF" na zahvalnem zaslonu ostane kot rezerva, če bi kdo dovoljenje za več datotek
+zavrnil. Pod njim stoji **kartica s kontaktom Datalab prodaje** (telefon kot `tel:`, e-naslov kot
+`mailto:`, konstanta `SALES_CONTACT` v `EmailGate.tsx`): poziv na obrazcu obljublja klic svetovalca,
+kdor pa noče čakati, mora imeti kam poklicati takoj. Prikaže se vsem, tudi tistemu, ki je zahtevek za
+svetovanje že oddal.
 
 ### Priprava na pogovor
 

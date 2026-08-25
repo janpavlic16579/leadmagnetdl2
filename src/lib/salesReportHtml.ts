@@ -1,6 +1,5 @@
 import { roleDisplay } from './answerLabels';
-import { slugify, type DownloadFile } from './download';
-import { formatEUR, formatEURRange, formatHours, formatPercent, isoDate } from './format';
+import { formatEUR, formatEURRange, formatHours, formatPercent } from './format';
 import { displayRange, type EURRange } from './range';
 import {
   contactPerson,
@@ -59,15 +58,6 @@ ${sectionIcp(report)}
 </footer>
 </body>
 </html>`;
-}
-
-/** Sestavi datoteko in jo vrne — dostavo opravi lib/download.ts (glej pdf.ts). */
-export function buildSalesHtmlFile(report: SalesReport): DownloadFile {
-  const company = slugify(report.meta.companyName);
-  return {
-    filename: `datalab-prodajna-priprava${company ? `-${company}` : ''}-${isoDate(new Date(report.meta.generatedAtISO))}.html`,
-    blob: new Blob([buildSalesReportHtml(report)], { type: 'text/html;charset=utf-8' }),
-  };
 }
 
 // --- 1. Ocena — kvalifikacija stranke ----------------------------------------

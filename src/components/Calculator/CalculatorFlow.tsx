@@ -8,7 +8,8 @@ import {
   isTechnicalRiskModuleVisible,
   type BusinessProfile,
 } from '../../config/contexts';
-import { getSegmentForIndustry } from '../../config/industries';
+import { getSegmentForIndustry, isCompleteIndustryChoice } from '../../config/industries';
+import { NEUTRAL_COPY, getSegmentCopy } from '../../config/copy';
 import { calculateAccountingCapacity } from '../../lib/calculations';
 import {
   computeModules,
@@ -133,6 +134,21 @@ export function CalculatorFlow({
    */
   const activeSegmentId = getSegmentForIndustry(basicInfo.industry);
   const segment = SEGMENTS[activeSegmentId];
+  /**
+   * Nagovor izbrane dejavnosti. Razreši se enkrat na izris in se poda navzdol —
+   * enako kot segment in kontekst. Komponente registra ne uvažajo same: korak,
+   * ki bi si besedilo poiskal sam, bi moral poznati segment, prav to pa je
+   * lastnost, ki jo koraki namenoma nimajo.
+   */
+  const copy = getSegmentCopy(activeSegmentId);
+  /**
+   * Uvodni zaslon je izjema: dejavnost tam še ni nujno izbrana, segment pa te
+   * razlike ne more povedati — getSegmentForIndustry('') vrne 'splosno' enako
+   * kot 'drugo_nic'. Dokler izbira ni popolna, velja nevtralni nagovor.
+   */
+  const landingCopy = isCompleteIndustryChoice(basicInfo.industry)
+    ? copy.landing
+    : NEUTRAL_COPY.landing;
   /**
    * Segment, po katerem so nastali obstoječi odgovori.
    *
@@ -525,6 +541,7 @@ export function CalculatorFlow({
     return (
       <StepIndustry
         value={basicInfo}
+        hero={landingCopy}
         /**
          * Odgovori pripadajo vprašalniku, vprašalnik pa segmentu — zato je sprožilec
          * sprememba SEGMENTA in ne dejavnosti: 'trgovina' in 'drugo_blago' vodita v
@@ -572,6 +589,7 @@ export function CalculatorFlow({
     return (
       <StepContext
         context={context}
+        copy={copy.context}
         profile={profile}
         onChange={setProfile}
         stepLabel={stepLabel('context')}
@@ -584,6 +602,7 @@ export function CalculatorFlow({
   if (step === 'triage') {
     return (
       <StepTriage
+        copy={copy.triage}
         modules={segmentModules.filter((definition) => definition.triage)}
         scores={triageScores}
         // Ocene NE prepišejo ročne izbire: triageSelection === null je že oznaka
@@ -608,6 +627,7 @@ export function CalculatorFlow({
     return (
       <StepCostBasis
         context={context}
+        copy={copy.costBasis}
         profile={profile}
         onChange={setProfile}
         stepLabel={stepLabel('costBasis')}
@@ -622,7 +642,7 @@ export function CalculatorFlow({
     const pageModules = inputPages[inputsPageIndex] ?? [];
     return (
       <StepInputs
-        segment={segment}
+        copy={copy}
         modules={pageModules}
         // Ime strani je ime področja — na zadnji strani z dvema modula spoj obeh,
         // ne izmišljen nadnaslov ("Dodatno" ipd.). Isti niz kot legenda v triaži.
@@ -658,6 +678,7 @@ export function CalculatorFlow({
     return (
       <ResultsView
         segment={segment}
+        copy={copy}
         outputsByModule={groupByModule(outputs)}
         totals={totals}
         totalsRange={totalsRange}
@@ -686,6 +707,7 @@ export function CalculatorFlow({
   if (step === 'emailGate') {
     return (
       <EmailGate
+        copy={copy.emailGate}
         submitted={submitted}
         internalMode={internalMode}
         followUpSequenceDebug={followUpSequence}
@@ -710,17 +732,6 @@ export function CalculatorFlow({
                   import('../../lib/download'),
                 ]);
                 downloadFile(await buildSalesPdfFile(salesReport));
-              }
-            : undefined
-        }
-        onDownloadSalesHtml={
-          salesReport
-            ? async () => {
-                const [{ buildSalesHtmlFile }, { downloadFile }] = await Promise.all([
-                  import('../../lib/salesReportHtml'),
-                  import('../../lib/download'),
-                ]);
-                downloadFile(buildSalesHtmlFile(salesReport));
               }
             : undefined
         }

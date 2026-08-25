@@ -1,4 +1,5 @@
 import type { BasicInfo } from '../../types';
+import { SHARED_COPY } from '../../config/copy';
 import { useStepHeading } from '../../lib/useStepHeading';
 import { NumberField } from './NumberField';
 import buttonStyles from '../../styles/buttons.module.css';
@@ -31,8 +32,9 @@ export function StepEmployeeCount({ value, onChange, stepLabel, onNext, onBack }
   return (
     <div className={styles.wrap}>
       <p className={styles.stepLabel}>{stepLabel}</p>
+      {/* Vprašanje, ne nagovor — zato skupno vsem dejavnostim (config/copy). */}
       <h1 className={styles.title} tabIndex={-1} ref={headingRef}>
-        Koliko ljudi zaposlujete?
+        {SHARED_COPY.employeeCountTitle}
       </h1>
 
       <div className={styles.card}>
@@ -55,10 +57,7 @@ export function StepEmployeeCount({ value, onChange, stepLabel, onNext, onBack }
         </div>
       </div>
 
-      <p className={styles.trustNote}>
-        Podatek ne vstopa v noben znesek — iz njega izpeljemo velikostni razred podjetja in preverimo,
-        ali so vnesene ure skladne z velikostjo vaše ekipe.
-      </p>
+      <p className={styles.trustNote}>{SHARED_COPY.employeeCountNote}</p>
 
       <div className={styles.stickyFooter}>
         <div className={styles.stickyFooterInner}>

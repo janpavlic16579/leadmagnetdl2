@@ -39,6 +39,12 @@ export interface LeadConsents {
   consentProcessing: boolean;
   consentOffers: boolean;
   consentContent: boolean;
+  /**
+   * Aktivna prošnja za posvet, ne trženjska privolitev. consentOffers odgovarja na
+   * "ali smem pošiljati ponudbe?", to polje pa na "ali me je prosil, naj ga pokličem?" —
+   * eno samo polje na obe vprašanji ne odgovori.
+   */
+  consentConsulting: boolean;
 }
 
 export type FlowStep =

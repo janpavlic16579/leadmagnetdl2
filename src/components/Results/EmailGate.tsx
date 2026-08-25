@@ -2,6 +2,7 @@ import { useId, useRef, useState } from 'react';
 import { isFilled, isValidEmail, normalizeTaxNumber, phoneState, taxNumberState } from '../../lib/validation';
 import { useStepHeading } from '../../lib/useStepHeading';
 import type { LeadConsents, LeadContact } from '../../types';
+import type { ResolvedSegmentCopy } from '../../config/copy';
 import buttonStyles from '../../styles/buttons.module.css';
 import styles from './EmailGate.module.css';
 
@@ -14,7 +15,27 @@ import styles from './EmailGate.module.css';
  */
 const PRIVACY_POLICY_URL = '';
 
+/**
+ * Prodajni kontakt za tiste, ki na klic nočejo čakati.
+ *
+ * Telefon je zapisan dvakrat: mednarodno za `tel:` (brskalnik na telefonu predpone
+ * ne ugane) in domače za oči.
+ */
+const SALES_CONTACT = {
+  label: 'Datalab prodaja',
+  phone: '01 252 89 50',
+  phoneHref: 'tel:+38612528950',
+  email: 'prodaja@datalab.si',
+} as const;
+
 interface EmailGateProps {
+  /**
+   * Naslov, podnaslov in poziv k svetovanju izbrane dejavnosti.
+   *
+   * Doslej je bil to edini zaslon toka, ki o obiskovalčevi dejavnosti ni vedel
+   * ničesar — in hkrati zaslon, na katerem se odloči, ali bo lead sploh nastal.
+   */
+  copy: ResolvedSegmentCopy['emailGate'];
   submitted: boolean;
   followUpSequenceDebug?: string;
   /** Privolitve potujejo naprej: poročilo jih hrani kot dokazilo, ne kot okras. */
@@ -38,7 +59,6 @@ interface EmailGateProps {
    * edina pot do svetovalca. Ob delujočem webhooku ostane skrita.
    */
   onDownloadSalesPdf?: () => void | Promise<void>;
-  onDownloadSalesHtml?: () => void | Promise<void>;
   /** Loči interni pregled od stranke: ista gumba, drugo besedilo nad njima. */
   internalMode?: boolean;
   /** Vrnitev na rezultate — zahvalni zaslon sicer nima nobene poti naprej ne nazaj. */
@@ -47,13 +67,13 @@ interface EmailGateProps {
 }
 
 export function EmailGate({
+  copy,
   submitted,
   internalMode = false,
   followUpSequenceDebug,
   onSubmit,
   onDownloadCustomerPdf,
   onDownloadSalesPdf,
-  onDownloadSalesHtml,
   onBackToResults,
   onBack,
 }: EmailGateProps) {
@@ -71,6 +91,8 @@ export function EmailGate({
   const [consentProcessing, setConsentProcessing] = useState(false);
   const [consentOffers, setConsentOffers] = useState(false);
   const [consentContent, setConsentContent] = useState(false);
+  /** Poziv k dejanju, ne privolitev v drobnem tisku — zato svoj blok pod obrazcem. */
+  const [consentConsulting, setConsentConsulting] = useState(false);
   /** Namig se pokaže šele, ko obiskovalec polje zapusti — sicer utripa že pri drugi števki. */
   const [touched, setTouched] = useState<{ phone?: boolean; taxNumber?: boolean }>({});
   /**
@@ -152,7 +174,7 @@ export function EmailGate({
           // Normalizacija natanko enkrat, ob oddaji.
           taxNumber: normalizeTaxNumber(taxNumber),
         },
-        consents: { consentProcessing, consentOffers, consentContent },
+        consents: { consentProcessing, consentOffers, consentContent, consentConsulting },
       });
     } catch {
       // Prej je napaka pustila obiskovalca na obrazcu brez pojasnila: zahvalni
@@ -188,7 +210,7 @@ export function EmailGate({
               </button>
             ) : null}
           </div>
-          {onDownloadSalesPdf || onDownloadSalesHtml ? (
+          {onDownloadSalesPdf ? (
             <>
               <p className={styles.subtitle}>
                 {internalMode
@@ -198,19 +220,39 @@ export function EmailGate({
                     'Poleg njega smo pripravili še povzetek za svetovalca — vaši odgovori na enem mestu. Če nam ga posredujete pred sestankom, vas ne bo spraševal po številkah, ki ste jih pravkar vnesli.'}
               </p>
               <div className={styles.actions}>
-                {onDownloadSalesPdf ? (
-                  <button type="button" className={buttonStyles.secondaryButton} onClick={onDownloadSalesPdf}>
-                    Priprava v PDF
-                  </button>
-                ) : null}
-                {onDownloadSalesHtml ? (
-                  <button type="button" className={buttonStyles.secondaryButton} onClick={onDownloadSalesHtml}>
-                    Priprava v HTML
-                  </button>
-                ) : null}
+                <button type="button" className={buttonStyles.secondaryButton} onClick={onDownloadSalesPdf}>
+                  Priprava v PDF
+                </button>
               </div>
             </>
           ) : null}
+          {/*
+            Brez tega kljukica na zahvali izgine brez sledu in obiskovalec ne ve, ali je
+            zahtevek sploh štel. Namenoma BREZ obljube klica ali roka: dokler webhook ni
+            nastavljen, zahtevek do Datalaba ne pride sam (glej lib/deliverLead.ts).
+          */}
+          {consentConsulting ? (
+            <p className={styles.subtitle}>
+              Označili ste, da želite svetovanje — zahtevek je zabeležen med vašimi odgovori.
+            </p>
+          ) : null}
+          {/*
+            Ista kartica kot poziv na obrazcu: ista ponudba, zato isti videz. Prikaže
+            se VSEM, tudi tistemu, ki je zahtevek že oddal — morda ga ne želi čakati.
+          */}
+          <div className={`${styles.consulting} ${styles.contactCard}`}>
+            <h2 className={styles.consultingTitle}>Želite se pogovoriti takoj?</h2>
+            <p className={styles.contactLead}>
+              Pokličite ali pišite našim prodajnim svetovalcem — brez čakanja na klic.
+            </p>
+            <p className={styles.contactName}>{SALES_CONTACT.label}</p>
+            <a className={styles.contactLink} href={SALES_CONTACT.phoneHref}>
+              {SALES_CONTACT.phone}
+            </a>
+            <a className={styles.contactLink} href={`mailto:${SALES_CONTACT.email}`}>
+              {SALES_CONTACT.email}
+            </a>
+          </div>
           {import.meta.env.DEV && followUpSequenceDebug ? (
             <p className={styles.consentText}>[dev] follow-up sekvenca: {followUpSequenceDebug}</p>
           ) : null}
@@ -222,12 +264,15 @@ export function EmailGate({
   return (
     <div className={styles.wrap}>
       <h1 className={styles.title} tabIndex={-1} ref={headingRef}>
-        PDF poročilo in akcijski načrt
+        {copy.title}
       </h1>
-      <p className={styles.subtitle}>
-        Poročilo je primerno za posredovanje upravi in vsebuje akcijski načrt "3 ukrepi ta teden".
-        Izračun na prejšnjem zaslonu ostane na voljo tudi brez tega koraka.
-      </p>
+      {/*
+        Podnaslov našteje, kaj dokument vsebuje. Prejšnja različica je končala s
+        stavkom, da je izračun na voljo tudi brez tega koraka — resnica, ki jo je
+        pošteno povedati, a ne kot zadnjo misel tik pred šestimi polji. Zdaj to
+        pove opomba o zasebnosti pod obrazcem, sporočilo tu pa je vrednost.
+      */}
+      <p className={styles.subtitle}>{copy.subtitle}</p>
       <form onSubmit={handleSubmit} noValidate>
         <div className={styles.card}>
           <div className={styles.nameRow}>
@@ -436,6 +481,39 @@ export function EmailGate({
         <p className={styles.requiredNote}>
           <span className={styles.required}>*</span> obvezno polje
         </p>
+
+        {/*
+          Poziv k dejanju stopi IZ obrazčeve kartice ven: po petih poljih in treh privolitvah
+          je obarvano ozadje z znamčno obrobo edino, kar še pritegne pogled. Ostane pa znotraj
+          <form>, sicer kljukica ni del oddaje.
+
+          Naslov je <h2> in ne <legend>: legenda prekine obrobo okvirja, obroba pa je tu ves
+          smisel. Besedilo ob kljukici je samostojno razumljivo ("Da, želim …"), zato naslov
+          ni njena edina razlaga — pojasnilo je nanjo pripeto z aria-describedby.
+        */}
+        <div className={styles.consulting}>
+          <h2 className={styles.consultingTitle}>{copy.consultingTitle}</h2>
+          <label className={styles.consultingRow}>
+            <input
+              type="checkbox"
+              aria-describedby={`${fieldId}-consulting-note`}
+              checked={consentConsulting}
+              onChange={(event) => setConsentConsulting(event.target.checked)}
+            />
+            <span className={styles.consultingLabel}>
+              Da, želim brezplačen posvet — kontaktirajte me.
+            </span>
+          </label>
+          <p id={`${fieldId}-consulting-note`} className={styles.consultingNote}>
+            {copy.consultingNote}
+          </p>
+          {/* Vabilo in ne pogoj: telefon in davčna oddaje nikoli ne ustavita. */}
+          {consentConsulting && !isFilled(phone) ? (
+            <p className={styles.consultingHint}>
+              Pustite tudi telefonsko številko — svetovalec vas doseže hitreje.
+            </p>
+          ) : null}
+        </div>
 
         {failed ? (
           <p className={styles.consentText} role="alert">

@@ -1,4 +1,45 @@
 /*
+ * Nagovor uvodnega zaslona.
+ *
+ * Rezervirana višina, ker se naslov in podnaslov ob izbiri dejavnosti zamenjata,
+ * spustni seznam pa stoji pod njima. Brez rezervacije se seznam ob izbiri
+ * premakne za 55–79 px — in prav tja obiskovalec pogleda, kadar se premisli.
+ *
+ * Vrednosti so IZMERJENE (najvišji od sedmih nagovorov plus rezerva), ne ocenjene:
+ *   320 px → 484 · 360 px → 460 · 375 px → 381 · 640 px → 254 · 1280 px → 230
+ * Zgornje meje dolžine varuje config/copy/copy.test.ts; ob njihovem zvišanju je
+ * treba te mere premeriti znova.
+ *
+ * min-block-size in ne fiksna višina: ko se besedilo prelomi v več vrstic, kot
+ * smo predvideli, se sme raztegniti — rezervacija je spodnja meja, ne strop.
+ */
+.hero {
+  min-block-size: 32rem;
+}
+
+@media (min-width: 375px) {
+  .hero {
+    min-block-size: 25rem;
+  }
+}
+
+@media (min-width: 640px) {
+  .hero {
+    min-block-size: 17rem;
+  }
+}
+
+/*
+ * Panožna bolečina. Temnejša od splošne obljube pod njo: to je stavek, zaradi
+ * katerega obiskovalec ostane, obljuba pa pojasnjuje, kaj dobi.
+ */
+.heroPain {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+}
+
+/*
  * Podvprašanje, ki se pokaže šele po izbiri "Drugo". Vizualno je enako
  * kontekstnim izbiram (StepContext), a živi v svojem modulu, ker je vsak korak
  * v tej mapi lastnik svojih slogov — deljen modul bi povezal komponenti, ki se

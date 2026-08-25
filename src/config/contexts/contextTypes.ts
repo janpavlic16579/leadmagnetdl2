@@ -129,13 +129,12 @@ export interface ScaleQuestion {
  * Nobeden od teh odgovorov ne vstopa v formulo posameznega modula. Določajo dvoje:
  * kako velik del izmerjenega stroška je realno mogoče nasloviti (pas izboljšave) in
  * ali so tehnična opozorila za tega obiskovalca sploh smiselna.
+ *
+ * Samo VPRAŠANJA. Naslov in uvod obeh korakov sta v config/copy/ — dokler sta
+ * bila tu, je bilo besedilo dejavnosti razdeljeno med dve datoteki in marketing
+ * ga je moral popravljati na obeh.
  */
 export interface SegmentContext {
-  /** Naslov koraka konteksta, npr. "Nekaj o vaši proizvodnji". */
-  title: string;
-  intro: string;
-  /** Uvod koraka s skupno finančno osnovo — enoti se med dejavnostmi razlikujeta. */
-  costBasisIntro: string;
   businessType: ContextQuestion;
   currentSystem: ContextQuestion<SystemOption>;
   role: ContextQuestion;

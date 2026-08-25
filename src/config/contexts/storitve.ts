@@ -61,12 +61,6 @@ const CHARGE_OUT_BANDS: CostBand[] = [
 ];
 
 export const STORITVE_CONTEXT: SegmentContext = {
-  title: 'Nekaj o vašem delu z naročniki',
-  intro:
-    'Tri vprašanja, ki ne sprašujejo po številkah. Iz njih izpeljemo, koliko od izmerjenega stroška je realno mogoče nasloviti — podjetje, ki že spremlja projekte in evidenco dela, je lažje izboljšave namreč večinoma že pobralo.',
-  costBasisIntro:
-    'Pet številk, ki veljajo za vsa področja. Polni strošek pomeni bruto plačo s prispevki delodajalca ter regresom, malico in prevozom — ne neto izplačila in ne režije; zaračunana postavka pa je to, kar za uro dela v povprečju zaračunate naročniku. Prihodek in maržo vprašamo enkrat — sta lastnost podjetja, ne posameznega področja.',
-
   businessType: {
     legend: 'Kako pretežno delate?',
     options: [

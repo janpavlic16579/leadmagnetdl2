@@ -46,12 +46,6 @@ const OPERATIONAL_HOUR_BANDS: CostBand[] = [
  * poštena posledica tega, ne ocena podjetja.
  */
 export const SPLOSNO_CONTEXT: SegmentContext = {
-  title: 'Nekaj o vašem podjetju',
-  intro:
-    'Tri vprašanja, ki ne sprašujejo po številkah. Ker vaše dejavnosti nismo mogli natančneje opredeliti, so naslednja vprašanja splošna — izračun bo zato bolj zadržan kot pri panožno prilagojenem vprašalniku.',
-  costBasisIntro:
-    'Pet številk, ki veljajo za vsa področja. Polni strošek ure pomeni bruto plačo s prispevki delodajalca ter regresom, malico in prevozom — ne neto izplačila in ne režije. Prihodek in maržo vprašamo enkrat — iz prihodka se med drugim izračuna strošek plačilnih zamud.',
-
   businessType: {
     legend: 'Kaj najbolje opiše vaše poslovanje?',
     options: [
