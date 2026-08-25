@@ -121,15 +121,25 @@ export const TRGOVINA_CONTEXT: SegmentContext = {
     label: 'Povprečna prispevna marža',
     help: 'Kar od prodajne cene ostane po nabavni vrednosti in neposrednih stroških (prevoz, provizije). Ni pribitek na nabavno ceno.',
     explainer: CONTRIBUTION_MARGIN_EXPLAINER,
+    /**
+     * Umerjeno na izmerjeno bruto maržo na blago (Eurostat SBS, SI, 2021–2023),
+     * brez podrazreda posredništva, ki kot prihodek knjiži provizijo in ne
+     * vrednosti blaga. Po blagovnih skupinah 2023: IKT 17,3 %, kmetijske surovine
+     * 18,7 %, druga specializirana 18,9 %, živila 19,1 %, izdelki široke porabe
+     * 25,6 %, stroji in naprave 29,6 %, nespecializirana 31,1 %.
+     *
+     * Prejšnji pasovi so bili prazni na dnu (nič ni pod 15 %) in previsoki v
+     * sredini. Izpeljava: docs/prispevne-marze-raziskava-2026-08.md
+     */
     bands: [
-      { id: 'do10', label: 'Do 10 %', midpoint: 0.08, min: 0.06, max: 0.1 },
-      { id: '10do20', label: '10–20 %', midpoint: 0.15, min: 0.1, max: 0.2 },
-      { id: '20do30', label: '20–30 %', midpoint: 0.25, min: 0.2, max: 0.3 },
-      { id: 'nad30', label: 'Več kot 30 %', midpoint: 0.35, min: 0.3, max: 0.4 },
+      { id: 'do12', label: 'Do 12 %', midpoint: 0.09, min: 0.05, max: 0.12 },
+      { id: '12do18', label: '12–18 %', midpoint: 0.15, min: 0.12, max: 0.18 },
+      { id: '18do26', label: '18–26 %', midpoint: 0.22, min: 0.18, max: 0.26 },
+      { id: 'nad26', label: 'Več kot 26 %', midpoint: 0.32, min: 0.26, max: 0.4 },
     ],
-    // Ne 0,25: to je sredina pasu "20–30 %", zato bi bil radio označen že ob prvem
-    // izrisu in "ni odgovora" bi se prikazalo kot izbran razpon.
-    fallback: 0.2,
+    // Sidro 2026: bruto marža na blago 22,9 % (povprečje 2021–2023, brez
+    // posredništva), manj pribl. 2 o. t. za prevoz do kupca in provizije.
+    fallback: 0.21,
     unit: '%',
     asPercent: true,
   },

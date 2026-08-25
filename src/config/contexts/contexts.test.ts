@@ -4,6 +4,7 @@ import {
   SEGMENT_CONTEXTS,
   emptyProfileFor,
   industryAverageBand,
+  industryAverageScaleBand,
 } from './index';
 import { SEGMENTS } from '../segments';
 import type { ContextQuestion, CostQuestion, ScaleQuestion, SegmentContext } from './contextTypes';
@@ -148,17 +149,36 @@ describe('Register kontekstov dejavnosti', () => {
      * Ta test je nadomestil prejšnjega ("privzetek se ne ujema z nobeno sredino
      * pasu"). Tisti je varoval ugibanje pasu po sredini, ki ga od uvedbe polja
      * `source` ni več nikjer.
+     *
+     * Velja za VSA vprašanja finančne osnove, ne le za urne postavke. Dokler je
+     * tekel samo prek `ratesOf`, je bila napaka mejnega pasu pri maržah leta in
+     * dan neopažena: privzetek 0,25 je ležal hkrati v "15–25 %" in "25–35 %",
+     * `find` je vrnil prvega in izračun je tekel s 15–25 %, čeprav je obiskovalec
+     * v polju videl 25 %. Vprašanja s `fallback === 0` (letni prihodek) so
+     * izvzeta po istem pogoju kot `hasIndustryAverage` v StepCostBasis — prometa
+     * si ne izmišljamo, zato zanj povprečja panoge sploh ne ponudimo.
      */
     for (const [segmentId, context] of ENTRIES) {
-      for (const [name, rate] of ratesOf(context)) {
-        const containing = rate.bands.filter(
-          (band) => rate.fallbackEUR >= band.minEUR && rate.fallbackEUR <= band.maxEUR,
-        );
+      for (const [name, question] of costBasisQuestionsOf(context)) {
+        const isRate = 'fallbackEUR' in question;
+        const fallback = isRate ? question.fallbackEUR : question.fallback;
+        if (fallback <= 0) continue;
+
+        const containing = isRate
+          ? question.bands.filter(
+              (band) => fallback >= band.minEUR && fallback <= band.maxEUR,
+            )
+          : question.bands.filter((band) => fallback >= band.min && fallback <= band.max);
+
         expect(
           containing.map((band) => band.id),
-          `${segmentId}/${name}: povprečje ${rate.fallbackEUR} EUR`,
+          `${segmentId}/${name}: povprečje ${fallback}`,
         ).toHaveLength(1);
-        expect(industryAverageBand(rate)?.id, `${segmentId}/${name}`).toBe(containing[0].id);
+
+        const chosen = isRate
+          ? industryAverageBand(question)
+          : industryAverageScaleBand(question);
+        expect(chosen?.id, `${segmentId}/${name}`).toBe(containing[0].id);
       }
     }
   });

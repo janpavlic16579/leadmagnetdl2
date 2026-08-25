@@ -47,9 +47,14 @@ const REVENUE_BANDS: ScaleBand[] = [
 /**
  * Prispevna marža, ne bruto marža in ne pribitek.
  *
- * Razponi izhajajo iz scenarijev raziskave (konzervativno 22 %, realistično 27 %,
- * potencial 30 %), razširjeni navzdol za živila in tehniko, kjer je prispevna marža
- * po stroških kanala pogosto pod 20 %.
+ * Razponi so umerjeni na IZMERJENO bruto maržo na blago (Eurostat SBS, SI,
+ * 2021–2023), ne več na scenarije raziskave — ti so bili nižji od vsega, kar
+ * statistika pokaže. Po podrazredih 2023: bencinski servisi 9,5 %, živila v
+ * nespecializiranih prodajalnah 30,1 %, IKT 28,2 %, druge specializirane 32,6 %,
+ * gospodinjska oprema 36,4 %, specializirana živila 37,5 %. Zato pas ostane širok
+ * navzdol: "do 15 %" ni prazen, zaseda ga gorivo.
+ *
+ * Izpeljava: docs/prispevne-marze-raziskava-2026-08.md
  */
 const MARGIN_BANDS: ScaleBand[] = [
   { id: 'do15', label: 'Do 15 %', midpoint: 0.12, min: 0.09, max: 0.15 },
@@ -137,7 +142,10 @@ export const MALOPRODAJA_CONTEXT: SegmentContext = {
     help: 'Kar ostane od prodajne cene po nabavni vrednosti in neposrednih stroških kanala (provizije, kartice, dostava). Ni pribitek na nabavno ceno.',
     explainer: CONTRIBUTION_MARGIN_EXPLAINER,
     bands: MARGIN_BANDS,
-    fallback: 0.25,
+    // Sidro 2026: bruto marža na blago v prodajalnah (brez goriv in brez prodaje
+    // zunaj prodajaln) 31,9 % za 2023, manj pribl. 1 o. t. za kartice in dostavo.
+    // Edina marža, ki premakne evre — množi jo modules/maloprodaja.ts.
+    fallback: 0.31,
     unit: '%',
     asPercent: true,
   },
