@@ -162,9 +162,18 @@ export const STORITVE_CONTEXT: SegmentContext = {
       { id: '50do70', label: '50–70 %', midpoint: 0.6, min: 0.5, max: 0.7 },
       { id: 'nad70', label: 'Več kot 70 %', midpoint: 0.78, min: 0.7, max: 0.86 },
     ],
-    // Ne 0,25: to je sredina pasu "Do 30 %", zato bi bil radio označen že ob prvem
-    // izrisu in "ni odgovora" bi se prikazalo kot izbran razpon.
-    fallback: 0.3,
+    /**
+     * Sidro 2026: izpeljano iz obeh postavk tega vprašalnika. Izvedbena ura stane
+     * 29 EUR (:116), zaračunana je 55 EUR (:137) — neposredno delo je torej 52,7 %
+     * zaračunanega, licence in podizvajalci pribl. 8 %. SURS 2024 da po dejavnostih
+     * 49 % (projektiranje), 50 % (svetovanje) in 60 % (programiranje), a statistika
+     * podizvajalcev ne loči od stalnih storitev, zato je vzeta nižja, lastna pot.
+     *
+     * Prejšnjih 30 % je bilo v nasprotju s postavkama zgoraj: pomenilo bi
+     * zaračunano uro 42 EUR namesto 55.
+     * Izpeljava: docs/prispevne-marze-raziskava-2026-08.md
+     */
+    fallback: 0.4,
     unit: '%',
     asPercent: true,
   },

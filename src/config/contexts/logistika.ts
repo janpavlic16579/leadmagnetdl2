@@ -118,15 +118,30 @@ export const LOGISTIKA_CONTEXT: SegmentContext = {
 
   contributionMargin: {
     label: 'Povprečna prispevna marža',
-    help: 'Kar od zaračunane cene ostane po neposrednih stroških izvedbe (gorivo, podizvajalci, cestnine).',
+    // Delo voznikov in skladiščnikov je našteto namenoma: brez njega bi bilo to
+    // edino tako polje v vprašalniku, ki neposrednega dela ne odšteje, in podjetje
+    // s skladiščem bi po črki besedila odgovorilo 80 %. Disponent je izločen, ker
+    // ga aplikacija sama uvršča med administrativne ure (:99), voznika in
+    // skladiščnika pa med operativne (:90).
+    help: 'Kar od zaračunane cene ostane po neposrednih stroških izvedbe: gorivo, cestnine, podizvajalski prevozi ter delo voznikov in skladiščnikov. Disponent, prodaja in uprava sem ne sodijo.',
     explainer: CONTRIBUTION_MARGIN_EXPLAINER,
+    /**
+     * Panoga je dvovrhna in pasovi to razpetost namenoma pokrijejo: špediter, ki
+     * prevoz v celoti kupi, je pri 10–15 %, prevoznik z lastnim voznim parkom pri
+     * 37 %. Zoževanje bi razliko zabrisalo.
+     */
     bands: [
       { id: 'do15', label: 'Do 15 %', midpoint: 0.12, min: 0.09, max: 0.15 },
       { id: '15do30', label: '15–30 %', midpoint: 0.22, min: 0.15, max: 0.3 },
       { id: '30do45', label: '30–45 %', midpoint: 0.37, min: 0.3, max: 0.45 },
       { id: 'nad45', label: 'Več kot 45 %', midpoint: 0.52, min: 0.45, max: 0.59 },
     ],
-    fallback: 0.25,
+    // Sidro 2026: stroškovni model GZS za vlačilec 39 t — gorivo 24,8 % cene,
+    // cestnine 15,8 %, voznik 22,1 %. Prevoznik s 15 % podizvajalcev (razlika med
+    // izmerjenimi 71,4 % nakupov po SURS in pribl. 56 % za lasten vozni park) je
+    // pri 31,8 %, špediter pri 12 %; uteženo po prometu 25,7 %.
+    // Izpeljava: docs/prispevne-marze-raziskava-2026-08.md
+    fallback: 0.26,
     unit: '%',
     asPercent: true,
   },

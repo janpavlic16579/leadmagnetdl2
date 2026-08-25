@@ -137,7 +137,13 @@ export const SPLOSNO_CONTEXT: SegmentContext = {
       { id: '25do35', label: '25–35 %', midpoint: 0.3, min: 0.25, max: 0.35 },
       { id: 'nad35', label: 'Več kot 35 %', midpoint: 0.42, min: 0.35, max: 0.49 },
     ],
-    fallback: 0.25,
+    // Segment ni panoga in svoje statistike nima — je zbiralnik za podjetja, ki se
+    // v triaži niso prepoznala. Sidro 2026 je zato sredina umerjenih dejavnosti:
+    // nad proizvodnjo (26 %) in veleprodajo (21 %), pod storitvami (40 %). Dodana
+    // vrednost celotnega gospodarstva (23,2 % pri MSP) tu ni prava mera, ker jo
+    // navzdol vleče trgovina, ki ima lasten segment.
+    // Izpeljava: docs/prispevne-marze-raziskava-2026-08.md
+    fallback: 0.28,
     unit: '%',
     asPercent: true,
   },

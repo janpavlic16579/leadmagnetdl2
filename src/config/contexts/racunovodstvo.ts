@@ -130,15 +130,23 @@ export const RACUNOVODSTVO_CONTEXT: SegmentContext = {
     label: 'Povprečna prispevna marža',
     help: 'Kar od zaračunanega ostane po neposrednih stroških izvedbe (plače na strankah, licence, zunanji sodelavci).',
     explainer: CONTRIBUTION_MARGIN_EXPLAINER,
+    /**
+     * Servisi se gnetejo med 45 in 60 %, zato so pasovi ožji od storitvenih.
+     * Prejšnji "30–50 %" je bil preširok in je z "do 30 %" pokrival ves realen
+     * razpon naenkrat. Izpeljava: docs/prispevne-marze-raziskava-2026-08.md
+     */
     bands: [
-      { id: 'do30', label: 'Do 30 %', midpoint: 0.25, min: 0.2, max: 0.3 },
-      { id: '30do50', label: '30–50 %', midpoint: 0.4, min: 0.3, max: 0.5 },
-      { id: '50do70', label: '50–70 %', midpoint: 0.6, min: 0.5, max: 0.7 },
-      { id: 'nad70', label: 'Več kot 70 %', midpoint: 0.78, min: 0.7, max: 0.86 },
+      { id: 'do30', label: 'Do 30 %', midpoint: 0.25, min: 0.18, max: 0.3 },
+      { id: '30do45', label: '30–45 %', midpoint: 0.38, min: 0.3, max: 0.45 },
+      { id: '45do60', label: '45–60 %', midpoint: 0.52, min: 0.45, max: 0.6 },
+      { id: 'nad60', label: 'Več kot 60 %', midpoint: 0.68, min: 0.6, max: 0.78 },
     ],
-    // Ne 0,25: to je sredina pasu "Do 30 %", zato bi bil radio označen že ob prvem
-    // izrisu in "ni odgovora" bi se prikazalo kot izbran razpon.
-    fallback: 0.3,
+    // Sidro 2026: prihodek na zaposlenega 93.235 EUR (SURS, računovodske
+    // dejavnosti 2024) proti računovodski uri 25 EUR (:100) × 1.700 h = 42.500 EUR
+    // neposrednega dela, torej 45,6 %; z licencami 5 % ostane 49,4 %. Druga pot
+    // (delo pripisano tudi 2.713 samozaposlenim računovodjem, ki jih statistika ne
+    // knjiži med stroške dela) da 47,9 %.
+    fallback: 0.48,
     unit: '%',
     asPercent: true,
   },

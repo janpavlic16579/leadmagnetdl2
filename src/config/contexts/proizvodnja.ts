@@ -94,13 +94,26 @@ export const PROIZVODNJA_CONTEXT: SegmentContext = {
     label: 'Povprečna prispevna marža',
     help: 'Kar od prodajne cene ostane po materialu in neposrednih stroških izdelave. Ni razlika v ceniku, ampak dejanski ostanek.',
     explainer: CONTRIBUTION_MARGIN_EXPLAINER,
+    /**
+     * Umerjeno na SURS, podjetja z 10–249 zaposlenimi, 2022–2024: dodana vrednost
+     * 31,9 % prihodka, stroški dela 21,2 %, bruto poslovni presežek 10,7 %. Marža
+     * leži med presežkom in dodano vrednostjo; po odbitku materiala z energijo
+     * (pribl. 56 %), neposrednih storitev (5 %) in neposrednega dela (63 % stroška
+     * dela) ostane po oddelkih: les 19 %, živila 20 %, guma in plastika 25 %,
+     * stroji 25 %, pohištvo 25 %, kovinski izdelki 28 %.
+     *
+     * Prejšnja pasova "35–50 %" in "nad 50 %" sta bila nedosegljiva — noben
+     * oddelek se jima ne približa. Izpeljava:
+     * docs/prispevne-marze-raziskava-2026-08.md
+     */
     bands: [
-      { id: 'do20', label: 'Do 20 %', midpoint: 0.15, min: 0.1, max: 0.2 },
-      { id: '20do35', label: '20–35 %', midpoint: 0.28, min: 0.2, max: 0.35 },
-      { id: '35do50', label: '35–50 %', midpoint: 0.42, min: 0.35, max: 0.5 },
-      { id: 'nad50', label: 'Več kot 50 %', midpoint: 0.58, min: 0.5, max: 0.66 },
+      { id: 'do18', label: 'Do 18 %', midpoint: 0.13, min: 0.08, max: 0.18 },
+      { id: '18do28', label: '18–28 %', midpoint: 0.23, min: 0.18, max: 0.28 },
+      { id: '28do38', label: '28–38 %', midpoint: 0.33, min: 0.28, max: 0.38 },
+      { id: 'nad38', label: 'Več kot 38 %', midpoint: 0.44, min: 0.38, max: 0.52 },
     ],
-    fallback: 0.25,
+    // Sidro 2026: 24–26 % za predelovalne dejavnosti kot celoto.
+    fallback: 0.26,
     unit: '%',
     asPercent: true,
   },
