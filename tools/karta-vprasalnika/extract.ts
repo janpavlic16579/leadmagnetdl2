@@ -13,6 +13,10 @@ import {
   SEGMENT_ORDER,
 } from '../../src/config/segments';
 import { SEGMENT_CONTEXTS } from '../../src/config/contexts/index';
+// Besedila dejavnosti so od selitve tu in ne več v segments.ts / contexts/.
+// Ključi izvoza ostajajo isti, da build-diagram.mjs ostane nedotaknjen.
+import { getSegmentCopy } from '../../src/config/copy/index';
+import { SHARED_COPY } from '../../src/config/copy/copyTypes';
 import {
   MODULE_REGISTRY,
   type ModuleDefinition,
@@ -98,15 +102,16 @@ const out = {
     crmLabel: i.label,
     segment: i.segment,
   })),
-  employeeQuestion: 'Koliko ljudi zaposlujete?',
+  employeeQuestion: SHARED_COPY.employeeCountTitle,
   segments: SEGMENT_ORDER.map((segId) => {
     const seg = SEGMENTS[segId];
     const ctx = SEGMENT_CONTEXTS[segId];
+    const copy = getSegmentCopy(segId);
     return {
       id: seg.id,
-      displayName: seg.displayName,
-      headlineStory: seg.headlineStory,
-      directLossNote: seg.directLossNote ?? null,
+      displayName: copy.displayName,
+      headlineStory: copy.results.headline,
+      directLossNote: copy.figures.directLoss.note,
       highLossThresholdEUR: seg.highLossThresholdEUR ?? null,
       accountingCapacity: seg.accountingCapacity ?? null,
       triage: seg.triage
@@ -114,9 +119,9 @@ const out = {
         : null,
       context: ctx
         ? {
-            title: ctx.title,
-            intro: ctx.intro,
-            costBasisIntro: ctx.costBasisIntro,
+            title: copy.context.title,
+            intro: copy.context.intro,
+            costBasisIntro: copy.costBasis.intro,
             businessType: ctx.businessType,
             currentSystem: {
               legend: ctx.currentSystem.legend,

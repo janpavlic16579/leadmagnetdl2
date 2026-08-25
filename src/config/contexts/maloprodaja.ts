@@ -59,12 +59,6 @@ const MARGIN_BANDS: ScaleBand[] = [
 ];
 
 export const MALOPRODAJA_CONTEXT: SegmentContext = {
-  title: 'Nekaj o vaši maloprodaji',
-  intro:
-    'Tri vprašanja, ki ne sprašujejo po številkah. Iz njih izpeljemo, koliko od izmerjenega stroška je realno mogoče nasloviti — trgovec, ki ima blagajno že povezano z zalogami, je lažje izboljšave namreč večinoma že pobral.',
-  costBasisIntro:
-    'Pet številk, ki veljajo za vsa področja. Polni strošek ure pomeni bruto plačo s prispevki delodajalca ter regresom, malico in prevozom — ne neto izplačila in ne režije. Prihodek in maržo vprašamo enkrat, ker se iz njiju računa vsak odstotek v nadaljevanju.',
-
   businessType: {
     legend: 'Kako pretežno prodajate?',
     options: [

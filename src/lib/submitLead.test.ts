@@ -23,7 +23,7 @@ const RECORD = buildLeadExportRecord({
     phone: '',
     taxNumber: '',
   },
-  consents: { consentProcessing: true, consentOffers: false, consentContent: false },
+  consents: { consentProcessing: true, consentOffers: false, consentContent: false, consentConsulting: false },
   industry: 'trgovina',
   segment: 'trgovina',
   employeeCount: 30,
@@ -52,7 +52,7 @@ describe('buildLeadExportRecord', () => {
     const withoutConsent = buildLeadExportRecord({
       timestampISO: '2026-08-11T10:00:00.000Z',
       contact: RECORD,
-      consents: { consentProcessing: false, consentOffers: true, consentContent: true },
+      consents: { consentProcessing: false, consentOffers: true, consentContent: true, consentConsulting: false },
       industry: 'trgovina',
       segment: 'trgovina',
       employeeCount: 30,

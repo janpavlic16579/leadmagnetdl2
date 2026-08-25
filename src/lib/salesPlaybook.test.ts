@@ -39,6 +39,7 @@ const BASE: PlaybookInput = {
     consentProcessing: true,
     consentOffers: false,
     consentContent: false,
+    consentConsulting: false,
     utmSource: null,
     taxNumberLooksValid: true,
   },

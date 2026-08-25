@@ -7,6 +7,7 @@ import type {
   ScaleQuestion,
   SegmentContext,
 } from '../../config/contexts';
+import type { ResolvedSegmentCopy } from '../../config/copy';
 import { useStepHeading } from '../../lib/useStepHeading';
 import buttonStyles from '../../styles/buttons.module.css';
 import { HelpTip } from './HelpTip';
@@ -18,6 +19,8 @@ import styles from './StepCostBasis.module.css';
 interface StepCostBasisProps {
   /** Oznaki in razponi obeh ur — voznikova ura ni operaterjeva. */
   context: SegmentContext;
+  /** Naslov in uvod dejavnosti; oznake postavk ostanejo v context. */
+  copy: ResolvedSegmentCopy['costBasis'];
   profile: BusinessProfile;
   onChange: (profile: BusinessProfile) => void;
   stepLabel: string;
@@ -38,6 +41,7 @@ interface StepCostBasisProps {
  */
 export function StepCostBasis({
   context,
+  copy,
   profile,
   onChange,
   stepLabel,
@@ -50,9 +54,9 @@ export function StepCostBasis({
     <div className={shellStyles.wrap}>
       <p className={shellStyles.stepLabel}>{stepLabel}</p>
       <h1 className={shellStyles.title} tabIndex={-1} ref={headingRef}>
-        Skupna finančna osnova
+        {copy.title}
       </h1>
-      <p className={styles.intro}>{context.costBasisIntro}</p>
+      <p className={styles.intro}>{copy.intro}</p>
 
       <div className={shellStyles.card}>
         <CostField

@@ -45,12 +45,6 @@ const OPERATIONAL_HOUR_BANDS: CostBand[] = [
  * znamka; obratna trditev bi presegala objavljeni slovenski cenik.
  */
 export const RACUNOVODSTVO_CONTEXT: SegmentContext = {
-  title: 'Nekaj o vašem servisu',
-  intro:
-    'Tri vprašanja, ki ne sprašujejo po številkah. Iz njih izpeljemo, koliko od izmerjenega stroška je realno mogoče nasloviti — servis, ki listine že zajema samodejno, je lažje izboljšave namreč večinoma že pobral.',
-  costBasisIntro:
-    'Štiri številke, ki veljajo za vsa področja. Polni strošek pomeni bruto plačo s prispevki delodajalca ter regresom, malico in prevozom — ne neto izplačila, ne režije in ne cene, ki jo za uro zaračunate stranki. Prihodek in maržo vprašamo enkrat — sta lastnost servisa, ne posameznega področja.',
-
   businessType: {
     legend: 'Kakšna je pretežna struktura vaših strank?',
     options: [

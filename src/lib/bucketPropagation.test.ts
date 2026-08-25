@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { getSegmentCopy } from '../config/copy';
 import { buildSalesReport, type BuildSalesReportParams } from './salesReport';
 import { buildSalesReportHtml } from './salesReportHtml';
 import { computeModules, resolveActiveModules, resolveInputs } from './moduleEngine';
@@ -62,7 +63,7 @@ function retailReport() {
       phone: '',
       taxNumber: '',
     },
-    consents: { consentProcessing: true, consentOffers: false, consentContent: false },
+    consents: { consentProcessing: true, consentOffers: false, consentContent: false, consentConsulting: false },
     utmSource: null,
     industry: 'maloprodaja',
     employeeCount: 30,
@@ -131,7 +132,10 @@ describe('lostMargin doseže vse potrošnike seštevkov', () => {
     // PDF vsebine ni mogoče grepati po bajtih (jsPDF tokove stisne) — meja se
     // preverja pri vhodu, enako kot v pdf.test.ts.
     expect(pdfSource).toContain('lostMarginEUR');
-    expect(pdfSource).toContain('NEZASLUŽENA LETNA MARŽA');
+    // Naslov kartice je od selitve besedil v config/copy tam in ne več tu; grep
+    // po njem bi odslej preverjal samo, da nekdo ni prepisal niza nazaj v pdf.ts.
+    expect(pdfSource).toContain('copy.figures.lostMargin');
+    expect(getSegmentCopy('maloprodaja').figures.lostMargin.title).toBe('Nezaslužena letna marža');
     expect(pdfSource).toContain("rowsForBucket(params.outputs, 'lostMargin')");
   });
 });

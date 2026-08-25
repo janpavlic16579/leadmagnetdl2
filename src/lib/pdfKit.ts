@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
+import { SHARED_COPY } from '../config/copy';
 import autoTable from 'jspdf-autotable';
 import type { RiskLevel } from '../config/modules/moduleTypes';
-import type { ConfidenceLevel } from './potential';
 import { TITILLIUM_BOLD_BASE64, TITILLIUM_REGULAR_BASE64, TITILLIUM_SEMIBOLD_BASE64 } from './pdfFonts';
 
 /**
@@ -147,17 +147,16 @@ export const RISK_LEVEL_COLORS: Record<RiskLevel, { bg: RGB; border: RGB; text: 
   high: { bg: PALETTE.warningBg, border: PALETTE.warningBorder, text: PALETTE.warningText, bold: true },
 };
 
-export const CONFIDENCE_LABEL: Record<ConfidenceLevel, string> = {
-  high: 'Visoka zanesljivost',
-  medium: 'Srednja zanesljivost',
-  low: 'Nizka zanesljivost',
-};
-
-export const CONFIDENCE_NOTE: Record<ConfidenceLevel, string> = {
-  high: 'Vnesene so konkretne ure, stroški in glavni vzroki. Številke stojijo na podatkih podjetja.',
-  medium: 'Del vrednosti izhaja iz izbranih razponov ali privzetih ocen — rezultat je pravega velikostnega reda.',
-  low: 'Večina ključnih podatkov manjka, zato so zneski spodnja meja — dejanski so praviloma višji, ne nižji.',
-};
+/**
+ * Oznaka in pojasnilo zanesljivosti prihajata iz registra besedil.
+ *
+ * Doslej sta tu stala lastna zapisa in ista trditev je v poročilu ter na zaslonu
+ * obstajala v dveh različicah, ne da bi kdo vedel za obe. Register ju hrani drug
+ * ob drugem: PDF namenoma govori v tretji osebi, ker dokument bere tudi tisti,
+ * ki obrazca ni izpolnil.
+ */
+export const CONFIDENCE_LABEL = SHARED_COPY.confidenceLabel;
+export const CONFIDENCE_NOTE = SHARED_COPY.confidenceNotePdf;
 
 export const PAGE_WIDTH = 210;
 export const PAGE_HEIGHT = 297;

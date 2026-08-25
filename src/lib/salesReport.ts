@@ -5,6 +5,7 @@ import type {
   ImprovementBand,
 } from '../config/contexts';
 import { improvementBandFor, isTechnicalRiskModuleVisible } from '../config/contexts';
+import { getSegmentCopy } from '../config/copy';
 import { getIndustryLabel } from '../config/industries';
 import type { ModuleDefinition, ModuleOutput } from '../config/modules/moduleTypes';
 import type { SegmentConfig } from '../config/segments';
@@ -271,6 +272,9 @@ export interface BuildSalesReportParams {
 
 export function buildSalesReport(params: BuildSalesReportParams): SalesReport {
   const { context, profile, segment, values } = params;
+  // Ime dejavnosti je odslej v registru besedil; prodajna priprava in strankino
+  // poročilo morata imenovati isto dejavnost z istimi besedami.
+  const segmentCopy = getSegmentCopy(segment.id);
   const activeIds = new Set(params.activeModules.map((definition) => definition.id));
   const outputsByModule = groupByModule(params.outputs);
 
@@ -286,8 +290,8 @@ export function buildSalesReport(params: BuildSalesReportParams): SalesReport {
     },
 
     qualification: {
-      industryLabel: getIndustryLabel(params.industry) || segment.displayName,
-      segmentName: segment.displayName,
+      industryLabel: getIndustryLabel(params.industry) || segmentCopy.displayName,
+      segmentName: segmentCopy.displayName,
       sizeClass: getSizeClass(params.employeeCount),
       employeeCount: params.employeeCount,
       roleLabel: contextOptionLabel(context?.role, profile.role),

@@ -37,6 +37,8 @@ export interface LeadExportRecord {
   taxNumber: string;
   consentOffers: boolean;
   consentContent: boolean;
+  /** Prošnja za posvet — edino polje obrazca, ki pove NAMERO in ne le dovoljenja. */
+  consentConsulting: boolean;
   /** Moduli, ki so bili dejansko izračunani. */
   selectedModules: string[];
   /** Ocene VSEH modulov iz triaže — "stalno prestavljamo naloge" je signal tudi brez evrov. */
@@ -107,6 +109,7 @@ export function buildLeadExportRecord(params: BuildLeadExportRecordParams): Lead
     taxNumber: params.contact.taxNumber,
     consentOffers: params.consents.consentOffers,
     consentContent: params.consents.consentContent,
+    consentConsulting: params.consents.consentConsulting,
     selectedModules: params.selectedModules,
     triageScores: params.triageScores,
     moduleInputs: params.moduleInputs,
@@ -196,6 +199,10 @@ export const CSV_COLUMNS = [
   // razlikujeta (vnesena operativna, prevzeta administrativna).
   'operationalHourSource',
   'adminHourSource',
+  // Prošnja za posvet z zadnjega koraka obrazca. NE ob consentOffers/consentContent,
+  // čeprav tja vsebinsko sodi: preslikave v CRM so pozicijske in vrivanje na sredino
+  // bi tiho premaknilo vsak stolpec za njim.
+  'consentConsulting',
 ] as const;
 
 /** Prazna celica namesto "0" — segment brez te vrednosti je ni izračunal, ni je izmeril kot nič. */
@@ -261,6 +268,7 @@ export function buildCsvRow(record: LeadExportRecord): string[] {
     record.profile?.roleOther ?? '',
     record.profile?.operationalHour.source ?? '',
     record.profile?.adminHour.source ?? '',
+    String(record.consentConsulting),
   ].map((value) => csvEscape(value));
 }
 

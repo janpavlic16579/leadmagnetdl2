@@ -86,7 +86,12 @@ function reportFor(segmentId: SegmentId, options: ScenarioOptions = {}) {
       phone: '+386 1 234 5678',
       taxNumber: options.taxNumber ?? '12345679',
     },
-    consents: { consentProcessing: true, consentOffers: true, consentContent: false },
+    consents: {
+      consentProcessing: true,
+      consentOffers: true,
+      consentContent: false,
+      consentConsulting: true,
+    },
     utmSource: 'linkedin',
     industry: INDUSTRIES.find((i) => i.segment === segmentId)?.id ?? '',
     employeeCount: 45,
@@ -165,7 +170,12 @@ describe('Poročilo se sestavi za vsako dejavnost', () => {
     const report = buildSalesReport({
       generatedAtISO: STAMP,
       contact: { firstName: '', lastName: '', companyName: '', email: '', phone: '', taxNumber: '' },
-      consents: { consentProcessing: true, consentOffers: false, consentContent: false },
+      consents: {
+        consentProcessing: true,
+        consentOffers: false,
+        consentContent: false,
+        consentConsulting: false,
+      },
       utmSource: null,
       industry: 'trgovina',
       employeeCount: 12,
@@ -375,11 +385,14 @@ describe('Zapis ne izgubi podatkov, ki jih je tok doslej zavrgel', () => {
     expect(report.meta.taxNumber).toBe('12345679');
   });
 
-  it('vse tri privolitve so ločene, ne združene v eno zastavico', () => {
+  it('vse štiri privolitve so ločene, ne združene v eno zastavico', () => {
     const report = reportFor('trgovina');
     expect(report.meta.consentProcessing).toBe(true);
     expect(report.meta.consentOffers).toBe(true);
     expect(report.meta.consentContent).toBe(false);
+    // Prošnja za posvet je ločena od privolitve za ponudbe: "smem pošiljati" ni
+    // isto kot "prosil je, naj ga pokličem".
+    expect(report.meta.consentConsulting).toBe(true);
   });
 
   it('vir kampanje in časovni žig sta v poročilu', () => {

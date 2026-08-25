@@ -1,5 +1,6 @@
+import { SHARED_COPY, type ResolvedSegmentCopy } from '../../config/copy';
 import { formatAmount, formatEUR, formatEURRange, formatHours } from '../../lib/format';
-import type { ConfidenceLevel, ResultTotals } from '../../lib/potential';
+import type { ResultTotals } from '../../lib/potential';
 import { displayRange, type EURRange, type TotalsRange } from '../../lib/range';
 import styles from './ResultsSummary.module.css';
 
@@ -7,11 +8,13 @@ interface ResultsSummaryProps {
   totals: ResultTotals;
   /** Razpon, kadar finančna osnova stoji na izbranih pasovih (lib/range.ts). */
   totalsRange?: TotalsRange | null;
-  /** Primeri postavk te dejavnosti; brez njih ostane nevtralno besedilo. */
-  directLossNote?: string;
+  /**
+   * Naslovi in opombe kartic te dejavnosti (config/copy). Doslej je komponenta
+   * dobila samo opombo pri neposrednih stroških, vse ostalo pa je imela zapisano
+   * pri sebi — in isto besedilo je v drugačni različici živelo še v pdf.ts.
+   */
+  figures: ResolvedSegmentCopy['figures'];
 }
-
-const DEFAULT_DIRECT_LOSS_NOTE = 'Denar, ki dejansko odteka, ne izgubljen čas.';
 
 /**
  * Pod tem zneskom postavka ne dobi svoje kartice.
@@ -24,17 +27,6 @@ const DEFAULT_DIRECT_LOSS_NOTE = 'Denar, ki dejansko odteka, ne izgubljen čas.'
  */
 const MIN_FIGURE_EUR = 100;
 
-const CONFIDENCE_LABEL: Record<ConfidenceLevel, string> = {
-  high: 'Visoka zanesljivost',
-  medium: 'Srednja zanesljivost',
-  low: 'Nizka zanesljivost',
-};
-
-const CONFIDENCE_NOTE: Record<ConfidenceLevel, string> = {
-  high: 'Vnesli ste konkretne ure, stroške in glavni vzrok. Številke stojijo na vaših podatkih.',
-  medium: 'Del vrednosti je iz izbranih razponov ali privzetih ocen. Rezultat je pravega velikostnega reda.',
-  low: 'Večina ključnih podatkov manjka, zato so zneski označeni kot "najmanj" — dejanski so praviloma višji, ne nižji.',
-};
 
 /**
  * Štiri ločene številke namesto ene velike.
@@ -46,7 +38,7 @@ const CONFIDENCE_NOTE: Record<ConfidenceLevel, string> = {
  * Kartica se izriše samo, kadar ima vrednost — segmenti brez potenciala tako
  * ostanejo pri treh ali manj, brez praznih ničel.
  */
-export function ResultsSummary({ totals, totalsRange, directLossNote }: ResultsSummaryProps) {
+export function ResultsSummary({ totals, totalsRange, figures }: ResultsSummaryProps) {
   const confidence = totals.confidence;
   const amount = (value: number, range?: EURRange) =>
     formatAmount(value, { range: displayRange(range), lowConfidence: confidence === 'low' });
@@ -55,16 +47,16 @@ export function ResultsSummary({ totals, totalsRange, directLossNote }: ResultsS
     <>
       {confidence ? (
         <div className={styles.confidenceRow}>
-          <span className={`${styles.badge} ${styles[confidence]}`}>{CONFIDENCE_LABEL[confidence]}</span>
-          <span className={styles.confidenceNote}>{CONFIDENCE_NOTE[confidence]}</span>
+          <span className={`${styles.badge} ${styles[confidence]}`}>{SHARED_COPY.confidenceLabel[confidence]}</span>
+          <span className={styles.confidenceNote}>{SHARED_COPY.confidenceNote[confidence]}</span>
         </div>
       ) : null}
 
       <div className={styles.grid}>
         <Figure
-          title="Neposredni letni stroški"
+          title={figures.directLoss.title}
           value={amount(totals.directLossEUR, totalsRange?.directLoss)}
-          note={directLossNote ?? DEFAULT_DIRECT_LOSS_NOTE}
+          note={figures.directLoss.note}
         />
 
         {/*
@@ -75,43 +67,45 @@ export function ResultsSummary({ totals, totalsRange, directLossNote }: ResultsS
         */}
         {totals.lostMarginEUR >= MIN_FIGURE_EUR ? (
           <Figure
-            title="Nezaslužena letna marža"
+            title={figures.lostMargin.title}
             value={amount(totals.lostMarginEUR, totalsRange?.lostMargin)}
             // Besedilo je namerno panožno nevtralno: koš 'lostMargin' zdaj polni šest
             // dejavnosti, ne le maloprodaja. Prejšnji primeri ("prazna polica") so bili
             // trgovinski in so v proizvodnji, storitvah in računovodstvu zveneli tuje.
-            note="Marža, ki je niste zaslužili — posel, do katerega ni prišlo, ali prodaja po napačni ceni. Denar ni odtekel, zato je prikazana ločeno."
+            note={figures.lostMargin.note}
           />
         ) : null}
 
         {totals.capacityEUR > 0 ? (
           <Figure
-            title="Vrednost izgubljene kapacitete"
+            title={figures.capacity.title}
             value={amount(totals.capacityEUR, totalsRange?.capacity)}
-            note={`${formatHours(totals.capacityHoursPerMonth)}/mesec. To ni prihranek pri plačah — zaposleni ostane, njegov čas pa se lahko usmeri v delo, ki prinaša vrednost.`}
+            // Ure so izračun in ne besedilo, zato jih doda izrisovalec: opomba v
+            // registru se začne za njimi in ostane panožno prepisljiva.
+            note={`${formatHours(totals.capacityHoursPerMonth)}/mesec. ${figures.capacity.note}`}
           />
         ) : null}
 
         {totals.oneTimeCapitalEUR >= MIN_FIGURE_EUR ? (
           <Figure
-            title="Sprostljiv obratni kapital"
+            title={figures.oneTimeCapital.title}
             value={
               displayRange(totalsRange?.oneTimeCapital)
                 ? formatEURRange(totalsRange!.oneTimeCapital.minEUR, totalsRange!.oneTimeCapital.maxEUR)
                 : formatEUR(totals.oneTimeCapitalEUR)
             }
-            note="Enkraten učinek, ne letni prihranek — zato se z zneski zgoraj ne sešteva."
+            note={figures.oneTimeCapital.note}
           />
         ) : null}
 
         {totals.potential ? (
           <Figure
-            title="Realistični potencial izboljšave"
+            title={figures.potential.title}
             value={formatEURRange(
               totalsRange?.potential?.minEUR ?? totals.potential.minEUR,
               totalsRange?.potential?.maxEUR ?? totals.potential.maxEUR,
             )}
-            note="Letno. Izpeljano iz glavnih vzrokov, ki ste jih navedli, in sistemov, ki jih danes uporabljate. Ni obljuba prihranka, ampak konservativen poslovni potencial, ki ga je mogoče preveriti na uvodnem sestanku."
+            note={figures.potential.note}
           />
         ) : null}
       </div>

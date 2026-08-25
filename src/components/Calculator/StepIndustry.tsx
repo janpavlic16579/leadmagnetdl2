@@ -7,7 +7,9 @@ import {
   findSubIndustry,
   getSegmentForIndustry,
   industryChoiceLabel,
+  isCompleteIndustryChoice,
 } from '../../config/industries';
+import { SHARED_COPY, type ResolvedSegmentCopy } from '../../config/copy';
 import type { BasicInfo } from '../../types';
 import { useStepHeading } from '../../lib/useStepHeading';
 import buttonStyles from '../../styles/buttons.module.css';
@@ -16,6 +18,12 @@ import styles from './StepIndustry.module.css';
 
 interface StepIndustryProps {
   value: BasicInfo;
+  /**
+   * Nagovor uvodnega zaslona. Korak ga ne izpelje sam: segmenta ob tem vprašanju
+   * še ne pozna in ga tudi ne sme — dokler ni izbrana dejavnost, je nevtralni
+   * nagovor edini pošten. Izbiro opravi CalculatorFlow.
+   */
+  hero: ResolvedSegmentCopy['landing'];
   /**
    * Ali obstajajo odgovori, ki bi jih menjava vprašalnika zavrgla. Krmili
    * opozorilo; brisanje samo opravi klicatelj, in sicer šele ob "Naprej".
@@ -40,7 +48,7 @@ interface StepIndustryProps {
  */
 const INDUSTRY_QUESTION = 'S čim se ukvarja vaše podjetje?';
 
-export function StepIndustry({ value, answersAtRisk = false, onChange, onNext }: StepIndustryProps) {
+export function StepIndustry({ value, hero, answersAtRisk = false, onChange, onNext }: StepIndustryProps) {
   /**
    * Segment, s katerim je korak začel — z njim se primerja trenutna izbira, da
    * opozorilo pove resnico: 'trgovina' in 'drugo_blago' vodita v isti vprašalnik,
@@ -57,27 +65,36 @@ export function StepIndustry({ value, answersAtRisk = false, onChange, onNext }:
   const showSubQuestion = selectValue === DRUGO_ID;
 
   // Sam 'drugo' ni odgovor: brez podizbire ne vemo, kateri vprašalnik pokazati.
+  // Isti predikat krmili nagovor zgoraj — gumb in naslov se prižgeta hkrati.
   const headingRef = useStepHeading();
-  const canProceed = value.industry.length > 0 && value.industry !== DRUGO_ID;
+  const canProceed = isCompleteIndustryChoice(value.industry);
   const willDiscardAnswers =
     answersAtRisk && canProceed && getSegmentForIndustry(value.industry) !== initialSegmentId;
 
   return (
     <div className={shellStyles.wrap}>
-      <h1 className={shellStyles.introTitle} tabIndex={-1} ref={headingRef}>
-        Koliko vas stane sedanji način dela?
-      </h1>
       {/*
-       * Ocena trajanja mora držati. Prej je pisalo "v dveh minutah": že sam korak
-       * triaže traja dlje, obiskovalec pa takrat še ni pri nobeni številki. Obljuba,
-       * ki se podre na koraku 6, stane več kot poštena — takrat je vloženih že
-       * osem minut in opustitev je najdražja možna.
-       */}
-      <p className={shellStyles.introSubtitle}>
-        Odgovorite na nekaj vprašanj o svojem poslovanju in dobite razčlenjen izračun letnih skritih
-        stroškov — brez vnosa e-naslova. Sami izberete, katera področja vas najbolj tiščijo; za
-        priporočena tri vzame okoli deset minut.
-      </p>
+        Rezervirana višina: spustni seznam stoji POD nagovorom, nagovor pa se ob
+        izbiri dejavnosti zamenja. Brez min-block-size bi daljši podnaslov seznam
+        premaknil izpod kazalca prav v trenutku, ko obiskovalec izbira. Dolžine
+        varuje config/copy/copy.test.ts — CSS rezervira, test skrbi, da je dovolj.
+      */}
+      <div className={styles.hero}>
+        <h1 className={shellStyles.introTitle} tabIndex={-1} ref={headingRef}>
+          {hero.heroTitle}
+        </h1>
+        <p className={styles.heroPain}>{hero.heroSubtitle}</p>
+        {/*
+         * Ocena trajanja mora držati. Prej je pisalo "v dveh minutah": že sam korak
+         * triaže traja dlje, obiskovalec pa takrat še ni pri nobeni številki. Obljuba,
+         * ki se podre na koraku 6, stane več kot poštena — takrat je vloženih že
+         * osem minut in opustitev je najdražja možna.
+         *
+         * Ločeno od panožnega podnaslova, ker je ponudba za vse ista: sedem
+         * prepisov bi se ob prvi spremembi roka razšlo.
+         */}
+        <p className={shellStyles.introSubtitle}>{SHARED_COPY.landingOffer}</p>
+      </div>
 
       <div className={shellStyles.card}>
         <div className={shellStyles.formRow}>
@@ -141,10 +158,7 @@ export function StepIndustry({ value, answersAtRisk = false, onChange, onNext }:
         </p>
       ) : null}
 
-      <p className={shellStyles.trustNote}>
-        Ves izračun poteka v vašem brskalniku. Nič od vnesenih podatkov ne zapusti brskalnika, dokler se sami ne
-        odločite oddati obrazca za PDF poročilo.
-      </p>
+      <p className={shellStyles.trustNote}>{SHARED_COPY.privacyNote}</p>
 
       <div className={shellStyles.stickyFooter}>
         <div className={shellStyles.stickyFooterInner}>

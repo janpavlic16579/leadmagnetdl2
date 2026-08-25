@@ -84,7 +84,7 @@ describe('Prodajni PDF se sestavi', () => {
         phone: '',
         taxNumber: '',
       },
-      consents: { consentProcessing: true, consentOffers: false, consentContent: false },
+      consents: { consentProcessing: true, consentOffers: false, consentContent: false, consentConsulting: false },
       utmSource: null,
       industry: 'proizvodnja',
       employeeCount: 45,

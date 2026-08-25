@@ -102,6 +102,19 @@ export function industryChoiceLabel(option: IndustryOption): string {
 /** Id 'drugo' sam po sebi ni izbira, ampak vrata do pod-dejavnosti. */
 export const DRUGO_ID = 'drugo';
 
+/**
+ * Ali je izbira dejavnosti popoln odgovor.
+ *
+ * Sam 'drugo' ni: manjka podizbira in vprašalnika še ne poznamo. Predikat ima
+ * dva odjemalca — gumb "Naprej" v Koraku 1 in izbiro nagovora na uvodnem
+ * zaslonu — in prav zato mora biti en sam. Segment tega ne more povedati:
+ * getSegmentForIndustry('') vrne 'splosno' enako kot 'drugo_nic', zato je
+ * razlika med "ni izbral" in "izbral je splošno" samo tu.
+ */
+export function isCompleteIndustryChoice(industryId: string): boolean {
+  return industryId.length > 0 && industryId !== DRUGO_ID;
+}
+
 /** Spustni seznam in pod-dejavnosti skupaj — edini vir za preslikavo in oznake. */
 const ALL_INDUSTRIES: IndustryOption[] = [...INDUSTRIES, ...DRUGO_SUB_INDUSTRIES];
 

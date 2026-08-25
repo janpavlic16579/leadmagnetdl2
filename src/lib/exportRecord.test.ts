@@ -24,6 +24,7 @@ const RECORD: LeadExportRecord = {
   taxNumber: '12345679',
   consentOffers: true,
   consentContent: false,
+  consentConsulting: true,
   selectedModules: ['narocila_trgovina'],
   triageScores: { narocila_trgovina: 2 },
   moduleInputs: { narocila_trgovina: { orderHoursPerMonth: 30 } },
@@ -52,7 +53,7 @@ describe('Izvozni zapis za CRM', () => {
   it('novi stolpci gredo na konec, za obstoječimi', () => {
     // Vrivanje na vsebinsko "pravo" mesto bi premaknilo vse pozicijske preslikave,
     // ki so bile narejene pred spremembo.
-    const tail = CSV_COLUMNS.slice(-10);
+    const tail = CSV_COLUMNS.slice(-11);
     expect(tail).toEqual([
       'firstName',
       'lastName',
@@ -64,6 +65,7 @@ describe('Izvozni zapis za CRM', () => {
       'roleOther',
       'operationalHourSource',
       'adminHourSource',
+      'consentConsulting',
     ]);
   });
 
@@ -90,6 +92,7 @@ describe('Izvozni zapis za CRM', () => {
       ['taxNumber', '12345679'],
       ['consentOffers', 'true'],
       ['consentContent', 'false'],
+      ['consentConsulting', 'true'],
     ] as const) {
       expect(row[CSV_COLUMNS.indexOf(column)], column).toBe(expected);
     }

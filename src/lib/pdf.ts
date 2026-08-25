@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import { getSegmentCopy, type ResolvedSegmentCopy } from '../config/copy';
 import { getModules, MODULE_REGISTRY } from '../config/modules';
 import type { ModuleOutput, RiskLevel } from '../config/modules/moduleTypes';
 import type { SegmentConfig } from '../config/segments';
@@ -119,13 +120,19 @@ function niceCeiling(value: number): number {
  */
 export async function buildResultsPdfFile(params: GeneratePdfParams): Promise<DownloadFile> {
   const doc = createPdfDocument();
+  /**
+   * Ista besedila kot na zaslonu. Doslej so bili naslovi kartic in njihove opombe
+   * tu zapisani še enkrat — in ker sta bili to dve evidenci, je poročilo vsakega
+   * proizvajalca še vedno navajalo "prazna polica, napačna cena".
+   */
+  const copy = getSegmentCopy(params.segment.id);
   const dateStr = new Intl.DateTimeFormat('sl-SI').format(new Date());
   // Poti do public/ morajo iti prek BASE_URL — aplikacija se strežе izpod
   // /leadmagnetdl/ (glej vite.config.ts), zato bi trdo kodiran koren 404-iral.
   const logo = await loadImage(`${import.meta.env.BASE_URL}logo-datalab.png`);
 
-  let y = drawHeader(doc, params, dateStr, logo);
-  y = drawHeroSection(doc, params, y);
+  let y = drawHeader(doc, params, copy, dateStr, logo);
+  y = drawHeroSection(doc, params, copy, y);
 
   const chartData = buildChartData(params.segment, params.outputs);
   // Nezaslužena marža sodi v isto razčlenitev kot neposredna izguba — enako kot na
@@ -137,7 +144,7 @@ export async function buildResultsPdfFile(params: GeneratePdfParams): Promise<Do
   ];
   if (chartData.length > 0 || directLossRows.length > 0) {
     y = ensurePageSpace(doc, y, 24);
-    y = drawSectionTitle(doc, 'Razčlenitev po področjih', y);
+    y = drawSectionTitle(doc, copy.results.breakdownTitle, y);
     if (chartData.length > 0) {
       y = ensurePageSpace(doc, y, CHART_TOTAL_HEIGHT);
       y = drawBreakdownChart(doc, chartData, y);
@@ -150,18 +157,18 @@ export async function buildResultsPdfFile(params: GeneratePdfParams): Promise<Do
   const capacityRows = rowsForBucket(params.outputs, 'capacity');
   if (capacityRows.length > 0) {
     y = ensurePageSpace(doc, y, 24);
-    y = drawSectionTitle(doc, 'Kje se izgublja kapaciteta', y);
+    y = drawSectionTitle(doc, copy.results.capacityTitle, y);
     y = drawResultsTable(doc, capacityRows, y, [
-      `Skupaj ${formatHours(params.totals.capacityHoursPerMonth)}/mesec sproščenega časa. To ni prihranek pri plačah — zaposleni ostane, njegov čas pa se lahko usmeri v delo, ki prinaša vrednost.`,
+      `Skupaj ${formatHours(params.totals.capacityHoursPerMonth)}/mesec sproščenega časa. ${copy.figures.capacity.note}`,
     ]);
   }
 
   if (params.totals.risks.length > 0) {
-    y = drawRisksSection(doc, params.totals.risks, y);
+    y = drawRisksSection(doc, params.totals.risks, copy.results.risksTitle, y);
   }
 
   if (params.coverage && params.coverage.unmeasured.length > 0) {
-    y = drawUnmeasuredSection(doc, params.coverage, y);
+    y = drawUnmeasuredSection(doc, params.coverage, copy.results.unmeasuredTitle, y);
   }
 
   const actionPlan = getActionPlan(params.highestModule);
@@ -187,6 +194,7 @@ const HEADER_HEIGHT = 30;
 function drawHeader(
   doc: jsPDF,
   params: GeneratePdfParams,
+  copy: ResolvedSegmentCopy,
   dateStr: string,
   logo: { dataUrl: string; width: number; height: number } | null,
 ): number {
@@ -206,14 +214,14 @@ function drawHeader(
   doc.setTextColor(...PALETTE.white);
   setFont(doc, 'bold');
   doc.setFontSize(14);
-  doc.text('Analiza skritih stroškov sedanjega načina dela', textLeft, logo ? 24 : 16);
+  doc.text(copy.pdf.documentTitle, textLeft, logo ? 24 : 16);
 
   setFont(doc, 'normal');
   doc.setFontSize(9);
   doc.setTextColor(...PALETTE.cream);
   const infoLines = [
     `Podjetje: ${params.companyName || '—'}`,
-    `Segment: ${params.segment.displayName}`,
+    `Segment: ${copy.displayName}`,
     `Datum: ${dateStr}`,
   ];
   infoLines.forEach((line, index) => {
@@ -244,7 +252,12 @@ function drawConfidenceBadge(doc: jsPDF, level: ConfidenceLevel, x: number, y: n
   doc.text(label, x - badgeWidth / 2, y + badgeHeight / 2 + 1.4, { align: 'center' });
 }
 
-function drawHeroSection(doc: jsPDF, params: GeneratePdfParams, startY: number): number {
+function drawHeroSection(
+  doc: jsPDF,
+  params: GeneratePdfParams,
+  copy: ResolvedSegmentCopy,
+  startY: number,
+): number {
   let y = startY;
 
   // Računovodstvo dobi poseben poudarjen pas nad standardno kartico — enaka
@@ -268,7 +281,7 @@ function drawHeroSection(doc: jsPDF, params: GeneratePdfParams, startY: number):
   setFont(doc, 'semibold');
   doc.setFontSize(9);
   doc.setTextColor(...PALETTE.textMuted);
-  doc.text('NEPOSREDNI LETNI STROŠKI', MARGIN + 8, y + 11);
+  doc.text(copy.figures.directLoss.title.toUpperCase(), MARGIN + 8, y + 11);
 
   if (params.totals.confidence) {
     drawConfidenceBadge(doc, params.totals.confidence, MARGIN + CONTENT_WIDTH - 8, y + 7.5);
@@ -290,7 +303,7 @@ function drawHeroSection(doc: jsPDF, params: GeneratePdfParams, startY: number):
   const heroNote =
     params.totals.confidence
       ? CONFIDENCE_NOTE[params.totals.confidence]
-      : (params.segment.directLossNote ?? 'Denar, ki dejansko odteka, ne izgubljen čas.');
+      : copy.figures.directLoss.note;
   const heroNoteLines = doc.splitTextToSize(heroNote, CONTENT_WIDTH - 16);
   doc.text(heroNoteLines, MARGIN + 8, y + 30);
 
@@ -317,33 +330,33 @@ function drawHeroSection(doc: jsPDF, params: GeneratePdfParams, startY: number):
   const figures: { title: string; value: string; note: string }[] = [];
   if (params.totals.lostMarginEUR > 0) {
     figures.push({
-      title: 'NEZASLUŽENA LETNA MARŽA',
+      title: copy.figures.lostMargin.title.toUpperCase(),
       value: cardValue(params.totals.lostMarginEUR, params.totalsRange?.lostMargin),
-      note: 'Marža, ki ni bila zaslužena — prazna polica, napačna cena.',
+      note: copy.figures.lostMargin.shortNote,
     });
   }
   if (params.totals.capacityEUR > 0) {
     figures.push({
-      title: 'VREDNOST IZGUBLJENE KAPACITETE',
+      title: copy.figures.capacity.title.toUpperCase(),
       value: cardValue(params.totals.capacityEUR, params.totalsRange?.capacity),
-      note: `${formatHours(params.totals.capacityHoursPerMonth)}/mesec — ni prihranek pri plačah, zaposleni ostane.`,
+      note: `${formatHours(params.totals.capacityHoursPerMonth)}/mesec — ${copy.figures.capacity.shortNote}`,
     });
   }
   if (params.totals.oneTimeCapitalEUR > 0) {
     figures.push({
-      title: 'SPROSTLJIV OBRATNI KAPITAL',
+      title: copy.figures.oneTimeCapital.title.toUpperCase(),
       value: cardValue(params.totals.oneTimeCapitalEUR, params.totalsRange?.oneTimeCapital),
-      note: 'Enkraten učinek, ne letni prihranek — se z zneski zgoraj ne sešteva.',
+      note: copy.figures.oneTimeCapital.shortNote,
     });
   }
   if (params.totals.potential) {
     figures.push({
-      title: 'REALISTIČNI POTENCIAL',
+      title: copy.figures.potential.title.toUpperCase(),
       value: formatEURRange(
         params.totalsRange?.potential?.minEUR ?? params.totals.potential.minEUR,
         params.totalsRange?.potential?.maxEUR ?? params.totals.potential.maxEUR,
       ),
-      note: 'Letno, konservativna ocena — ni obljuba prihranka.',
+      note: copy.figures.potential.shortNote,
     });
   }
 
@@ -497,9 +510,9 @@ function drawResultsTable(
 
 // --- Tveganja ------------------------------------------------------------
 
-function drawRisksSection(doc: jsPDF, risks: ModuleOutput[], startY: number): number {
+function drawRisksSection(doc: jsPDF, risks: ModuleOutput[], title: string, startY: number): number {
   let y = ensurePageSpace(doc, startY, 24);
-  y = drawSectionTitle(doc, 'Podatki in procesna tveganja', y);
+  y = drawSectionTitle(doc, title, y);
 
   setFont(doc, 'normal');
   doc.setFontSize(8.5);
@@ -559,10 +572,11 @@ function drawRisksSection(doc: jsPDF, risks: ModuleOutput[], startY: number): nu
 function drawUnmeasuredSection(
   doc: jsPDF,
   coverage: NonNullable<GeneratePdfParams['coverage']>,
+  title: string,
   startY: number,
 ): number {
   let y = ensurePageSpace(doc, startY, 24);
-  y = drawSectionTitle(doc, 'Česa nismo izmerili', y);
+  y = drawSectionTitle(doc, title, y);
 
   setFont(doc, 'normal');
   doc.setFontSize(8.5);

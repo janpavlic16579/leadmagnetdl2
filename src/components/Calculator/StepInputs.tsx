@@ -1,5 +1,5 @@
 import type { ModuleDefinition } from '../../config/modules';
-import type { SegmentConfig } from '../../config/segments';
+import type { ResolvedSegmentCopy } from '../../config/copy';
 import { formatEUR } from '../../lib/format';
 import type { ModuleInputsState } from '../../types';
 import { ModuleSection } from './ModuleSection';
@@ -9,7 +9,11 @@ import shellStyles from './StepShell.module.css';
 import styles from './StepInputs.module.css';
 
 interface StepInputsProps {
-  segment: SegmentConfig;
+  /**
+   * Besedilo dejavnosti. Doslej je korak dobil cel SegmentConfig, prebral pa iz
+   * njega samo displayName — konfiguracijo vprašalnika zaradi ene oznake.
+   */
+  copy: ResolvedSegmentCopy;
   /** Moduli TE strani — eno področje, na zadnji strani diagnostika in tvegani stroški. */
   modules: ModuleDefinition[];
   /** Naslov strani: ime področja, na zadnji strani spoj imen njenih modulov. */
@@ -30,7 +34,7 @@ interface StepInputsProps {
 }
 
 export function StepInputs({
-  segment,
+  copy,
   modules,
   pageTitle,
   values,
@@ -72,7 +76,7 @@ export function StepInputs({
 
       <div className={styles.profileBanner}>
         <span>
-          Izračun prilagojen za: <span className={styles.profileName}>{segment.displayName}</span>
+          Izračun prilagojen za: <span className={styles.profileName}>{copy.displayName}</span>
         </span>
         {/* Pove, kam gumb pelje: vprašalnik določa dejavnost, zato se popravlja tam. */}
         <button type="button" className={styles.profileChange} onClick={onChangeSegment}>
@@ -94,10 +98,7 @@ export function StepInputs({
           />
         ))}
         {hasMonetaryFields ? (
-          <p className={styles.moduleFootnote}>
-            Sproščene ure ne pomenijo nižje plačne mase — zaposleni ostane. Gre za čas, ki ga lahko
-            usmerite v drugo delo.
-          </p>
+          <p className={styles.moduleFootnote}>{copy.inputs.hoursFootnote}</p>
         ) : null}
       </div>
 
@@ -123,7 +124,7 @@ export function StepInputs({
           */}
           {hasMonetaryFields ? (
             <div className={styles.pinnedTotal}>
-              <span className={styles.pinnedLabel}>Trenutni letni strošek izbranih področij</span>
+              <span className={styles.pinnedLabel}>{copy.inputs.runningTotalLabel}</span>
               <span className={styles.pinnedValue}>{formatEUR(liveTotalEUR)}</span>
             </div>
           ) : null}
@@ -133,7 +134,7 @@ export function StepInputs({
               Nazaj
             </button>
             <button type="button" className={buttonStyles.primaryButton} onClick={onNext}>
-              {isLastPage ? 'Poglej rezultat' : 'Naprej'}
+              {isLastPage ? copy.inputs.lastPageCta : 'Naprej'}
             </button>
           </div>
         </div>

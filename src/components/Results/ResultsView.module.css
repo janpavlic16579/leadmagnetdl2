@@ -45,6 +45,17 @@
   line-height: 1.1;
 }
 
+/*
+ * Sestava vsote, tik pod njo. Manjša od hero številke in večja od opomb kartic:
+ * bere se kot njen podnapis, ne kot nova trditev.
+ */
+.heroNote {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  max-width: 44rem;
+}
+
 .heroSecondary {
   font-size: var(--font-size-md);
   font-weight: 600;
