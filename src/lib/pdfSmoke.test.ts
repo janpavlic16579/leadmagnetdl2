@@ -6,7 +6,7 @@ import { aggregateResults, assessConfidence, buildComputeContext } from './poten
 import { computeModules, findHighestModule, resolveInputs } from './moduleEngine';
 import { getModules } from '../config/modules';
 import { SEGMENTS, SEGMENT_ORDER } from '../config/segments';
-import { emptyProfileFor, getSegmentContext, improvementBandFor } from '../config/contexts';
+import { emptyProfileFor, getSegmentContext } from '../config/contexts';
 
 /**
  * Dimni test izrisa: PDF se res sestavi.
@@ -33,7 +33,7 @@ function scenarioFor(segmentId: (typeof SEGMENT_ORDER)[number], values: Record<s
   }
   const outputs = computeModules(modules, resolved, buildComputeContext(profile));
   const totals = aggregateResults(outputs, {
-    band: context ? improvementBandFor(context, profile.currentSystem) : undefined,
+    includePotential: context !== undefined,
     confidence: context
       ? assessConfidence({ profile, context, modules, values: resolved, outputs })
       : undefined,

@@ -98,13 +98,14 @@ export function ResultsSummary({ totals, totalsRange, figures }: ResultsSummaryP
           />
         ) : null}
 
-        {totals.potential ? (
+        {totals.addressablePotentialEUR !== undefined ? (
           <Figure
             title={figures.potential.title}
-            value={formatEURRange(
-              totalsRange?.potential?.minEUR ?? totals.potential.minEUR,
-              totalsRange?.potential?.maxEUR ?? totals.potential.maxEUR,
-            )}
+            value={
+              displayRange(totalsRange?.potential)
+                ? formatEURRange(totalsRange!.potential!.minEUR, totalsRange!.potential!.maxEUR)
+                : formatEUR(totals.addressablePotentialEUR)
+            }
             note={figures.potential.note}
           />
         ) : null}

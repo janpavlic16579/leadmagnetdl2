@@ -33,7 +33,7 @@ const BASE: SalesReport = {
     businessTypeLabel: 'Veleprodaja poslovnim kupcem',
     currentSystemLabel: 'Večinoma Excel, papir ali sprotni dogovor',
     isPantheonCustomer: false,
-    improvementBand: { min: 0.25, max: 0.4 },
+    systemGap: { min: 0.25, max: 0.4 },
     followUpSequence: 'high-loss-no-risk',
   },
   summary: {

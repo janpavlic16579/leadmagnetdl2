@@ -29,8 +29,16 @@ export interface ContextOption {
   freeText?: true;
 }
 
-/** Delež naslovljivega stroška, ki ga je realno mogoče odpraviti — vedno pas, ne točka. */
-export interface ImprovementBand {
+/**
+ * Velikost vrzeli med sedanjim sistemom podjetja in urejeno postavitvijo.
+ *
+ * PRODAJNI SIGNAL, NE MNOŽITELJ. Doslej je bil to "pas izboljšave" in je v izračunu
+ * množil že naslovljiv strošek — ker naslovljiv delež glavnega vzroka meri isto
+ * odpravljivost, je bil isti problem zmanjšan dvakrat. Odslej vrzel hrani samo
+ * kvalifikacija: ocena ICP (config/icp.ts) in prodajni playbook. V evre NE vstopa;
+ * edini koeficient nad zneskom je ADDRESSABLE_SHARE (modules/addressableShare.ts).
+ */
+export interface SystemGap {
   min: number;
   max: number;
 }
@@ -38,10 +46,10 @@ export interface ImprovementBand {
 export interface SystemOption extends ContextOption {
   /**
    * KALIBRACIJA: začetne ocene, ne empirija. Podjetje, ki že uporablja ustrezen
-   * modul PANTHEON, je najlažje izboljšave večinoma že pobralo, zato je njegov pas
-   * najnižji. Po prvih ~50 vnosih je pasove treba preveriti na realnih podatkih.
+   * modul PANTHEON, je najlažje izboljšave večinoma že pobralo, zato je njegova
+   * vrzel najmanjša. Po prvih ~50 vnosih je vrzeli treba preveriti na realnih podatkih.
    */
-  band: ImprovementBand;
+  gap: SystemGap;
   /**
    * Obstoječi uporabnik PANTHEON. Tehnična opozorila (SQL Server, Windows Server,
    * ZIERDED) so smiselna samo tem — drugim niso prihranek, ampak šum.
@@ -283,7 +291,7 @@ export function industryAverageScaleBand(question: ScaleQuestion): ScaleBand | u
 }
 
 /** Brez odgovora vzamemo srednji pas — nikoli najugodnejšega. */
-export const FALLBACK_IMPROVEMENT_BAND: ImprovementBand = { min: 0.15, max: 0.3 };
+export const FALLBACK_SYSTEM_GAP: SystemGap = { min: 0.15, max: 0.3 };
 
 /**
  * Prazen profil za dano dejavnost: neizbrano, urni postavki označeni kot ocenjeni.

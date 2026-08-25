@@ -5,7 +5,7 @@ import { buildSalesReportHtml } from './salesReportHtml';
 import { computeModules, resolveActiveModules, resolveInputs } from './moduleEngine';
 import { aggregateResults, assessConfidence, buildComputeContext } from './potential';
 import { selectFollowUpSequence } from './followUp';
-import { emptyProfileFor, getSegmentContext, improvementBandFor } from '../config/contexts';
+import { emptyProfileFor, getSegmentContext } from '../config/contexts';
 import { getModules } from '../config/modules';
 import { SEGMENTS } from '../config/segments';
 import pdfSource from './pdf.ts?raw';
@@ -47,7 +47,7 @@ function retailReport() {
 
   const outputs = computeModules(activeModules, values, buildComputeContext(profile));
   const totals = aggregateResults(outputs, {
-    band: context ? improvementBandFor(context, profile.currentSystem) : undefined,
+    includePotential: context !== undefined,
     confidence: context
       ? assessConfidence({ profile, context, modules: activeModules, values, outputs })
       : undefined,

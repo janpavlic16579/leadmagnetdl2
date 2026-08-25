@@ -226,11 +226,11 @@ function segmentColumn(seg, idx) {
 <p class="intro">${esc(ctx.intro)}</p>
 ${contextQuestion('businessType', ctx.businessType.legend, ctx.businessType.options, seg.id)}
 ${contextQuestion('currentSystem', ctx.currentSystem.legend, ctx.currentSystem.options, seg.id, (o) => ({
-    extra: `pas izboljšave ${Math.round(o.band.min * 100)}–${Math.round(o.band.max * 100)} %${o.isPantheon ? ' · PANTHEON' : ''}`,
+    extra: `vrzel sistema ${Math.round(o.gap.min * 100)}–${Math.round(o.gap.max * 100)} %${o.isPantheon ? ' · PANTHEON' : ''}`,
     cls: o.isPantheon ? 'pantheon' : '',
   }))}
 ${contextQuestion('role', ctx.role.legend, ctx.role.options, seg.id)}
-<p class="note">Odgovor o sistemu določi pas izboljšave in ali se pokaže modul »Tvegani stroški«; v formule modulov ne vstopa.</p>
+<p class="note">Odgovor o sistemu je prodajni signal (vrzel sistema) in določa, ali se pokaže modul »Tvegani stroški«; v izračun ne vstopa.</p>
 </div>`;
 
   const k4 = `<div class="box step" id="k4-${seg.id}">
@@ -309,7 +309,7 @@ function tailHtml() {
 <div class="box step tail-box" id="k7">
 <div class="step-k">Korak 7 · Rezultati</div>
 <h4>Zneski, potencial in tveganja</h4>
-<p class="intro">Seštevek po štirih koših — ista postavka šteje le v enem. Neposredna izguba + kapaciteta letno; enkratni kapital ločeno; tveganja brez zneska. Potencial = naslovljivi delež × pas izboljšave sistema. Razdelek »Česa nismo izmerili« našteje preskočena področja in jih pusti doračunati.</p>
+<p class="intro">Seštevek po štirih koših — ista postavka šteje le v enem. Neposredna izguba + kapaciteta letno; enkratni kapital ločeno; tveganja brez zneska. Naslovljiv potencial = znesek × naslovljivi delež glavnega vzroka (en sam koeficient). Razdelek »Česa nismo izmerili« našteje preskočena področja in jih pusti doračunati.</p>
 <div class="mbuckets">
 <span class="bk bk-directLoss"><span class="dot d-directLoss"></span>neposredna izguba — denar odteka</span>
 <span class="bk bk-capacity"><span class="dot d-capacity"></span>kapaciteta — izgubljene ure</span>

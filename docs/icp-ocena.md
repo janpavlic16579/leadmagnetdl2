@@ -54,7 +54,7 @@ Pregledna tabela; podrobnosti za vsako dimenzijo sledijo.
 | # | Dimenzija | Utež | Ključni vhodni signali | Razpon prispevka |
 |---|-----------|------|------------------------|------------------|
 | 1 | Velikost podjetja | **0,20** | `employeeCount` | 0–20 točk |
-| 2 | Priložnost v sedanjem sistemu | **0,20** | `improvementBandMax`, `isPantheonCustomer` | 0–20 točk |
+| 2 | Priložnost v sedanjem sistemu | **0,20** | `systemGapMax`, `isPantheonCustomer` | 0–20 točk |
 | 3 | Izmerjena bolečina | **0,20** | `measuredLossEUR`, `highLossThresholdEUR` | 0–20 točk |
 | 4 | Bližina odločevalcu | **0,15** | `roleId` | 0–15 točk |
 | 5 | Nujnost zaradi rokov | **0,10** | `deadlineDates`, `generatedAtISO` | 0–10 točk |
@@ -80,9 +80,9 @@ velik posel, daljši cikel), ki je ločena oznaka in ne vpliva na oceno.
 
 ### 3.2 Priložnost v sedanjem sistemu (utež 0,20)
 
-Meri **velikost vrzeli, ne vrste stranke**. Vhod je zgornja meja pasu izboljšave sedanjega
-sistema (`improvementBandMax`, 0,08–0,40) — edini medsegmentni normalizator: 0,40 pomeni
-Excel in papir, 0,08 PANTHEON z ustreznim modulom. Pas se linearno preslika na 0–1.
+Meri **velikost vrzeli, ne vrste stranke**. Vhod je zgornja meja vrzeli sedanjega
+sistema (`systemGapMax`, 0,08–0,40) — edini medsegmentni normalizator: 0,40 pomeni
+Excel in papir, 0,08 PANTHEON z ustreznim modulom. Vrzel se linearno preslika na 0–1.
 
 - ≥ 0,30 → "Velika vrzel — večino vodijo zunaj sistema."
 - 0,20–0,29 → "Srednja vrzel — sistem imajo, a ne za vse."

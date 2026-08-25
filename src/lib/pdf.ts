@@ -349,13 +349,10 @@ function drawHeroSection(
       note: copy.figures.oneTimeCapital.shortNote,
     });
   }
-  if (params.totals.potential) {
+  if (params.totals.addressablePotentialEUR !== undefined) {
     figures.push({
       title: copy.figures.potential.title.toUpperCase(),
-      value: formatEURRange(
-        params.totalsRange?.potential?.minEUR ?? params.totals.potential.minEUR,
-        params.totalsRange?.potential?.maxEUR ?? params.totals.potential.maxEUR,
-      ),
+      value: cardValue(params.totals.addressablePotentialEUR, params.totalsRange?.potential),
       note: copy.figures.potential.shortNote,
     });
   }

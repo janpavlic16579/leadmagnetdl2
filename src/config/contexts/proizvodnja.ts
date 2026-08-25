@@ -37,11 +37,11 @@ export const PROIZVODNJA_CONTEXT: SegmentContext = {
   currentSystem: {
     legend: 'Kako danes vodite proizvodnjo?',
     options: [
-      { id: 'pantheonMfMt', label: 'PANTHEON MF in/ali MT', band: { min: 0.08, max: 0.2 }, isPantheon: true },
-      { id: 'pantheonNoMf', label: 'PANTHEON brez proizvodnega modula', band: { min: 0.15, max: 0.3 }, isPantheon: true },
-      { id: 'otherErp', label: 'Drug ERP za proizvodnjo', band: { min: 0.15, max: 0.3 } },
-      { id: 'erpExcelPaper', label: 'Kombinacija ERP-ja, Excela in papirja', band: { min: 0.25, max: 0.4 } },
-      { id: 'excelPaper', label: 'Večinoma Excel, papir ali sprotni dogovor', band: { min: 0.25, max: 0.4 } },
+      { id: 'pantheonMfMt', label: 'PANTHEON MF in/ali MT', gap: { min: 0.08, max: 0.2 }, isPantheon: true },
+      { id: 'pantheonNoMf', label: 'PANTHEON brez proizvodnega modula', gap: { min: 0.15, max: 0.3 }, isPantheon: true },
+      { id: 'otherErp', label: 'Drug ERP za proizvodnjo', gap: { min: 0.15, max: 0.3 } },
+      { id: 'erpExcelPaper', label: 'Kombinacija ERP-ja, Excela in papirja', gap: { min: 0.25, max: 0.4 } },
+      { id: 'excelPaper', label: 'Večinoma Excel, papir ali sprotni dogovor', gap: { min: 0.25, max: 0.4 } },
     ],
   },
 

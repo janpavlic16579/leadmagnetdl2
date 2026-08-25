@@ -3,16 +3,16 @@ import {
   aggregateResults,
   assessConfidence,
   buildComputeContext,
-  computePotentialRange,
+  computeAddressablePotentialEUR,
   isRevenueMissing,
   type AssessConfidenceParams,
   type ConfidenceLevel,
 } from './potential';
+import { buildTotalsRange } from './range';
 import { computeModules, resolveInputs } from './moduleEngine';
 import {
   emptyProfileFor,
   getSegmentContext,
-  improvementBandFor,
   isTechnicalRiskModuleVisible,
   type BusinessProfile,
   type CostAssumption,
@@ -46,93 +46,54 @@ const EXACT_HOURS: Partial<BusinessProfile> = {
 
 const STORITVE = getSegmentContext('storitve')!;
 
-describe('computePotentialRange', () => {
-  const band = { min: 0.25, max: 0.4 };
-
+describe('computeAddressablePotentialEUR', () => {
   it('upošteva neposredne izgube in kapaciteto', () => {
-    const range = computePotentialRange(
-      [
-        output({ bucket: 'directLoss', valueEUR: 10_000, addressableShare: 0.75 }),
-        output({ bucket: 'capacity', valueEUR: 10_000, addressableShare: 0.75 }),
-      ],
-      band,
-    );
+    // 20.000 EUR izmerjenega stroška z vzrokom v podatkih da 15.000 EUR naslovljivega —
+    // en sam koeficient, brez drugega odbitka za sedanji sistem.
+    const potentialEUR = computeAddressablePotentialEUR([
+      output({ bucket: 'directLoss', valueEUR: 10_000, addressableShare: 0.75 }),
+      output({ bucket: 'capacity', valueEUR: 10_000, addressableShare: 0.75 }),
+    ]);
 
-    expect(range.minEUR).toBeCloseTo(20_000 * 0.75 * 0.25, 6);
-    expect(range.maxEUR).toBeCloseTo(20_000 * 0.75 * 0.4, 6);
+    expect(potentialEUR).toBeCloseTo(15_000, 6);
   });
 
   it('enkratnega kapitala ne šteje — ta znesek je že sam potencial', () => {
-    const range = computePotentialRange(
-      [output({ bucket: 'oneTimeCapital', valueEUR: 500_000, addressableShare: 0.75 })],
-      band,
-    );
-    expect(range.maxEUR).toBe(0);
+    const potentialEUR = computeAddressablePotentialEUR([
+      output({ bucket: 'oneTimeCapital', valueEUR: 500_000, addressableShare: 0.75 }),
+    ]);
+    expect(potentialEUR).toBe(0);
   });
 
   it('postavka brez naslovljivega deleža v potencial ne vstopi', () => {
-    const range = computePotentialRange([output({ bucket: 'directLoss', valueEUR: 50_000 })], band);
-    expect(range.maxEUR).toBe(0);
+    const potentialEUR = computeAddressablePotentialEUR([
+      output({ bucket: 'directLoss', valueEUR: 50_000 }),
+    ]);
+    expect(potentialEUR).toBe(0);
   });
 
-  it('spodnja meja nikoli ne preseže zgornje', () => {
-    const range = computePotentialRange(
-      [output({ bucket: 'directLoss', valueEUR: 80_000, addressableShare: 0.65 })],
-      band,
-    );
-    expect(range.minEUR).toBeLessThanOrEqual(range.maxEUR);
-  });
-
-  it('potencial ostane pod teoretično zgornjo mejo 30 % izmerjenega stroška', () => {
-    // Najvišji možni zmnožek je 0.75 (podatki) × 0.40 (Excel/papir) = 0.30.
-    // Če se delež kje pomnoži dvakrat, ta test pade.
+  it('naslovljiv potencial nikoli ne preseže 0,75 izmerjenega letnega stroška', () => {
+    // Najvišji naslovljiv delež je 0,75 (podatki, ročni prenosi). Če se delež kje
+    // pomnoži dvakrat ali če kdo doda višjo kategorijo, ta test pade.
     const outputs = [
       output({ bucket: 'directLoss', valueEUR: 60_000, addressableShare: 0.75 }),
       output({ bucket: 'capacity', valueEUR: 40_000, addressableShare: 0.75 }),
     ];
-    const range = computePotentialRange(outputs, band);
-    expect(range.maxEUR).toBeLessThanOrEqual(100_000 * 0.3 + 1e-6);
-  });
-});
-
-describe('Pas izboljšave po sedanjem sistemu', () => {
-  it('vsaka možnost sistema v vsaki dejavnosti ima veljaven pas', () => {
-    // Pas visi na možnosti in ne v ločeni tabeli, zato ga ni mogoče pozabiti —
-    // ta test drži samo še, da je smiseln (min < max) in ne obljublja preveč.
-    for (const segmentId of SEGMENT_ORDER) {
-      const context = getSegmentContext(segmentId);
-      if (!context) continue;
-      for (const option of context.currentSystem.options) {
-        expect(option.band.min, `${segmentId}/${option.id}`).toBeLessThan(option.band.max);
-        expect(option.band.max, `${segmentId}/${option.id}`).toBeLessThanOrEqual(0.5);
-      }
-    }
+    expect(computeAddressablePotentialEUR(outputs)).toBeLessThanOrEqual(100_000 * 0.75 + 1e-6);
   });
 
-  it('brez odgovora vzame srednji pas, ne najugodnejšega', () => {
-    const fallback = improvementBandFor(PROIZVODNJA, null);
-    const best = PROIZVODNJA.currentSystem.options.find((option) => option.id === 'excelPaper')!;
-    expect(fallback.max).toBeLessThan(best.band.max);
-  });
+  it('glavni vzrok je edini, ki potencial spreminja', () => {
+    // Vzrok v podatkih naslovi bistveno več kot fizična omejitev — to je edina
+    // razlika, ki jo sme prikazani znesek pokazati.
+    const withData = computeAddressablePotentialEUR([
+      output({ bucket: 'directLoss', valueEUR: 100_000, addressableShare: 0.75 }),
+    ]);
+    const withPhysical = computeAddressablePotentialEUR([
+      output({ bucket: 'directLoss', valueEUR: 100_000, addressableShare: 0.15 }),
+    ]);
 
-  it('obstoječi uporabnik PANTHEON MF ima ožji potencial kot podjetje na Excelu', () => {
-    const outputs = [output({ bucket: 'directLoss', valueEUR: 100_000, addressableShare: 0.65 })];
-    const pantheon = computePotentialRange(outputs, improvementBandFor(PROIZVODNJA, 'pantheonMfMt'));
-    const excel = computePotentialRange(outputs, improvementBandFor(PROIZVODNJA, 'excelPaper'));
-
-    expect(pantheon.maxEUR).toBeLessThan(excel.maxEUR);
-  });
-
-  it('logistika ima svoje sisteme in svoj najnižji pas za podjetje z namenskim sistemom', () => {
-    const logistika = getSegmentContext('logistika')!;
-    const outputs = [output({ bucket: 'directLoss', valueEUR: 100_000, addressableShare: 0.65 })];
-    const withSystem = computePotentialRange(outputs, improvementBandFor(logistika, 'pantheonWmsTms'));
-    const excel = computePotentialRange(outputs, improvementBandFor(logistika, 'excelPaper'));
-
-    expect(withSystem.maxEUR).toBeLessThan(excel.maxEUR);
-    // Proizvodni id v logistiki ne sme tiho ujeti nobene možnosti — pas mora
-    // pasti na varovalo, ne na napačno dejavnost.
-    expect(improvementBandFor(logistika, 'pantheonMfMt')).toEqual(improvementBandFor(logistika, null));
+    expect(withData).toBeCloseTo(75_000, 6);
+    expect(withPhysical).toBeCloseTo(15_000, 6);
   });
 });
 
@@ -442,22 +403,16 @@ describe('assessConfidence', () => {
 });
 
 describe('aggregateResults', () => {
-  it('brez pasu izboljšave potenciala ne izračuna — kartica se ne prikaže', () => {
-    const totals = aggregateResults([
-      output({ bucket: 'directLoss', valueEUR: 10_000, addressableShare: 0.75 }),
-    ]);
-    expect(totals.potential).toBeUndefined();
-    expect(totals.confidence).toBeUndefined();
-    expect(totals.directLossEUR).toBe(10_000);
-  });
+  /** Isti proizvodni scenarij za vse spodnje trditve. */
+  const PROIZVODNI_VNOSI = {
+    planiranje: { waitingHoursPerMonth: 100, mainCause: 0 },
+    material: { annualMaterialSpendEUR: 1_000_000, scrapSharePercent: 0.03, mainCause: 0 },
+  };
 
-  it('sešteje koše in doda potencial, kadar je pas podan', () => {
-    const outputs = computeModules(
+  const proizvodniIzidi = () =>
+    computeModules(
       [planiranje, material],
-      {
-        planiranje: { waitingHoursPerMonth: 100, mainCause: 0 },
-        material: { annualMaterialSpendEUR: 1_000_000, scrapSharePercent: 0.03, mainCause: 0 },
-      },
+      PROIZVODNI_VNOSI,
       // Prihodek in marža v tem scenariju ne nastopata (planiranje in material ju ne
       // berete), zato 0 — izmišljen promet bi v vsoto vnesel znesek brez podlage.
       {
@@ -470,17 +425,61 @@ describe('aggregateResults', () => {
       },
     );
 
-    const totals = aggregateResults(outputs, {
-      band: improvementBandFor(PROIZVODNJA, 'excelPaper'),
+  it('brez stikala potenciala ne izračuna — kartica se ne prikaže', () => {
+    const totals = aggregateResults([
+      output({ bucket: 'directLoss', valueEUR: 10_000, addressableShare: 0.75 }),
+    ]);
+    expect(totals.addressablePotentialEUR).toBeUndefined();
+    expect(totals.confidence).toBeUndefined();
+    expect(totals.directLossEUR).toBe(10_000);
+  });
+
+  it('sešteje koše in doda potencial, kadar segment potencial pozna', () => {
+    const totals = aggregateResults(proizvodniIzidi(), {
+      includePotential: true,
       confidence: 'medium',
     });
 
     expect(totals.directLossEUR).toBeGreaterThan(0);
     expect(totals.capacityEUR).toBeGreaterThan(0);
-    expect(totals.potential!.minEUR).toBeGreaterThan(0);
-    expect(totals.potential!.minEUR).toBeLessThan(totals.potential!.maxEUR);
-    expect(totals.potential!.maxEUR).toBeLessThan(totals.directLossEUR + totals.capacityEUR);
+    expect(totals.addressablePotentialEUR!).toBeGreaterThan(0);
+    // Potencial je del izmerjenega stroška, nikoli njegov presežek.
+    expect(totals.addressablePotentialEUR!).toBeLessThan(totals.directLossEUR + totals.capacityEUR);
     expect(totals.confidence).toBe('medium');
+  });
+
+  it('odgovor o sedanjem sistemu naslovljivega potenciala ne spremeni', () => {
+    // Varovalo proti vrnitvi dvojnega diskonta. Vrzel sedanjega sistema (SystemGap)
+    // ostane vprašana, a je prodajni signal za kvalifikacijo — v evre ne vstopa.
+    // Podjetje na Excelu in podjetje s PANTHEON MF pri istem izmerjenem strošku in
+    // istem glavnem vzroku vidita isti znesek; razlikuje ju kvalifikacija, ne številka.
+    const outputs = proizvodniIzidi();
+    // Urna postavka kot izbran pas, da razpon sploh nastane — brez tega bi
+    // buildTotalsRange vrnil null in trditev o razponu ne bi ničesar preverila.
+    const izbranPas: Partial<BusinessProfile> = {
+      operationalHour: { valueEUR: 22, estimated: true, source: 'band', bandId: '20do25' },
+    };
+
+    const potencialiPoSistemu = ['excelPaper', 'pantheonMfMt', null].map((currentSystem) => ({
+      currentSystem,
+      potentialEUR: aggregateResults(outputs, { includePotential: true }).addressablePotentialEUR!,
+      range: buildTotalsRange({
+        modules: [planiranje, material],
+        values: PROIZVODNI_VNOSI,
+        profile: { ...emptyProfileFor(PROIZVODNJA), ...izbranPas, currentSystem },
+        context: PROIZVODNJA,
+        includePotential: true,
+      })?.potential,
+    }));
+
+    const [excel, ...ostali] = potencialiPoSistemu;
+    expect(excel.potentialEUR).toBeGreaterThan(0);
+    // Brez tega bi bila spodnja primerjava razponov prazna (undefined === undefined).
+    expect(excel.range!.minEUR).toBeLessThan(excel.range!.maxEUR);
+    for (const drugi of ostali) {
+      expect(drugi.potentialEUR, `sistem ${drugi.currentSystem}`).toBeCloseTo(excel.potentialEUR, 6);
+      expect(drugi.range, `razpon za sistem ${drugi.currentSystem}`).toEqual(excel.range);
+    }
   });
 });
 

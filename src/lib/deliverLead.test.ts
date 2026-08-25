@@ -6,7 +6,7 @@ import { computeModules, findHighestModule, resolveInputs } from './moduleEngine
 import { aggregateResults, assessConfidence, buildComputeContext } from './potential';
 import { getModules } from '../config/modules';
 import { SEGMENTS } from '../config/segments';
-import { emptyProfileFor, getSegmentContext, improvementBandFor } from '../config/contexts';
+import { emptyProfileFor, getSegmentContext } from '../config/contexts';
 
 /**
  * Pravilo, ki ga varuje ta test: KAM GRE PRODAJNA PRIPRAVA.
@@ -31,7 +31,7 @@ function scenario(): DeliverLeadInput {
 
   const outputs = computeModules(modules, values, buildComputeContext(profile));
   const totals = aggregateResults(outputs, {
-    band: context ? improvementBandFor(context, profile.currentSystem) : undefined,
+    includePotential: context !== undefined,
     confidence: context
       ? assessConfidence({ profile, context, modules, values, outputs })
       : undefined,

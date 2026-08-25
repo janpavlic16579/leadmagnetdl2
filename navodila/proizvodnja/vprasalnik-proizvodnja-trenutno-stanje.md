@@ -39,9 +39,9 @@ Ključna ločnica: **10 področij se oceni v triaži, podrobna vprašanja dobiš
 Po naročilu · Serijsko · Na zalogo · Projektno · Kombinirano
 → *Danes ne vpliva na nič razen na oznako v prodajnem poročilu.*
 
-**V3.2 — Kako danes vodite proizvodnjo?** ← edino vprašanje, ki določa pas izboljšave
+**V3.2 — Kako danes vodite proizvodnjo?** ← prodajni signal (vrzel sistema); v izračun ne vstopa
 
-| Odgovor | Pas izboljšave | PANTHEON? |
+| Odgovor | Vrzel sistema | PANTHEON? |
 |---|---|---|
 | PANTHEON MF in/ali MT | 8–20 % | da |
 | PANTHEON brez proizvodnega modula | 15–30 % | da |
@@ -354,7 +354,7 @@ Brez evrov namenoma: kjer podjetje nima kalkulacije ali sledljivosti, natančneg
 Brez vprašanj. Sestava zaslona:
 
 1. **Naslovni znesek** = samo `directLoss` (⚠ kdor izbere Plan + Delovne naloge, vidi **0 EUR**); ob nizki zanesljivosti pred vsakim zneskom **»najmanj«**
-2. **Realistični potencial** = Σ (znesek × naslovljivi delež) × pas izboljšave
+2. **Ocenjen naslovljiv potencial** = Σ (znesek × naslovljivi delež) — en sam koeficient
 3. Razčlenitev po področjih (neposredne izgube + enkratni kapital)
 4. Kje se izgublja kapaciteta (ure + EUR)
 5. Podatki in procesna tveganja

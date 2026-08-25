@@ -86,18 +86,18 @@ export const MALOPRODAJA_CONTEXT: SegmentContext = {
       {
         id: 'pantheonRetail',
         label: 'PANTHEON z maloprodajnim modulom (POS)',
-        band: { min: 0.08, max: 0.2 },
+        gap: { min: 0.08, max: 0.2 },
         isPantheon: true,
       },
       {
         id: 'pantheonNoRetail',
         label: 'PANTHEON brez maloprodajnega modula',
-        band: { min: 0.15, max: 0.3 },
+        gap: { min: 0.15, max: 0.3 },
         isPantheon: true,
       },
-      { id: 'otherRetailSystem', label: 'Drug maloprodajni sistem, povezan z zalogami', band: { min: 0.15, max: 0.3 } },
-      { id: 'posNoStockLink', label: 'Blagajna, ki ni povezana z zalogami', band: { min: 0.25, max: 0.4 } },
-      { id: 'excelPaper', label: 'Večinoma Excel, papir ali sprotni dogovor', band: { min: 0.25, max: 0.4 } },
+      { id: 'otherRetailSystem', label: 'Drug maloprodajni sistem, povezan z zalogami', gap: { min: 0.15, max: 0.3 } },
+      { id: 'posNoStockLink', label: 'Blagajna, ki ni povezana z zalogami', gap: { min: 0.25, max: 0.4 } },
+      { id: 'excelPaper', label: 'Večinoma Excel, papir ali sprotni dogovor', gap: { min: 0.25, max: 0.4 } },
     ],
   },
 

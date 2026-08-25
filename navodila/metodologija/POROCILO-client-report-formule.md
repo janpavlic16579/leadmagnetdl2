@@ -24,7 +24,7 @@ flowchart TD
     C1 --> H["SKUPAJ NA LETO<br/>= koš 1 + koš 2 + koš 3"]
     C2 --> H
     C3 --> H
-    C1 --> P["POTENCIAL IZBOLJŠAVE<br/>= Σ(postavka × naslovljiv delež) × pas izboljšave"]
+    C1 --> P["NASLOVLJIV POTENCIAL<br/>= Σ(postavka × naslovljiv delež)"]
     C2 --> P
     C3 --> P
 ```
@@ -38,7 +38,7 @@ flowchart TD
 | Nezaslužena letna marža | »To je posel, do katerega ni prišlo. Denar ni odtekel, zato ga prikažemo ločeno in ga ni mogoče ovreči skupaj z dokazljivim delom.« |
 | Vrednost izgubljene kapacitete | »To NI prihranek pri plačah — zaposleni ostane. Je vrednost ur, ki bi jih lahko usmerili v delo, ki prinaša denar.« |
 | Sprostljiv obratni kapital | »Enkraten učinek: denar, ki leži v presežni zalogi. Zato se z letnimi zneski nikoli ne sešteva.« |
-| Realistični potencial izboljšave | »Ne obljubljamo, da izgine vse. Vzamemo samo delež, ki ga po vašem lastnem odgovoru povzročajo procesi in podatki, in ga pomnožimo s konservativnim pasom glede na sistem, ki ga danes uporabljate.« |
+| Ocenjen naslovljiv potencial | »Ne obljubljamo, da izgine vse. Najprej izmerimo celoten strošek, nato enkrat ocenimo, kolikšen del je po vašem lastnem odgovoru o glavnem vzroku realistično mogoče odpraviti. Vzrok v podatkih je naslovljiv v 75 %, okvara stroja v 15 %.« |
 
 ---
 
@@ -50,7 +50,7 @@ flowchart TD
 | Pokritost (»Izmerjeno 3 od 10 področij«) | ✓ | ✓ | `ResultsView.tsx` (`measuredCount`), `pdf.ts` (`coverage`) |
 | Oznaka zanesljivosti | ✓ | ✓ | `src/lib/potential.ts` (`assessConfidence`) |
 | Štiri kartice (izguba, marža, kapaciteta, kapital) | ✓ | ✓ | `src/components/Results/ResultsSummary.tsx` |
-| Realistični potencial izboljšave | ✓ | ✓ | `potential.ts:38` (`computePotentialRange`) |
+| Ocenjen naslovljiv potencial | ✓ | ✓ | `potential.ts` (`computeAddressablePotentialEUR`) |
 | Graf po področjih | ✓ | ✓ | `BreakdownChart.tsx`, `pdf.ts` (`drawBreakdownChart`) |
 | Razčlenitev po področjih (postavke z zneski) | ✓ | ✓ | `Breakdown.tsx`, `pdf.ts` (`drawResultsTable`) |
 | »Prikaži izračun« (formula + strankine številke) | ✓ | **✗** | `MethodologyToggle.tsx`, besedila `content/methodology.ts` |
@@ -148,22 +148,34 @@ SKUPAJ = neposredna izguba + nezaslužena marža + izgubljena kapaciteta
 | Sprostljiv obratni kapital | Σ koša `oneTimeCapital` | skrije se pod 100 EUR; ne sešteva se |
 | +X strank (samo računovodstvo) | Σ sproščenih ur / povprečne ure na stranko (vpraša jih `donosnostRs`; rezerva 8 h/mesec — `segments.ts:249`) | `calculations.ts` — `calculateAccountingCapacity` |
 
-### 5.3 Realistični potencial izboljšave
+### 5.3 Ocenjen naslovljiv potencial
 
 ```
-potencial [min–max] = Σ čez letne postavke (znesek × naslovljiv delež)  ×  pas izboljšave
+naslovljiv potencial = Σ čez letne postavke (znesek × naslovljiv delež)
 ```
-- Vir: `potential.ts:38` (`computePotentialRange`).
+- Vir: `potential.ts` (`computeAddressablePotentialEUR`).
 - **Naslovljiv delež** pride iz odgovora »Kaj je glavni vzrok?« v vsakem področju (poglavje 6).
-- **Pas izboljšave** pride iz odgovora »Kako danes vodite …?« v koraku o podjetju (poglavje 7).
+  To je **edini** koeficient, ki zmanjša izmerjeni strošek.
 - Enkratni kapital je izpuščen — že sam JE potencial; množenje bi ga štelo dvakrat.
 
-**Delovni zgled:** postavka 10.000 EUR/leto, vzrok »podatki« (0,75), sistem »Excel in papir«
-(pas 0,25–0,40):
+**Delovni zgled:** postavka 10.000 EUR/leto, vzrok »podatki« (0,75):
 ```
-10.000 × 0,75 = 7.500 naslovljivih EUR
-potencial = 7.500 × 0,25 … 7.500 × 0,40 = 1.875 – 3.000 EUR letno
+naslovljiv potencial = 10.000 × 0,75 = 7.500 EUR letno
 ```
+
+**Kaj se je spremenilo (avgust 2026).** Doslej se je ta vsota množila še z »pasom izboljšave« iz
+odgovora o sedanjem sistemu:
+```
+STARO: 10.000 × 0,75 × [0,25 … 0,40] = 1.875 – 3.000 EUR letno
+```
+Naslovljiv delež in pas sta merila isto stvar — koliko problema je sploh odpravljivega — zato je bil
+isti problem zmanjšan dvakrat. Podjetju z ustreznim modulom PANTHEON je ostalo 600–1.500 EUR od
+10.000 EUR izgube. Odgovor o sedanjem sistemu ostane vprašan, a je odslej prodajni signal
+(»vrzel sistema«, poglavje 7) in v evre ne vstopa.
+
+**Prikaz.** Potencial je **točka** z oznako zanesljivosti (»7.500 EUR/leto, zanesljivost: srednja«),
+ne pas. Razpon se pokaže samo tam, kjer ga prinesejo izbrani pasovi skupnih predpostavk — urna
+postavka, prihodek, marža (`lib/range.ts`). Zanesljivost je oznaka in nikoli drug odbitek od zneska.
 
 ---
 
@@ -176,20 +188,32 @@ spada v eno kategorijo:
 |---|---:|---|
 | Podatki, normativi, ročni prenosi (`data`) | **0,75** | »Prenos podatkov med prodajo, nabavo in proizvodnjo je ročen« |
 | Planiranje, zaloge, vidnost (`planning`) | **0,65** | »Plan in kapacitete niso ažurni« |
-| Ljudje, odgovornosti, disciplina (`people`) | **0,45** | »Zalogo zavestno držimo kot varovalko« |
+| Ljudje: znanje, disciplina, kadrovska kapaciteta (`people`) | **0,45** | »Pomanjkanje usposabljanja« |
 | Zunanji dejavniki (`external`) | **0,25** | »Dobavitelji so nezanesljivi« |
 | Fizični vzroki (`physical`) | **0,15** | »Okvare strojev« |
 | »Ne vemo« (`unknown`, privzeto) | **0,30** | — |
 
 > KALIBRACIJA: deleži so začetne ocene iz specifikacije, ne empirija — preveriti po prvih ~50 vnosih
-> (opomba v isti datoteki).
+> (opomba v isti datoteki). Odkar so edini koeficient nad zneskom, gre napaka v njih naravnost v
+> prikazano številko.
+
+**Kategorija »Ljudje« je namenoma ozka.** Kadar ljudje grešijo, ker prepisujejo podatke, jih držijo v
+glavi ali delajo v nepovezanih sistemih, vzrok ni človek — je podatek oziroma proces, in takšna težava
+ob urejenem sistemu izgine. `people` velja samo za težave, ki bi ostale tudi ob dobro postavljenem
+sistemu: pomanjkanje usposabljanja, slaba disciplina, premalo ljudi, odsotnosti. Zato so vzroki kot
+»Odgovornosti niso jasne« in »Zalogo zavestno držimo kot varovalko« razvrščeni v `planning`, ne v
+`people`; »Le ena oseba ve, kje kaj je« pa v `data`.
 
 ---
 
-## 7. Pasovi izboljšave (odgovor »Kako danes vodite …?«)
+## 7. Vrzel sedanjega sistema (odgovor »Kako danes vodite …?«)
 
-Pas visi neposredno na možnosti sistema v `src/config/contexts/<panoga>.ts` — možnosti brez pasu ni
-mogoče dodati. Vzorec je pri vseh panogah enak, imena možnosti so panožna:
+**Prodajni signal, ne množitelj.** Do avgusta 2026 je bil to »pas izboljšave« in je množil že
+naslovljiv strošek (glej 5.3). Odslej ga hrani samo kvalifikacija: ocena ICP (`src/config/icp.ts`,
+dimenzija »priložnost«) in prodajni playbook. V evre ne vstopa.
+
+Vrzel visi neposredno na možnosti sistema v `src/config/contexts/<panoga>.ts` (`SystemOption.gap`) —
+možnosti brez nje ni mogoče dodati. Vzorec je pri vseh panogah enak, imena možnosti so panožna:
 
 | Sedanji sistem | Proizvodnja / Logistika / Veleprodaja / Maloprodaja / Storitve / Računovodstvo | Splošno |
 |---|---|---|
@@ -199,8 +223,8 @@ mogoče dodati. Vzorec je pri vseh panogah enak, imena možnosti so panožna:
 | Kombinacija ERP + Excel + papir | **0,25–0,40** | 0,20–0,35 |
 | Večinoma Excel, papir, telefon | **0,25–0,40** | 0,20–0,35 |
 
-Splošni segment ima ožje pasove namenoma: univerzalna vprašanja zajamejo strošek manj natančno
-(`src/config/contexts/splosno.ts:70–85`, README »Splošno«).
+Splošni segment ima ožje vrzeli namenoma: univerzalna vprašanja zajamejo strošek manj natančno
+(`src/config/contexts/splosno.ts`, README »Splošno«).
 
 ---
 
@@ -415,7 +439,7 @@ Edina panoga **brez enkratnega kapitala** (servis ne drži zaloge). Dve urni pos
 
 ### 9.7 Splošno (`src/config/modules/splosno.ts`)
 
-Za podjetja, ki se ne najdejo v nobeni panogi. Ožji pasovi izboljšave (poglavje 7).
+Za podjetja, ki se ne najdejo v nobeni panogi. Ožje vrzeli sedanjega sistema (poglavje 7).
 
 | Področje | Postavka | Koš | Formula |
 |---|---|:---:|---|

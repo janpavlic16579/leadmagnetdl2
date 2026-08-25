@@ -49,7 +49,8 @@ const NAROCILA_CAUSES: CauseOption[] = [
   { label: 'Naročila prihajajo v več različnih oblikah', category: 'data' },
   { label: 'Ceniki, rabati in pogodbeni pogoji niso na enem mestu', category: 'data' },
   { label: 'Podatki se ročno prepisujejo med orodji', category: 'data' },
-  { label: 'Odgovornosti pri potrjevanju cen niso jasne', category: 'people' },
+  // Potrjevanje cen je delovni tok, ki ga sistem določi — ne vprašanje discipline.
+  { label: 'Odgovornosti pri potrjevanju cen niso jasne', category: 'planning' },
   { label: 'Kupci pogosto spreminjajo naročila', category: 'external' },
 ];
 
@@ -311,7 +312,7 @@ const ZALOGE_CAUSES: CauseOption[] = [
   { label: 'Stanje zalog v sistemu ni zanesljivo', category: 'data' },
   { label: 'Nabava in prodaja nista usklajeni', category: 'planning' },
   { label: 'Dobavitelji so nezanesljivi ali imajo dolge roke', category: 'external' },
-  { label: 'Zalogo zavestno držimo kot varovalko', category: 'people' },
+  { label: 'Zalogo zavestno držimo kot varovalko', category: 'planning' },
 ];
 
 export const zalogeTrgovina: ModuleDefinition = {
@@ -422,6 +423,8 @@ const ODPREMA_CAUSES: CauseOption[] = [
   { label: 'Podatki o artiklih, količinah ali pakiranju niso zanesljivi', category: 'data' },
   { label: 'Odprema poteka brez preverjanja s črtno kodo', category: 'data' },
   { label: 'Naslovi in podatki o dostavi se prepisujejo ročno', category: 'data' },
+  // Ostaja people: manjkajočo kontrolo pokriva sosednja možnost o črtni kodi,
+  // ta pa opisuje napako kljub kontrolam in pomanjkanje usposabljanja.
   { label: 'Napake pri izvedbi oziroma pomanjkanje usposabljanja', category: 'people' },
   { label: 'Prevozniki in zunanje dostave', category: 'external' },
 ];

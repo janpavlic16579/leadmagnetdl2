@@ -278,7 +278,7 @@ export const NEUTRAL_COPY: ResolvedSegmentCopy = {
   context: {
     title: 'Nekaj o vašem podjetju',
     intro:
-      'Tri vprašanja, ki ne sprašujejo po številkah. Iz njih izpeljemo, koliko od izmerjenega stroška je realno mogoče nasloviti.',
+      'Tri vprašanja, ki ne sprašujejo po številkah. Iz njih izvemo, kako danes delate — to nam pove, o čem se je smiselno pogovoriti, in nam pomaga razumeti, zakaj stroški sploh nastajajo. V izračun zneskov ta odgovor ne vstopa.',
   },
 
   triage: {
@@ -339,11 +339,13 @@ export const NEUTRAL_COPY: ResolvedSegmentCopy = {
       shortNote: 'Enkraten učinek — z zneski zgoraj se ne sešteva.',
     },
     potential: {
-      title: 'Realistični potencial izboljšave',
+      title: 'Ocenjen naslovljiv potencial',
       // "ni obljuba prihranka" je ograda, ki mora preživeti vsak prepis — varuje
       // jo copy.test.ts. Brez nje se konservativna ocena bere kot zaveza.
-      note: 'Letno. Izpeljano iz glavnih vzrokov, ki ste jih navedli, in sistemov, ki jih danes uporabljate. Ni obljuba prihranka, ampak konservativen poslovni potencial, ki ga je mogoče preveriti na uvodnem sestanku.',
-      shortNote: 'Letno, konservativna ocena — ni obljuba prihranka.',
+      // Sistemi, ki jih podjetje danes uporablja, se tu namenoma ne omenjajo:
+      // v oceno vstopajo samo glavni vzroki, sicer bi bil diskont dvojen.
+      note: 'Letno. Del izmerjenega stroška, ki ga je po glavnih vzrokih, ki ste jih navedli, realno mogoče odpraviti. Ni obljuba prihranka, ampak konservativen poslovni potencial, ki ga je mogoče preveriti na uvodnem sestanku.',
+      shortNote: 'Letno, po glavnih vzrokih — konservativna ocena, ne obljuba prihranka.',
     },
   },
 

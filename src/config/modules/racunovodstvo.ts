@@ -47,7 +47,8 @@ const ZAJEM_CAUSES: CauseOption[] = [
   { label: 'Nimamo samodejnega zajema e-računov in bančnih izpiskov', category: 'data' },
   { label: 'Podatke vodimo v več ločenih programih', category: 'data' },
   { label: 'Stranke oddajajo listine neurejeno', category: 'external' },
-  { label: 'Delo ni standardizirano oziroma enakomerno razporejeno', category: 'people' },
+  // Standardizacija in razporejanje sta proces, ne lastnost ekipe.
+  { label: 'Delo ni standardizirano oziroma enakomerno razporejeno', category: 'planning' },
 ];
 
 export const zajemRs: ModuleDefinition = {
@@ -180,7 +181,8 @@ const STRANKE_CAUSES: CauseOption[] = [
   { label: 'Nimamo portala oziroma samopostrežnega vpogleda za stranke', category: 'data' },
   { label: 'Obveznosti in roki po stranki niso nikjer sledeni', category: 'planning' },
   { label: 'Stranke se ne držijo dogovorov', category: 'external' },
-  { label: 'Odgovornost za posamezno stranko ni jasno določena', category: 'people' },
+  // Dodelitev strank je procesna nastavitev sistema.
+  { label: 'Odgovornost za posamezno stranko ni jasno določena', category: 'planning' },
 ];
 
 export const strankeRs: ModuleDefinition = {

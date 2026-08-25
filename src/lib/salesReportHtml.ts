@@ -130,15 +130,12 @@ function subsectionTheirInfo(report: SalesReport): string {
       ),
     );
   }
-  if (s.potentialMinEUR !== undefined && s.potentialMaxEUR !== undefined) {
+  if (s.addressablePotentialEUR !== undefined) {
     cards.push(
       card(
-        'Realistični potencial',
-        formatEURRange(
-          s.rangeEUR?.potential?.minEUR ?? s.potentialMinEUR,
-          s.rangeEUR?.potential?.maxEUR ?? s.potentialMaxEUR,
-        ),
-        'Letno, konservativno — ni obljuba',
+        'Naslovljiv potencial',
+        value(s.addressablePotentialEUR, s.rangeEUR?.potential),
+        'Letno, po glavnih vzrokih — ni obljuba',
       ),
     );
   }
@@ -285,7 +282,7 @@ function sectionIcp(report: SalesReport): string {
 
 function sectionQualification(report: SalesReport): string {
   const q = report.qualification;
-  const band = `${formatPercent(q.improvementBand.min)} – ${formatPercent(q.improvementBand.max)}`;
+  const band = `${formatPercent(q.systemGap.min)} – ${formatPercent(q.systemGap.max)}`;
 
   const rows: [string, string][] = [
     // Kontakt gre na vrh: svetovalec najprej potrebuje, koga pokliče.
@@ -300,7 +297,7 @@ function sectionQualification(report: SalesReport): string {
     ['Pretežno dela', q.businessTypeLabel ?? '—'],
     ['Sedanji sistem', q.currentSystemLabel ?? '—'],
     ['Obstoječi uporabnik PANTHEON', q.isPantheonCustomer ? 'Da' : 'Ne'],
-    ['Pas realistične izboljšave', band],
+    ['Vrzel sedanjega sistema (prodajni signal)', `${band} — v izračun ne vstopa`],
     ['Vir obiska', report.meta.utmSource ?? 'neposredno'],
     // Tri ločene vrstice in ne ena združena: revizijsko vprašanje je "ali je
     // privolil v trženje?", na kar skupna celica ne odgovori.

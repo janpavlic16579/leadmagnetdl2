@@ -2,9 +2,9 @@ import type {
   AssumptionSource,
   SegmentContext,
   BusinessProfile,
-  ImprovementBand,
+  SystemGap,
 } from '../config/contexts';
-import { improvementBandFor, isTechnicalRiskModuleVisible } from '../config/contexts';
+import { systemGapFor, isTechnicalRiskModuleVisible } from '../config/contexts';
 import { getSegmentCopy } from '../config/copy';
 import { getIndustryLabel } from '../config/industries';
 import type { ModuleDefinition, ModuleOutput } from '../config/modules/moduleTypes';
@@ -90,7 +90,7 @@ export interface SalesReportQualification {
   currentSystemLabel: string | null;
   /** Od tega je odvisno, ali so tehnična opozorila (ZIERDED, SQL Server) sploh smiselna. */
   isPantheonCustomer: boolean;
-  improvementBand: ImprovementBand;
+  systemGap: SystemGap;
   followUpSequence: FollowUpSequence;
 }
 
@@ -107,8 +107,8 @@ export interface SalesReportSummary {
   rangeEUR: TotalsRange | null;
   capacityHoursPerMonth: number;
   oneTimeCapitalEUR: number;
-  potentialMinEUR?: number;
-  potentialMaxEUR?: number;
+  /** Točka; razpon prinesejo izbrani pasovi predpostavk prek `rangeEUR.potential`. */
+  addressablePotentialEUR?: number;
   confidence?: ConfidenceLevel;
   /** Zakaj ta oznaka — brez tega je "nizka zanesljivost" očitek brez naslova. */
   confidenceReason: string;
@@ -299,7 +299,7 @@ export function buildSalesReport(params: BuildSalesReportParams): SalesReport {
       businessTypeLabel: contextOptionLabel(context?.businessType, profile.businessType),
       currentSystemLabel: contextOptionLabel(context?.currentSystem, profile.currentSystem),
       isPantheonCustomer: isPantheonCustomer(context, profile.currentSystem),
-      improvementBand: improvementBandFor(context, profile.currentSystem),
+      systemGap: systemGapFor(context, profile.currentSystem),
       followUpSequence: params.followUpSequence,
     },
 
@@ -310,8 +310,7 @@ export function buildSalesReport(params: BuildSalesReportParams): SalesReport {
       rangeEUR: params.totalsRange ?? null,
       capacityHoursPerMonth: params.totals.capacityHoursPerMonth,
       oneTimeCapitalEUR: params.totals.oneTimeCapitalEUR,
-      potentialMinEUR: params.totals.potential?.minEUR,
-      potentialMaxEUR: params.totals.potential?.maxEUR,
+      addressablePotentialEUR: params.totals.addressablePotentialEUR,
       confidence: params.totals.confidence,
       confidenceReason: buildConfidenceReason(params),
     },
@@ -372,7 +371,7 @@ function buildIcpSignals(
 
   return {
     employeeCount: params.employeeCount,
-    improvementBandMax: base.qualification.improvementBand.max,
+    systemGapMax: base.qualification.systemGap.max,
     isPantheonCustomer: base.qualification.isPantheonCustomer,
     roleId: params.profile.role,
     measuredLossEUR:

@@ -59,18 +59,18 @@ export const LOGISTIKA_CONTEXT: SegmentContext = {
       {
         id: 'pantheonWmsTms',
         label: 'PANTHEON in namenski skladiščni oziroma transportni sistem',
-        band: { min: 0.08, max: 0.2 },
+        gap: { min: 0.08, max: 0.2 },
         isPantheon: true,
       },
       {
         id: 'pantheonNoWms',
         label: 'PANTHEON brez namenskega logističnega sistema',
-        band: { min: 0.15, max: 0.3 },
+        gap: { min: 0.15, max: 0.3 },
         isPantheon: true,
       },
-      { id: 'otherErp', label: 'Drug ERP ali namenski logistični sistem', band: { min: 0.15, max: 0.3 } },
-      { id: 'erpExcelPaper', label: 'Kombinacija ERP-ja, Excela in papirja', band: { min: 0.25, max: 0.4 } },
-      { id: 'excelPaper', label: 'Večinoma Excel, papir ali telefon', band: { min: 0.25, max: 0.4 } },
+      { id: 'otherErp', label: 'Drug ERP ali namenski logistični sistem', gap: { min: 0.15, max: 0.3 } },
+      { id: 'erpExcelPaper', label: 'Kombinacija ERP-ja, Excela in papirja', gap: { min: 0.25, max: 0.4 } },
+      { id: 'excelPaper', label: 'Večinoma Excel, papir ali telefon', gap: { min: 0.25, max: 0.4 } },
     ],
   },
 

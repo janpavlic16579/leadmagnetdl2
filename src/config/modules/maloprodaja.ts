@@ -202,7 +202,7 @@ const ZALOGE_CAUSES: CauseOption[] = [
   { label: 'Naročamo preveč, ker podatkov o obračanju nimamo', category: 'planning' },
   { label: 'Artiklov brez prodaje ne opazimo pravočasno', category: 'data' },
   { label: 'Roki uporabnosti in serije niso sproti vidni', category: 'data' },
-  { label: 'Zalogo zavestno držimo kot varovalko', category: 'people' },
+  { label: 'Zalogo zavestno držimo kot varovalko', category: 'planning' },
   { label: 'Dobavitelji zahtevajo velike minimalne količine', category: 'external' },
 ];
 
@@ -327,6 +327,8 @@ const MARZE_CAUSES: CauseOption[] = [
   { label: 'Cenike in akcije vzdržujemo ročno', category: 'data' },
   { label: 'Dobaviteljski pogoji niso zapisani na enem mestu', category: 'data' },
   { label: 'Marže po artiklu ne spremljamo sproti', category: 'planning' },
+  // Ostaja people: ročno vzdrževanje cenikov je svoja možnost (data),
+  // ta pa opisuje napako pri vnosu, ki ostane tudi ob urejenem ceniku.
   { label: 'Napake pri vnosu cen ali na blagajni', category: 'people' },
   { label: 'Dobavitelji cene spreminjajo brez najave', category: 'external' },
 ];
@@ -464,6 +466,8 @@ export const marzeMp: ModuleDefinition = {
 const BLAGAJNA_CAUSES: CauseOption[] = [
   { label: 'Prevzem in odpis nista evidentirana sproti', category: 'data' },
   { label: 'Zaloga v sistemu se ne ujema z dejansko', category: 'data' },
+  // Ostaja people: neujemanje zaloge in neevidentiran prevzem sta svoji možnosti,
+  // ta pa opisuje napako pri delu, ki je sistem težko prepreči.
   { label: 'Napake pri delu na blagajni', category: 'people' },
   { label: 'Kraja kupcev ali zunanjih oseb', category: 'external' },
   { label: 'Poškodbe blaga pri rokovanju ali skladiščenju', category: 'physical' },
@@ -598,7 +602,7 @@ const PREVZEM_CAUSES: CauseOption[] = [
   { label: 'Podatke vodimo v več različnih orodjih', category: 'data' },
   { label: 'Prevzem se ne opravi sproti', category: 'data' },
   { label: 'Prenosi med enotami niso dosledno evidentirani', category: 'data' },
-  { label: 'Odgovornosti niso jasne', category: 'people' },
+  { label: 'Odgovornosti niso jasne', category: 'planning' },
   { label: 'Dobavitelji dokumentov ne pošiljajo elektronsko', category: 'external' },
 ];
 
@@ -706,7 +710,8 @@ const KANALI_CAUSES: CauseOption[] = [
   { label: 'Artikle in cene vzdržujemo ločeno za vsak kanal', category: 'data' },
   { label: 'Zaloga za splet ni sproti vidna', category: 'planning' },
   { label: 'Prenos naročil med sistemoma je ročen', category: 'data' },
-  { label: 'Za spletno prodajo ni izrecno zadolžen nihče', category: 'people' },
+  // Integracija kanalov odpravi ročno breme; zadolžitev je posledica, ne vzrok.
+  { label: 'Za spletno prodajo ni izrecno zadolžen nihče', category: 'planning' },
   { label: 'Omejitve ponudnika spletne trgovine', category: 'external' },
 ];
 
