@@ -86,7 +86,7 @@ function preloadFonts(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/leadmagnetdl/',
+  base: '/leadmagnetdl2/',
   plugins: [react(), canonicalUrl(), preloadFonts()],
   server: {
     port: process.env.PORT ? Number(process.env.PORT) : 5173,
