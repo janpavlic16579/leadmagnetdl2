@@ -1,4 +1,5 @@
 import { addressableShareOf, mainCauseField, type CauseOption } from './addressableShare';
+import { UNANSWERED_CHOICE } from './moduleTypes';
 import type { ModuleDefinition, RiskLevel } from './moduleTypes';
 import {
   ASSURANCE_CHOICES,
@@ -234,7 +235,7 @@ export const strankeRs: ModuleDefinition = {
       key: 'deliveryMethod',
       label: 'Kako stranke danes oddajajo listine?',
       kind: 'choice',
-      default: 2,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       choices: [
         { value: 0, label: 'Prek portala ali samodejne izmenjave' },
@@ -353,7 +354,7 @@ export const obracuniRs: ModuleDefinition = {
       key: 'closingProcess',
       label: 'Kako pripravljate mesečne obračune?',
       kind: 'choice',
-      default: 2,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       choices: [
         { value: 0, label: 'Samodejno iz programa' },

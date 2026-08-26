@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SEGMENTS, type SegmentId } from '../../config/segments';
 import { getModules } from '../../config/modules';
 import {
@@ -15,6 +15,7 @@ import {
   findHighestModule,
   groupByModule,
   isModuleAnswered,
+  modulesMissingMainCause,
   resolveActiveModules,
   resolveInputs,
   selectTopModules,
@@ -22,6 +23,11 @@ import {
   type TriageScores,
 } from '../../lib/moduleEngine';
 import { aggregateResults, assessConfidence, buildComputeContext } from '../../lib/potential';
+import {
+  collectConfidenceSignals,
+  confidenceReasonPdf,
+  confidenceReasonScreen,
+} from '../../lib/confidenceReason';
 import { buildTotalsRange } from '../../lib/range';
 import { assessHoursPlausibility, hoursPlausibilityWarning } from '../../lib/plausibility';
 import { selectFollowUpSequence } from '../../lib/followUp';
@@ -30,6 +36,7 @@ import { track } from '../../lib/analytics';
 import { deliverLead, loadDeliveryModules } from '../../lib/deliverLead';
 import { clearProgress, readProgress, saveProgress } from '../../lib/progressStorage';
 import type { DownloadFile } from '../../lib/download';
+import type { ModuleDefinition } from '../../config/modules/moduleTypes';
 import type { SalesReport } from '../../lib/salesReport';
 import type {
   BasicInfo,
@@ -38,6 +45,7 @@ import type {
   LeadContact,
   ModuleInputsState,
 } from '../../types';
+import shellStyles from './StepShell.module.css';
 import { StepIndustry } from './StepIndustry';
 import { StepEmployeeCount } from './StepEmployeeCount';
 import { StepContext } from './StepContext';
@@ -201,22 +209,64 @@ export function CalculatorFlow({
    * za "nazaj" hkrati najbolj poguben: obiskovalca je odnesel s strani, s tem pa
    * je izginil ves vprašalnik.
    */
+  /**
+   * Interni "Nazaj" mora iti SKOZI zgodovino, ne mimo nje.
+   *
+   * Prej je klical setStep, učinek spodaj pa je ob vsaki spremembi koraka dodal
+   * nov vnos — po enem internem "Nazaj" je bila zgodovina [1,2,3,2] in brskalnikov
+   * "Nazaj" (na telefonu gib "swipe back") je obiskovalca peljal NAPREJ.
+   * Zdaj interni "Nazaj" kliče history.back(), korak pa nastavi popstate — oba
+   * "Nazaj" tako premikata isti kazalec.
+   *
+   * lm10Idx šteje globino naših vnosov: pove, ali pod trenutnim sploh obstaja naš
+   * vnos. Brez njega bi history.back() v svežem zavihku z obnovljeno sejo (en sam
+   * vnos) odnesel obiskovalca s strani — takrat se korak nastavi neposredno, vnos
+   * pa NADOMESTI (replace), da ne nastane past za naprej.
+   */
+  const replaceNextHistoryRef = useRef(false);
   useEffect(() => {
     const state = window.history.state as {
       lm10Step?: FlowStep;
       lm10InputsModuleId?: string | null;
+      lm10Idx?: number;
     } | null;
     // Tudi inputsModuleId in ne le step: korak z vnosi je ena stran na področje,
     // zato bi sicer vsa področja delila en vnos v zgodovini in bi "Nazaj" s
     // tretjega področja skočil na finančno osnovo.
     const unchanged =
       state?.lm10Step === step && (state?.lm10InputsModuleId ?? null) === inputsModuleId;
-    if (unchanged) return;
+    if (unchanged) {
+      replaceNextHistoryRef.current = false;
+      return;
+    }
 
-    // Prvi korak samo označimo (replace), da v zgodovini ne nastane prazen vnos.
-    const method = state?.lm10Step ? 'pushState' : 'replaceState';
-    window.history[method]({ lm10Step: step, lm10InputsModuleId: inputsModuleId }, '');
+    // Prvi korak samo označimo (replace), da v zgodovini ne nastane prazen vnos;
+    // replace velja tudi za rezervno pot internega "Nazaj" (glej navigateBack).
+    const usePush = Boolean(state?.lm10Step) && !replaceNextHistoryRef.current;
+    replaceNextHistoryRef.current = false;
+    window.history[usePush ? 'pushState' : 'replaceState'](
+      {
+        lm10Step: step,
+        lm10InputsModuleId: inputsModuleId,
+        lm10Idx: usePush ? (state?.lm10Idx ?? 0) + 1 : (state?.lm10Idx ?? 0),
+      },
+      '',
+    );
   }, [step, inputsModuleId]);
+
+  /**
+   * Korak nazaj: skozi zgodovino, kadar pod trenutnim vnosom obstaja naš vnos;
+   * sicer rezervna pot z nadomestitvijo vnosa (svež zavihek z obnovljeno sejo).
+   */
+  const navigateBack = (fallback: () => void) => {
+    const state = window.history.state as { lm10Idx?: number } | null;
+    if ((state?.lm10Idx ?? 0) > 0) {
+      window.history.back();
+      return;
+    }
+    replaceNextHistoryRef.current = true;
+    fallback();
+  };
 
   useEffect(() => {
     const onPopState = (event: PopStateEvent) => {
@@ -307,19 +357,45 @@ export function CalculatorFlow({
    * Številčenje korakov. stepOrder šteje vnose kot EN korak, obiskovalec pa jih
    * prehodi toliko, kolikor je področij — zato se skupno število razširi in vsaka
    * stran vnosov dobi svojo številko. Ena funkcija, da aritmetika ne zaide v JSX.
+   *
+   * Uvodni zaslon se NE šteje: števca namenoma nima (je prvi vtis), zato je bil
+   * prvi števec, ki ga je obiskovalec videl, "Korak 2 od 10" — vtis, da je nekaj
+   * zamudil. Štetje se zdaj začne s prvim oštevilčenim zaslonom.
    */
   const inputsAt = stepOrder.indexOf('inputs');
-  const totalSteps = stepOrder.length - 1 + inputPages.length;
+  const totalSteps = stepOrder.length - 2 + inputPages.length;
   const stepNumber = (current: FlowStep, pageIndex = 0) => {
     const index = stepOrder.indexOf(current);
-    if (index < inputsAt) return index + 1;
-    if (current === 'inputs') return inputsAt + 1 + pageIndex;
+    if (index < inputsAt) return index;
+    if (current === 'inputs') return inputsAt + pageIndex;
     // Rezultati in vse za njimi: vnosi so pojedli inputPages.length mest namesto enega.
-    return index + inputPages.length;
+    return index - 1 + inputPages.length;
   };
 
   const stepLabel = (current: FlowStep, pageIndex = 0) =>
     `Korak ${stepNumber(current, pageIndex)} od ${totalSteps}`;
+
+  /**
+   * Vizualna vrstica napredka nad korakom. Besedilni števec je bil doslej edini
+   * signal napredovanja — 14 px verzalna vrstica, ki je pri devetih in več
+   * korakih premalo za občutek "sem že skoraj tam", ta občutek pa drži ljudi v
+   * lijaku. Uvodni zaslon je brez nje iz istega razloga, kot je brez števca.
+   */
+  const progressBar = (current: FlowStep, pageIndex = 0) => (
+    <div
+      className={shellStyles.progressTrack}
+      role="progressbar"
+      aria-valuemin={1}
+      aria-valuemax={totalSteps}
+      aria-valuenow={stepNumber(current, pageIndex)}
+      aria-label={`Napredek: korak ${stepNumber(current, pageIndex)} od ${totalSteps}`}
+    >
+      <div
+        className={shellStyles.progressFill}
+        style={{ width: `${Math.round((stepNumber(current, pageIndex) / totalSteps) * 100)}%` }}
+      />
+    </div>
+  );
   const goNext = (current: FlowStep) => () => {
     const next = stepOrder[stepOrder.indexOf(current) + 1];
     // Naprej v vnose se vedno začne na prvem področju — ne glede na to, kateri korak
@@ -327,7 +403,8 @@ export function CalculatorFlow({
     if (next === 'inputs') setInputsModuleId(null);
     setStep(next);
   };
-  const goBack = (current: FlowStep) => () => setStep(stepOrder[stepOrder.indexOf(current) - 1]);
+  const goBack = (current: FlowStep) => () =>
+    navigateBack(() => setStep(stepOrder[stepOrder.indexOf(current) - 1]));
 
   /** Vstop v vnose od zadaj (z rezultatov) pristane na zadnji strani — pravi inverz. */
   const openInputsAt = (moduleId: string | null) => {
@@ -367,6 +444,23 @@ export function CalculatorFlow({
     [outputs, context, profile, activeModules, resolvedValues],
   );
 
+  /**
+   * Razlog nizke zanesljivosti — za zaslon in strankin PDF iz istih signalov
+   * (lib/confidenceReason.ts). Splošno besedilo registra pravi "podatki
+   * manjkajo", kar je napačno, kadar so vsa polja vnesena in sta le urni
+   * postavki panožna ocena — najpogostejša pot do nizke ocene.
+   */
+  const confidenceReasons = useMemo(() => {
+    if (!context || totals.confidence !== 'low') return { screen: null, pdf: null };
+    const signals = collectConfidenceSignals({
+      context,
+      profile,
+      modules: activeModules,
+      values: resolvedValues,
+    });
+    return { screen: confidenceReasonScreen(signals), pdf: confidenceReasonPdf(signals) };
+  }, [context, profile, activeModules, resolvedValues, totals.confidence]);
+
   const highestModule = findHighestModule(outputs, segment.moduleIds);
 
   /**
@@ -398,6 +492,26 @@ export function CalculatorFlow({
         assessHoursPlausibility(activeModules, resolvedValues, basicInfo.employeeCount),
       ),
     [activeModules, resolvedValues, basicInfo.employeeCount],
+  );
+
+  /**
+   * Področja TE STRANI z vnesenim zneskom, a brez izbranega glavnega vzroka.
+   *
+   * Vzrok je edini koeficient nad izmerjenim zneskom, zato je klik nanj vreden
+   * opozorila — a le tam, kjer znesek sploh obstaja. Omejeno na stran, ker bi
+   * očitek o polju, ki ga obiskovalec trenutno ne vidi, samo zmedel. Kot vse na
+   * tem koraku je mehko: gumb "Naprej" ostane omogočen.
+   */
+  const missingCauseWarningFor = useCallback(
+    (pageModules: ModuleDefinition[]): string | null => {
+      const pending = modulesMissingMainCause(pageModules, resolvedValues);
+      if (pending.length === 0) return null;
+      const titles = pending.map((definition) => definition.title).join(', ');
+      const lead =
+        pending.length === 1 ? `Pri področju ${titles} še` : `Pri področjih ${titles} še`;
+      return `${lead} niste izbrali glavnega vzroka. Od njega je odvisno, kolikšen del zneska štejemo za odpravljiv — brez odgovora vzamemo najbolj zadržano oceno.`;
+    },
+    [resolvedValues],
   );
 
   /**
@@ -511,6 +625,7 @@ export function CalculatorFlow({
         totalsRange,
         highestModule,
         accountingCapacity,
+        confidenceReasonPdf: confidenceReasons.pdf,
         // Ista pokritost kot na zaslonu: hero znesek meri samo izbrana področja.
         coverage: {
           measuredCount: triageableIds.length - unmeasuredModules.length,
@@ -574,33 +689,41 @@ export function CalculatorFlow({
 
   if (step === 'employeeCount') {
     return (
-      <StepEmployeeCount
-        value={basicInfo}
-        onChange={setBasicInfo}
-        stepLabel={stepLabel('employeeCount')}
-        onNext={goNext('employeeCount')}
-        onBack={goBack('employeeCount')}
-      />
+      <>
+        {progressBar('employeeCount')}
+        <StepEmployeeCount
+          value={basicInfo}
+          onChange={setBasicInfo}
+          stepLabel={stepLabel('employeeCount')}
+          onNext={goNext('employeeCount')}
+          onBack={goBack('employeeCount')}
+        />
+      </>
     );
   }
 
   if (step === 'context' && context) {
     return (
-      <StepContext
-        context={context}
-        copy={copy.context}
-        profile={profile}
-        onChange={setProfile}
-        stepLabel={stepLabel('context')}
-        onNext={goNext('context')}
-        onBack={goBack('context')}
-      />
+      <>
+        {progressBar('context')}
+        <StepContext
+          context={context}
+          copy={copy.context}
+          profile={profile}
+          onChange={setProfile}
+          stepLabel={stepLabel('context')}
+          onNext={goNext('context')}
+          onBack={goBack('context')}
+        />
+      </>
     );
   }
 
   if (step === 'triage') {
     return (
-      <StepTriage
+      <>
+        {progressBar('triage')}
+        <StepTriage
         copy={copy.triage}
         modules={segmentModules.filter((definition) => definition.triage)}
         scores={triageScores}
@@ -618,21 +741,36 @@ export function CalculatorFlow({
           goNext('triage')();
         }}
         onBack={goBack('triage')}
-      />
+        />
+      </>
     );
   }
 
   if (step === 'costBasis' && context) {
     return (
-      <StepCostBasis
-        context={context}
-        copy={copy.costBasis}
-        profile={profile}
-        onChange={setProfile}
-        stepLabel={stepLabel('costBasis')}
-        onNext={goNext('costBasis')}
-        onBack={goBack('costBasis')}
-      />
+      <>
+        {progressBar('costBasis')}
+        <StepCostBasis
+          context={context}
+          copy={copy.costBasis}
+          profile={profile}
+          onChange={setProfile}
+          stepLabel={stepLabel('costBasis')}
+          onNext={() => {
+            // Vir vsake postavke osnove (vneseno/povprečje/razpon/prazno) — najboljši
+            // znani napovednik kakovosti leada; razredi, nič osebnega.
+            track('lm10_cost_basis_done', {
+              operational: profile.operationalHour.source,
+              admin: profile.adminHour.source,
+              ...(context.chargeOutRate ? { chargeOut: profile.chargeOutRate.source } : {}),
+              ...(context.annualRevenue ? { revenue: profile.annualRevenue.source } : {}),
+              ...(context.contributionMargin ? { margin: profile.contributionMargin.source } : {}),
+            });
+            goNext('costBasis')();
+          }}
+          onBack={goBack('costBasis')}
+        />
+      </>
     );
   }
 
@@ -640,8 +778,11 @@ export function CalculatorFlow({
     const isLastPage = inputsPageIndex === inputPages.length - 1;
     const pageModules = inputPages[inputsPageIndex] ?? [];
     return (
-      <StepInputs
+      <>
+        {progressBar('inputs', inputsPageIndex)}
+        <StepInputs
         copy={copy}
+        employeeCount={basicInfo.employeeCount}
         modules={pageModules}
         // Ime strani je ime področja — na zadnji strani z dvema modula spoj obeh,
         // ne izmišljen nadnaslov ("Dodatno" ipd.). Isti niz kot legenda v triaži.
@@ -651,6 +792,7 @@ export function CalculatorFlow({
         onChange={setModuleInputs}
         liveTotalEUR={totals.directLossEUR + totals.lostMarginEUR + totals.capacityEUR}
         plausibilityWarning={plausibilityWarning}
+        missingCauseWarning={missingCauseWarningFor(pageModules)}
         stepLabel={stepLabel('inputs', inputsPageIndex)}
         isLastPage={isLastPage}
         // Na robovih koraka gre navigacija ven po stepOrder, vmes pa le na sosednje
@@ -663,21 +805,25 @@ export function CalculatorFlow({
         onBack={
           inputsPageIndex === 0
             ? goBack('inputs')
-            : () => setInputsModuleId(inputPages[inputsPageIndex - 1][0].id)
+            : () => navigateBack(() => setInputsModuleId(inputPages[inputsPageIndex - 1][0].id))
         }
         // Vprašalnik določa dejavnost, zato je popravek tam in ne na ločenem zaslonu
         // z drugim besednjakom. 'industry' je prvi člen stepOrder — ista navigacija
         // kot "Nazaj" s Koraka 2, brez skoka na sredino toka.
         onChangeSegment={() => setStep('industry')}
-      />
+        />
+      </>
     );
   }
 
   if (step === 'results') {
     return (
-      <ResultsView
+      <>
+        {progressBar('results')}
+        <ResultsView
         segment={segment}
         copy={copy}
+        employeeCount={basicInfo.employeeCount}
         outputsByModule={groupByModule(outputs)}
         totals={totals}
         totalsRange={totalsRange}
@@ -686,6 +832,7 @@ export function CalculatorFlow({
         triageScores={triageScores}
         valuesByModule={resolvedValues}
         stepLabel={stepLabel('results')}
+        confidenceReason={confidenceReasons.screen}
         onMeasureModule={(id) => {
           // Odkar je "neizmerjeno" izpeljano iz podatkov, se gumb prikaže tudi pri
           // področju, ki JE izbrano, a prazno — brez Set bi id podvojili.
@@ -698,8 +845,9 @@ export function CalculatorFlow({
           track('lm10_email_gate_view', { segment: segment.id });
           setStep('emailGate');
         }}
-        onBack={() => openInputsAt(inputPages.at(-1)?.[0].id ?? null)}
-      />
+        onBack={() => navigateBack(() => openInputsAt(inputPages.at(-1)?.[0].id ?? null))}
+        />
+      </>
     );
   }
 
@@ -722,7 +870,7 @@ export function CalculatorFlow({
               }
             : undefined
         }
-        onBackToResults={() => setStep('results')}
+        onBackToResults={() => navigateBack(() => setStep('results'))}
         onDownloadSalesPdf={
           salesReport
             ? async () => {
@@ -734,7 +882,7 @@ export function CalculatorFlow({
               }
             : undefined
         }
-        onBack={() => setStep('results')}
+        onBack={() => navigateBack(() => setStep('results'))}
       />
     );
   }

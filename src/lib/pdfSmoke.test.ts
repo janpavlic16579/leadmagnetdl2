@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildResultsPdfFile } from './pdf';
+import { buildResultsPdfFile, headerInfoLines } from './pdf';
 import { buildSalesPdfFile } from './pdfSales';
 import { buildSalesReport } from './salesReport';
 import { aggregateResults, assessConfidence, buildComputeContext } from './potential';
@@ -7,6 +7,8 @@ import { computeModules, findHighestModule, resolveInputs } from './moduleEngine
 import { getModules } from '../config/modules';
 import { SEGMENTS, SEGMENT_ORDER } from '../config/segments';
 import { emptyProfileFor, getSegmentContext } from '../config/contexts';
+import { getSegmentCopy } from '../config/copy';
+import { MIN_POTENTIAL_FOR_PAYBACK_EUR } from './horizon';
 
 /**
  * Dimni test izrisa: PDF se res sestavi.
@@ -61,6 +63,7 @@ describe('Strankin PDF se sestavi', () => {
     const file = await buildResultsPdfFile({
       segment: scenario.segment,
       companyName: 'Testno podjetje d.o.o.',
+      employeeCount: 45,
       outputs: scenario.outputs,
       totals: scenario.totals,
       highestModule: scenario.highestModule,
@@ -68,6 +71,66 @@ describe('Strankin PDF se sestavi', () => {
 
     expect(file.filename).toMatch(/\.pdf$/);
     expect(file.blob.size).toBeGreaterThan(1000);
+  });
+
+  /**
+   * Scenarij z izpolnjenimi vnosi. Prazni scenariji zgoraj imajo potencial 0 in
+   * zato NE dosežejo tabele povračila (izriše se šele nad pragom) — brez tega
+   * testa bi bila ta veja izrisa nepokrita, izjema v njej pa bi se pokazala šele
+   * pri obiskovalcu, ki je vprašalnik dejansko izpolnil.
+   */
+  it('proizvodnja — z izpolnjenimi vnosi doseže tudi tabelo povračila', async () => {
+    const scenario = scenarioFor('proizvodnja', {
+      zamude: {
+        expediteCostEUR: 12_000,
+        penaltyCostEUR: 5_000,
+        lostMarginEUR: 20_000,
+        customerCommsHoursPerMonth: 16,
+        mainCause: 2,
+      },
+    });
+
+    expect(scenario.totals.addressablePotentialEUR).toBeGreaterThan(
+      MIN_POTENTIAL_FOR_PAYBACK_EUR,
+    );
+
+    const file = await buildResultsPdfFile({
+      segment: scenario.segment,
+      companyName: 'Testno podjetje d.o.o.',
+      // Nad ciljnim razredom: glava mora izpisati "250+ zaposlenih" in ne razpona
+      // iz imena segmenta, kot se je dogajalo, dokler je razpon stal v displayName.
+      employeeCount: 300,
+      outputs: scenario.outputs,
+      totals: scenario.totals,
+      highestModule: scenario.highestModule,
+      coverage: {
+        measuredCount: 1,
+        offeredCount: 10,
+        unmeasured: [{ title: 'Zaloge in razpoložljivost', scoreLabel: 'Vsak teden' }],
+      },
+    });
+
+    expect(file.blob.size).toBeGreaterThan(1000);
+  });
+
+  it('glava vzame velikostni razred iz vnesenega števila zaposlenih', () => {
+    const scenario = scenarioFor('storitve');
+    const lines = headerInfoLines(
+      {
+        segment: scenario.segment,
+        companyName: 'Testno podjetje d.o.o.',
+        employeeCount: 400,
+        outputs: scenario.outputs,
+        totals: scenario.totals,
+        highestModule: scenario.highestModule,
+      },
+      getSegmentCopy('storitve'),
+      '15. 1. 2026',
+    );
+
+    // Prijavljeni primer: vnos 400 je nekoč obveljal za "10–249 zaposlenih",
+    // ker je razpon stal v imenu segmenta namesto v izpeljavi iz vnosa.
+    expect(lines).toContain('Segment: Storitve in projekti · 250+ zaposlenih');
   });
 });
 

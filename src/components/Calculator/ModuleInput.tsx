@@ -37,6 +37,12 @@ interface ChoiceFieldProps {
   explainer?: string;
   value: number;
   choices: { value: number; label: string }[];
+  /**
+   * Opomba pod skupino, kadar ni izbran noben odgovor. Odsotna = privzeto
+   * besedilo o zadržanem deležu (velja za glavni vzrok); `null` = brez opombe —
+   * kontekstna vprašanja v izračun ne vstopajo in opomba o deležu bi lagala.
+   */
+  unansweredNote?: string | null;
   onChange: (value: number) => void;
 }
 
@@ -65,8 +71,22 @@ export function ModuleInput(props: ModuleInputProps) {
   }
 
   if (props.mode === 'choice') {
+    /**
+     * Vrednost, ki ne ustreza nobeni možnosti, pomeni "ni izbrano" — tedaj ni
+     * označen noben radio. Izpeljano iz vrednosti in ne iz nove zastavice, ker je
+     * to splošno pravilo in ne posebnost vprašanja o glavnem vzroku.
+     */
+    const hasSelection = props.choices.some((choice) => choice.value === value);
+    const unansweredNote =
+      props.unansweredNote === undefined
+        ? 'Brez odgovora računamo z najbolj zadržanim deležem — vaš dejanski znesek je najverjetneje višji.'
+        : props.unansweredNote;
+
     return (
-      <fieldset className={styles.field}>
+      <fieldset
+        className={styles.field}
+        aria-describedby={hasSelection || !unansweredNote ? undefined : `${groupId}-unanswered`}
+      >
         {/* Legenda je hkrati ovoj vprašanja: `<legend>` mora ostati prvi otrok
             `<fieldset>`, zato je ni dovoljeno oviti v .questionRow. */}
         <legend className={`${styles.label} ${helpStyles.questionRow}`}>
@@ -86,6 +106,13 @@ export function ModuleInput(props: ModuleInputProps) {
             </label>
           ))}
         </div>
+        {/* Mehko in ne blokada: nadaljevanje ostane mogoče, a tiha privzeta
+            vrednost, ki bi odločila o naslovljivem deležu, ne obstaja več. */}
+        {hasSelection || !unansweredNote ? null : (
+          <p id={`${groupId}-unanswered`} className={styles.unanswered}>
+            {unansweredNote}
+          </p>
+        )}
       </fieldset>
     );
   }

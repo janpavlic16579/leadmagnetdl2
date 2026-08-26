@@ -2,7 +2,7 @@ import type { SegmentCopy } from './copyTypes';
 
 export const PROIZVODNJA_COPY: SegmentCopy = {
   id: 'proizvodnja',
-  displayName: 'Proizvodnja 10–249 zaposlenih',
+  displayName: 'Proizvodnja',
 
   landing: {
     heroTitle: 'Koliko vas letno stane sedanji način dela v proizvodnji?',

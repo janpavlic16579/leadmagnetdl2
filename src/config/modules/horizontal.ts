@@ -1,4 +1,5 @@
 import { addressableShareOf, mainCauseField, type CauseOption } from './addressableShare';
+import { UNANSWERED_CHOICE } from './moduleTypes';
 import type { ModuleDefinition } from './moduleTypes';
 import { MONTHS_PER_YEAR } from './shared';
 
@@ -85,7 +86,7 @@ export const analitikaHz: ModuleDefinition = {
       key: 'reportFreshness',
       label: 'Kako stare so ključne številke, ko jih vodstvo vidi?',
       kind: 'choice',
-      default: 2,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       choices: [
         { value: 0, label: 'Sprotne, iz sistema' },
@@ -553,7 +554,7 @@ export const servisHz: ModuleDefinition = {
       key: 'caseTracking',
       label: 'Kako spremljate odprte reklamacijske in servisne primere?',
       kind: 'choice',
-      default: 2,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       choices: [
         { value: 0, label: 'V sistemu, s statusi in roki' },

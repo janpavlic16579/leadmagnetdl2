@@ -30,6 +30,18 @@
 }
 
 /*
+ * Na nizkih zaslonih (iPhone SE: 667 px) rezervacija potisne spustni seznam —
+ * edini kontrolnik uvodnega zaslona — pod pregib. Tam se rezervaciji odpovemo:
+ * premik seznama ob izbiri dejavnosti je manjše zlo od nevidne izbire.
+ * Za širokimi pravili, da v kaskadi zmaga.
+ */
+@media (max-height: 700px) {
+  .hero {
+    min-block-size: 0;
+  }
+}
+
+/*
  * Panožna bolečina. Temnejša od splošne obljube pod njo: to je stavek, zaradi
  * katerega obiskovalec ostane, obljuba pa pojasnjuje, kaj dobi.
  */

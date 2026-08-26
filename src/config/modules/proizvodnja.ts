@@ -1,4 +1,5 @@
 import { addressableShareOf, mainCauseField, type CauseOption } from './addressableShare';
+import { UNANSWERED_CHOICE } from './moduleTypes';
 import type { ModuleDefinition, RiskLevel } from './moduleTypes';
 import {
   ASSURANCE_CHOICES,
@@ -58,7 +59,7 @@ export const planiranje: ModuleDefinition = {
       key: 'planningMethod',
       label: 'Kako danes planirate proizvodnjo?',
       kind: 'choice',
-      default: 2,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       choices: [
         { value: 0, label: 'MRP oziroma ERP plan' },
@@ -209,6 +210,12 @@ export const material: ModuleDefinition = {
         label: 'Izmet materiala',
         valueEUR: input.annualMaterialSpendEUR * input.scrapSharePercent,
         addressableShare,
+        // Izmet ima tehnološko dno: razrez, zagon serije in izplen materiala
+        // ostanejo tudi ob popolnih podatkih. Povprečje panoge je 3–8 %, dobra
+        // praksa pod 2,5 % — odpravljiva je torej približno polovica, in še to
+        // skupaj s tehnološkimi ukrepi, ne z evidenco. Brez te meje bi vzrok
+        // "zastarele sestavnice" trdil, da je odpravljivih 75 % izmeta.
+        addressableCap: 0.5,
       },
       {
         bucket: 'directLoss',
@@ -298,7 +305,7 @@ export const zaloge: ModuleDefinition = {
       key: 'stockVisibility',
       label: 'Kako dober je vaš pregled nad dejanskimi zalogami?',
       kind: 'choice',
-      default: 2,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       choices: [
         { value: 0, label: 'Sproten in po lokacijah' },
@@ -351,6 +358,11 @@ const NALOGI_CAUSES: CauseOption[] = [
   { label: 'Podatki se ne vnašajo sproti', category: 'data' },
   // Nejasna odgovornost je nepostavljen proces; sistem z delovnimi tokovi jo določi in sledi.
   { label: 'Odgovornosti niso jasne', category: 'planning' },
+  // Peta možnost je nizka namenoma. Brez nje so bile vse štiri 'data' ali
+  // 'planning' in najnižji dosegljivi delež je bil 0,65 — podjetje, katerega
+  // nalogi zastajajo zaradi usposobljenosti ali menjav v ekipi, tega ni moglo
+  // povedati in mu je ostal samo molk.
+  { label: 'Usposobljenost oziroma menjava ljudi', category: 'people' },
 ];
 
 export const nalogi: ModuleDefinition = {
@@ -397,7 +409,7 @@ export const nalogi: ModuleDefinition = {
       key: 'reportingTiming',
       label: 'Kdaj se dejanska poraba materiala in opravljeno delo evidentirata?',
       kind: 'choice',
-      default: 2,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       choices: [
         { value: 0, label: 'Sproti na terminalu' },
@@ -471,7 +483,9 @@ export const zamude: ModuleDefinition = {
   fields: [
     {
       key: 'lateOrdersPerMonth',
-      label: 'Od koliko naročil mesečno jih povprečno odpremite z zamudo?',
+      // "Od koliko naročil … jih" je spraševalo po imenovalcu, polje pa pričakuje
+      // števec (enota naročil/mesec) — obiskovalec je lahko vpisal skupno število naročil.
+      label: 'Koliko naročil mesečno odpremite z zamudo?',
       kind: 'number',
       unit: 'naročil/mesec',
       default: 0,

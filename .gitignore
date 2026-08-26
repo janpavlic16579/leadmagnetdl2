@@ -11,3 +11,6 @@ public/karta/
 .env
 .env.*
 !.env.example
+
+# Zaklepne datoteke Worda (~$ime.docx) — nastanejo ob odprtem dokumentu.
+~$*

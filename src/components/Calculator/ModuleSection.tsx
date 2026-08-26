@@ -69,6 +69,9 @@ function Field({
           explainer={field.explainer}
           value={value}
           choices={field.choices ?? []}
+          // Kontekstno vprašanje v izračun ne vstopa, zato opomba o zadržanem
+          // deležu tam ne velja — neodgovor je preprosto neodgovor.
+          unansweredNote={field.contextOnly ? null : undefined}
           onChange={(next) => onChange(field.key, next)}
         />
       );

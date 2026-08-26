@@ -1,4 +1,5 @@
 import { addressableShareOf, mainCauseField, type CauseOption } from './addressableShare';
+import { UNANSWERED_CHOICE } from './moduleTypes';
 import type { ModuleDefinition, RiskLevel } from './moduleTypes';
 import {
   ASSURANCE_CHOICES,
@@ -68,7 +69,7 @@ export const odprema: ModuleDefinition = {
       key: 'dispatchMethod',
       label: 'Kako danes razporejate prevoze?',
       kind: 'choice',
-      default: 2,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       choices: [
         { value: 0, label: 'Namenski sistem za razporejanje' },
@@ -140,6 +141,12 @@ export const odprema: ModuleDefinition = {
         label: 'Prazni in slabo izkoriščeni kilometri',
         valueEUR: input.emptyKmPerMonth * input.costPerKmEUR * MONTHS_PER_YEAR,
         addressableShare,
+        // Geografsko dno: vozilo se mora nekako vrniti, tovor v obe smeri pa ne
+        // obstaja na vsaki relaciji. Boljše planiranje delež praznih kilometrov
+        // zniža, ne odpravi. Doslej je komentar nad to postavko to že trdil,
+        // koda pa tega ni izvajala — postavka je dobila isti delež kot ure
+        // razporejanja.
+        addressableCap: 0.5,
       },
       {
         bucket: 'capacity',
@@ -355,7 +362,7 @@ export const skladisce: ModuleDefinition = {
       key: 'stockVisibility',
       label: 'Kako dober je vaš pregled nad zalogo po lokacijah?',
       kind: 'choice',
-      default: 2,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       choices: [
         { value: 0, label: 'Sproten in po lokacijah' },
@@ -455,7 +462,7 @@ export const dokumentacija: ModuleDefinition = {
       key: 'podTiming',
       label: 'Kdaj dokazilo o dostavi (POD) pride v vaš sistem?',
       kind: 'choice',
-      default: 2,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       choices: [
         { value: 0, label: 'Sproti, elektronsko' },

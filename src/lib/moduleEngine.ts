@@ -1,10 +1,13 @@
 import {
   DEFAULT_COST_CONTEXT,
+  isUnansweredChoice,
   isUnknownAnswer,
+  isUnknownChoiceValue,
   type ComputeContext,
   type ModuleDefinition,
   type ModuleOutput,
 } from '../config/modules/moduleTypes';
+import { MAIN_CAUSE_KEY } from '../config/modules/addressableShare';
 
 /**
  * Zasilne predpostavke živijo pri tipu, ki ga opisujejo (config/modules/moduleTypes).
@@ -220,7 +223,38 @@ export function isModuleAnswered(
     if (field.contextOnly || field.kind === 'checkbox') return false;
     const value = values[field.key];
     if (isUnknownAnswer(value)) return false;
+    // "Ne vem" in neodgovorjena izbira nista izmerjena podatka: oba prispevata
+    // 0 EUR in oba padeta na konservativni delež. Doslej ju je pokrivala že
+    // primerjava s privzetkom, ker je bil privzetek glavnega vzroka prav "Ne vemo".
+    // Odkar vzrok privzetka nima (MAIN_CAUSE_UNANSWERED), mora biti pravilo
+    // izrecno — sicer bi izbrani "Ne vemo" štel kot odgovor in bi področje brez
+    // ene same vnesene številke izpadlo iz razdelka "Česa nismo izmerili".
+    if (isUnknownChoiceValue(field, value) || isUnansweredChoice(field, value)) return false;
     return value !== undefined && value !== field.default;
+  });
+}
+
+/**
+ * Področja, kjer je znesek že vnesen, glavni vzrok pa ne izbran.
+ *
+ * Pogoj je NAMENOMA dvojni. Obiskovalcu, ki področja sploh ni izpolnil, se
+ * neodgovorjen vzrok ne sme očitati — opozorilo je smiselno šele, ko obstaja
+ * znesek, ki ga delež množi. Brez tega bi vsak, ki stran preleti, dobil očitek
+ * za polje, ki na njegov rezultat sploh ne vpliva.
+ *
+ * Živi tu in ne v komponenti, ker vitest teče v okolju 'node' brez jsdom in
+ * logike v JSX ni mogoče pokriti s testi.
+ */
+export function modulesMissingMainCause(
+  definitions: ModuleDefinition[],
+  values: Record<string, Record<string, number>>,
+): ModuleDefinition[] {
+  return definitions.filter((definition) => {
+    const moduleValues = values[definition.id];
+    if (!isModuleAnswered(definition, moduleValues)) return false;
+    return definition.fields.some(
+      (field) => field.key === MAIN_CAUSE_KEY && isUnansweredChoice(field, moduleValues?.[field.key]),
+    );
   });
 }
 

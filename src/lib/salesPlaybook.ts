@@ -1,4 +1,5 @@
 import { dealSizeLabel, type IcpScore } from '../config/icp';
+import { ADDRESSABLE_SHARE } from '../config/modules/addressableShare';
 import type { SegmentId } from '../config/segmentTypes';
 import { getPantheonFit, PANTHEON_FIT_CONFIRM, type PantheonFit } from '../../content/sales/pantheonFit';
 import { OBJECTIONS, type ObjectionEntry, type ObjectionId } from '../../content/sales/objections';
@@ -98,6 +99,16 @@ function buildOpeningQuestions(report: PlaybookInput): OpeningQuestion[] {
     });
   }
 
+  // Neodgovorjeno izbirno vprašanje ni isto kot "Ne vem": tam je stranka nekaj
+  // rekla, tu ni rekla ničesar. Trditev "odgovorili so 'Ne vem'" bi bila za
+  // prodajnika neresnična in bi na sestanku takoj počila.
+  for (const row of report.softness.unansweredChoices) {
+    questions.push({
+      question: `${row.moduleTitle}: "${row.question}" — kdo pri vas to najbolje ve?`,
+      why: 'Vprašanja niso odgovorili. Izračun je vzel najbolj zadržan delež, kar je najverjetneje prenizko.',
+    });
+  }
+
   for (const row of report.softness.untouchedFields) {
     questions.push({
       question: `${row.moduleTitle}: "${row.question}"`,
@@ -156,12 +167,19 @@ function buildObjections(report: PlaybookInput): SalesPlaybook['objections'] {
 
   if (report.summary.confidence === 'low') triggered.push('inflatedNumber');
 
-  if (report.softness.unknownAnswers.length + report.softness.untouchedFields.length >= 3) {
+  if (
+    report.softness.unknownAnswers.length +
+      report.softness.unansweredChoices.length +
+      report.softness.untouchedFields.length >=
+    3
+  ) {
     triggered.push('noData');
   }
 
-  // Naslovljiv delež 0,25 pripada kategoriji "external" (config/modules/addressableShare.ts).
-  if (report.measured.some((area) => area.addressableShare === 0.25)) {
+  // Simbolično in ne trdo 0,25: ob prvi kalibraciji deleža bi trda vrednost tiho
+  // nehala ujeti zunanji vzrok, ugovor bi izginil iz prodajne priprave in noben
+  // test tega ne bi opazil — fixture v salesPlaybook.test.ts nosi svojo številko.
+  if (report.measured.some((area) => area.addressableShare === ADDRESSABLE_SHARE.external)) {
     triggered.push('externalCause');
   }
 

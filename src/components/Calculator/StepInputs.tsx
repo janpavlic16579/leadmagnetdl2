@@ -1,5 +1,5 @@
 import type { ModuleDefinition } from '../../config/modules';
-import type { ResolvedSegmentCopy } from '../../config/copy';
+import { segmentLabelWithSize, type ResolvedSegmentCopy } from '../../config/copy';
 import { formatEUR } from '../../lib/format';
 import type { ModuleInputsState } from '../../types';
 import { ModuleSection } from './ModuleSection';
@@ -14,6 +14,8 @@ interface StepInputsProps {
    * njega samo displayName — konfiguracijo vprašalnika zaradi ene oznake.
    */
   copy: ResolvedSegmentCopy;
+  /** Vneseno število zaposlenih (Korak 2) — pas pripne dejanski velikostni razred. */
+  employeeCount: number;
   /** Moduli TE strani — eno področje, na zadnji strani diagnostika in tvegani stroški. */
   modules: ModuleDefinition[];
   /** Naslov strani: ime področja, na zadnji strani spoj imen njenih modulov. */
@@ -25,6 +27,12 @@ interface StepInputsProps {
   liveTotalEUR: number;
   /** Mehko opozorilo o verjetnosti vnesenih ur — nikoli ne blokira (lib/plausibility). */
   plausibilityWarning?: string | null;
+  /**
+   * Področja te strani, kjer je znesek vnesen, glavni vzrok pa ne izbran.
+   * Prav tako mehko: vzrok odloči o naslovljivem deležu, zato je vreden klika —
+   * a obiskovalca, ki ga noče izbrati, ne ustavimo (lib/moduleEngine).
+   */
+  missingCauseWarning?: string | null;
   stepLabel: string;
   /** Zadnja stran vnosov — od tod naprej gre na rezultate in ne na novo področje. */
   isLastPage: boolean;
@@ -35,6 +43,7 @@ interface StepInputsProps {
 
 export function StepInputs({
   copy,
+  employeeCount,
   modules,
   pageTitle,
   values,
@@ -42,6 +51,7 @@ export function StepInputs({
   raw,
   liveTotalEUR,
   plausibilityWarning,
+  missingCauseWarning,
   stepLabel,
   isLastPage,
   onNext,
@@ -76,7 +86,10 @@ export function StepInputs({
 
       <div className={styles.profileBanner}>
         <span>
-          Izračun prilagojen za: <span className={styles.profileName}>{copy.displayName}</span>
+          Izračun prilagojen za:{' '}
+          <span className={styles.profileName}>
+            {segmentLabelWithSize(copy.displayName, employeeCount)}
+          </span>
         </span>
         {/* Pove, kam gumb pelje: vprašalnik določa dejavnost, zato se popravlja tam. */}
         <button type="button" className={styles.profileChange} onClick={onChangeSegment}>
@@ -107,6 +120,12 @@ export function StepInputs({
         // ostane omogočen. role="status", da ga bralnik zaslona prebere ob pojavu.
         <p className={styles.plausibilityWarning} role="status">
           {plausibilityWarning}
+        </p>
+      ) : null}
+
+      {missingCauseWarning ? (
+        <p className={styles.plausibilityWarning} role="status">
+          {missingCauseWarning}
         </p>
       ) : null}
 

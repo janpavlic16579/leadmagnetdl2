@@ -62,6 +62,86 @@
   margin: 0 0 var(--space-2);
 }
 
+/*
+ * Večletni pogled: drugotno sidro, ne druga hero številka.
+ *
+ * Levi rob namesto polnega okvirja in znesek za stopnjo manjši od hero — trojni
+ * znesek je izpeljanka letnega in mora biti videti kot izpeljanka, sicer stran
+ * ponuja dve enakovredni "glavni" številki in bralec ne ve, katera je meritev.
+ */
+.horizon {
+  border-left: 3px solid var(--color-accent);
+  padding: var(--space-1) 0 var(--space-1) var(--space-3);
+  margin: 0 0 var(--space-3);
+  max-width: 44rem;
+}
+
+.horizonTotal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-1);
+}
+
+.horizonLabel {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.horizonValue {
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  color: var(--color-primary-text);
+  line-height: 1.15;
+}
+
+.horizonNote {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+/*
+ * Ograde. Opozorilni žetoni in ne nevtralna kartica: blok ne pripoveduje o
+ * izračunu, ampak o njegovih mejah, in mora biti razpoznaven kot pridržek — pri
+ * čemer je njegovo sporočilo, da je resnica VIŠJA, ne nižja.
+ */
+.notIncluded {
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  margin: 0 0 var(--space-4);
+}
+
+.notIncludedTitle {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  color: var(--color-warning-text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.notIncludedList {
+  margin: 0 0 var(--space-2);
+  padding-left: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+
+.notIncludedClosing {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
 .card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);

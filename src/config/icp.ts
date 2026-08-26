@@ -68,8 +68,9 @@ export interface IcpDimension {
 /**
  * Velikost podjetja proti ciljnemu razredu.
  *
- * KALIBRACIJA: imena segmentov ("Proizvodnja 10–249 zaposlenih") so edini že
- * zapisani podatek o ciljni velikosti, zato je 10–249 zaenkrat polna ocena.
+ * KALIBRACIJA: ciljni razred 10–249 je prodajna odločitev. Doslej je bil
+ * razviden tudi iz imen segmentov ("Proizvodnja 10–249 zaposlenih"); odkar
+ * displayName nosi samo ime panoge, so te meje edini zapis cilja.
  * Mikro podjetja in velike hiše niso izključena, le nižje ovrednotena.
  */
 const SIZE_FIT: { max: number | null; value: number; note: string }[] = [

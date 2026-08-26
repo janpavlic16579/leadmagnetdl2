@@ -53,13 +53,17 @@ Ob spremembi dejavnosti se odgovori zavržejo samo, kadar se spremeni tudi **seg
 
 | URL | Segment | Koraki |
 |---|---|---|
-| `?s=proizvodnja` | Proizvodnja 10–249 zap. | 7 |
-| `?s=logistika` | Logistika in transport 10–249 zap. | 7 |
+| `?s=proizvodnja` | Proizvodnja | 7 |
+| `?s=logistika` | Logistika in transport | 7 |
 | `?s=trgovina` | Veleprodaja in distribucija | 7 |
 | `?s=maloprodaja` | Maloprodaja | 7 |
-| `?s=storitve` | Storitve in projekti 10–249 zap. | 7 |
+| `?s=storitve` | Storitve in projekti | 7 |
 | `?s=racunovodstvo` | Računovodski servis | 7 |
 | `?s=splosno` | Direktor / CFO | 7 |
+
+Imena so čista imena panog. Velikostni razred (`1–9` / `10–49` / `50–249` / `250+`) se oznaki pripne
+ob izrisu iz vnesenega števila zaposlenih — `segmentLabelWithSize` v `config/copy/index.ts` nad
+`config/sizeClasses.ts`. Dokler je razpon stal v imenu, je zaslon pri 400 zaposlenih trdil `10–249`.
 
 ## Tok
 
@@ -193,8 +197,10 @@ Dvoje je vredno vedeti pred urejanjem:
   administrativni postavki za pisarniško reševanje reklamacije. Podštevanje je boljše od dvojnega štetja.
 - **`terjatve_trgovina` šteje samo prekoračitev NAD dogovorjenim rokom, ne celotnega DSO.** Financiranje
   roka, ki ste ga kupcu sami odobrili, je normalno poslovanje. Celoten DSO bi dal večjo številko, ki bi
-  jo vsak finančnik takoj zavrnil. Letni strošek kapitala je konstanta `RECEIVABLES_CAPITAL_COST`
-  (`src/config/modules/shared.ts`), ne vprašanje — omejitev na šest polj na modul je ostrejša od koristi.
+  jo vsak finančnik takoj zavrnil. Letni strošek kapitala pride iz skupne finančne osnove
+  (`ComputeContext.capitalCostRate`); privzetek je 8,5 % — povprečni WACC podjetij (KPMG 2025) in ne
+  obrestna mera posojila. Nosita ga `DEFAULT_COST_CONTEXT` (`src/config/modules/moduleTypes.ts`) in
+  `fallback` v `src/config/contexts/`, konstanta `RECEIVABLES_CAPITAL_COST` pa je zapisana referenca.
 
 ### Maloprodaja — šest izključujočih se stroškovnih področij
 
@@ -430,6 +436,11 @@ Izpeljava, sidra in datumi poizvedb: [`docs/urne-postavke.md`](docs/urne-postavk
 | Kateri moduli so v segmentu (tudi katere horizontale), prag visoke izgube | `src/config/segments.ts` |
 | Dejavnost → segment (spustni seznam) | `src/config/industries.ts` |
 | Naslovljivi deleži po vzroku | `src/config/modules/addressableShare.ts` |
+| Preverba naslovljivih deležev proti literaturi (preden jih spreminjate) | [`docs/naslovljivost-raziskava-2026-08.md`](docs/naslovljivost-raziskava-2026-08.md) |
+| Ista preverba kot poročilo za vodstvo (PDF, 11 strani) | [`docs/naslovljivost-raziskava-2026-08.pdf`](docs/naslovljivost-raziskava-2026-08.pdf) |
+| Utemeljitev deležev **za stranko** — izpeljava, viri, omejitve (PDF, 7 strani) | [`report/naslovljivostni koeficienti/`](report/naslovljivostni%20koeficienti/utemeljitev-naslovljivih-delezev-2026-08.pdf) |
+| Zunanja sidra: koristi ERP, strošek kapitala, prazne police (preden jih spreminjate) | [`docs/erp-koristi-benchmarki-2026-08.md`](docs/erp-koristi-benchmarki-2026-08.md) |
+| Zakaj poročilo kaže tri leta, ceno odlašanja in dobo povračila | `src/lib/horizon.ts` |
 | Kontekstna vprašanja, vrzeli sedanjega sistema, razponi urnih postavk, vidnost modula E | `src/config/contexts/` |
 | Izpeljava in viri urnih postavk (preden jih spreminjate) | [`docs/urne-postavke.md`](docs/urne-postavke.md) |
 | Zapisnik zadnje preverbe postavk proti trgu (od kod je prišla sprememba) | [`docs/urne-postavke-raziskava-2026-08.md`](docs/urne-postavke-raziskava-2026-08.md) |
@@ -687,10 +698,17 @@ sekvenco zapis sodi, ključ pa potuje v izvoznem zapisu (`followUpSequence`), da
 4. Strokovna potrditev besedil "3 ukrepov".
 5. Ponudba "15-min pregled s svetovalcem" — kdo izvaja in kakšna je kapaciteta.
 
-**Kalibracija:** naslovljivi deleži, vrzeli sedanjega sistema (`SystemGap`, prodajni signal) in prag
-visoke izgube v `segments.ts` so **začetne ocene**, ne empirija. Po prvih ~50 vnosih jih je treba
-preveriti na realnih podatkih. Pri naslovljivih deležih je to najbolj nujno: odkar so edini koeficient
-nad zneskom, gre napaka v njih naravnost v prikazano številko.
+**Kalibracija (stanje avgust 2026).** Naslovljivi deleži, strošek kapitala in sprostljivi deleži
+zaloge **niso več začetne ocene**: vsak je preverjen proti literaturi in nosi vir ob vrednosti —
+glej [`docs/naslovljivost-raziskava-2026-08.md`](docs/naslovljivost-raziskava-2026-08.md) in
+[`docs/erp-koristi-benchmarki-2026-08.md`](docs/erp-koristi-benchmarki-2026-08.md).
+
+Odprto ostane troje. Prvo: **nobena od meritev ni slovenska** — Ardent in Hackett sta severnoameriška,
+Billentis evropski, Aberdeen globalen; prava kalibracija bo prišla iz Datalabovih lastnih uvedb.
+Drugo: `data` (0,75) in `planning` (0,65) sta **zavestno pri zgornjem robu** pasu, ki ga literatura
+dopušča, in sta prva kandidata za umik, če ju kdo izpodbija — nasprotni predlog (0,65 in 0,50) je
+zapisan v naslovljivostni raziskavi. Tretje: vrzeli sedanjega sistema (`SystemGap`, prodajni signal)
+in prag visoke izgube v `segments.ts` preverbe še nista dobila.
 
 ## Namerno izven obsega (faza 2)
 

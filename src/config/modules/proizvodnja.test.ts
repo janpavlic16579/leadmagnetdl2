@@ -3,6 +3,7 @@ import { diagnostika, material, nalogi, planiranje, zaloge, zamude } from './pro
 import { ADDRESSABLE_SHARE } from './addressableShare';
 import type { ComputeContext, ModuleDefinition, ModuleOutputDraft } from './moduleTypes';
 import { resolveInputs } from '../../lib/moduleEngine';
+import { reducibleShareOf } from './shared';
 
 /**
  * Testi držijo dve lastnosti, na katerih stoji verodostojnost izračuna:
@@ -121,12 +122,17 @@ describe('Zaloge in razpoložljivost materiala', () => {
     expect(pick(outputs, 'Sprostljiv obratni kapital v zalogah').addressableShare).toBeUndefined();
   });
 
-  it('"Ne vem" pade na najkonservativnejši delež znižanja', () => {
-    const unknown = run(zaloge, { inventoryValueEUR: 800_000, reducibleShare: 4 });
-    const lowest = run(zaloge, { inventoryValueEUR: 800_000, reducibleShare: 0 });
-    expect(pick(unknown, 'Sprostljiv obratni kapital v zalogah').valueEUR).toBe(
-      pick(lowest, 'Sprostljiv obratni kapital v zalogah').valueEUR,
-    );
+  // Doslej je "Ne vem" padel na natanko isti delež kot najnižji pas (0,05).
+  // To ni bila konservativnost, ampak polovica spodnjega roba tega, kar Aberdeen
+  // izmeri ob uvedbi ERP (13,4–25 %, konservativno sidro 10–15 %) — neodgovor je
+  // obljubljal manj od najslabšega izmerjenega projekta. Odslej 0,10.
+  it('"Ne vem" pade na izmerjeno spodnjo mejo, ne na najnižji pas', () => {
+    const valueOf = (share: number) =>
+      pick(run(zaloge, { inventoryValueEUR: 800_000, reducibleShare: share }), 'Sprostljiv obratni kapital v zalogah').valueEUR ?? 0;
+
+    expect(valueOf(4)).toBe(800_000 * reducibleShareOf(4));
+    expect(valueOf(4)).toBeGreaterThan(valueOf(0));
+    expect(valueOf(4)).toBeLessThan(valueOf(2));
   });
 });
 
@@ -226,7 +232,10 @@ describe('Skupne lastnosti stroškovnih modulov', () => {
     }
   });
 
-  it('privzeti glavni vzrok je "Ne vemo" in da konservativen delež', () => {
+  // Vprašanje o glavnem vzroku nima privzetka (MAIN_CAUSE_UNANSWERED): brez izbire
+  // ni označen noben radio, delež pa pade na konservativni 'unknown'. Ta test hodi
+  // prek compute() in NE prek withoutUnknowns — celotno pot varuje moduleEngine.test.ts.
+  it('neodgovorjen glavni vzrok da konservativen delež', () => {
     for (const definition of COSTED_MODULES) {
       const outputs = run(definition).filter((output) => output.addressableShare !== undefined);
       expect(outputs.length, definition.id).toBeGreaterThan(0);

@@ -5,6 +5,7 @@ import {
   DEFAULT_COST_CONTEXT,
   findHighestModule,
   isModuleAnswered,
+  modulesMissingMainCause,
   resolveActiveModules,
   resolveInputs,
   selectTopModules,
@@ -16,7 +17,14 @@ import { LEGACY_TRGOVINA_MODULES } from '../config/modules/legacyTrgovina';
 import { SEGMENTS, SEGMENT_ORDER } from '../config/segments';
 import { MODULE_METHODOLOGY } from '../../content/methodology';
 import { ACTION_PLANS } from '../../content/actions/actions';
+import { UNANSWERED_CHOICE, UNKNOWN_ANSWER } from '../config/modules/moduleTypes';
 import type { ModuleOutput } from '../config/modules/moduleTypes';
+import {
+  ADDRESSABLE_SHARE,
+  MAIN_CAUSE_KEY,
+  MAIN_CAUSE_UNANSWERED,
+} from '../config/modules/addressableShare';
+import { mainCauseLabel } from './answerLabels';
 
 /**
  * Zastareli trgovinski moduli niso v registru (glej config/modules/index.ts) —
@@ -265,11 +273,55 @@ describe('Triaža', () => {
   });
 });
 
+describe('modulesMissingMainCause', () => {
+  const definition = MODULE_REGISTRY.planiranje;
+  const withValues = (overrides: Record<string, number>) => ({
+    [definition.id]: resolveInputs(definition, overrides),
+  });
+
+  it('področja brez vnesenega zneska ne očita', () => {
+    // Opozorilo je smiselno šele, ko obstaja znesek, ki ga delež množi — sicer bi
+    // vsak, ki stran samo preleti, dobil očitek za polje brez učinka.
+    expect(modulesMissingMainCause([definition], withValues({}))).toHaveLength(0);
+  });
+
+  it('področje z zneskom in brez izbranega vzroka je našteto', () => {
+    const pending = modulesMissingMainCause([definition], withValues({ waitingHoursPerMonth: 20 }));
+    expect(pending.map((module) => module.id)).toEqual([definition.id]);
+  });
+
+  it('izbran vzrok očitek odpravi — tudi izbrani "Ne vemo"', () => {
+    const causeField = definition.fields.find((field) => field.key === MAIN_CAUSE_KEY);
+    const unknownChoice = causeField?.choices?.find((choice) => choice.unknown);
+
+    expect(
+      modulesMissingMainCause([definition], withValues({ waitingHoursPerMonth: 20, mainCause: 0 })),
+    ).toHaveLength(0);
+    expect(
+      modulesMissingMainCause(
+        [definition],
+        withValues({ waitingHoursPerMonth: 20, mainCause: unknownChoice!.value }),
+      ),
+    ).toHaveLength(0);
+  });
+});
+
 describe('isModuleAnswered', () => {
   const definition = MODULE_REGISTRY.planiranje;
 
   it('modul na samih privzetih vrednostih ni izpolnjen', () => {
     expect(isModuleAnswered(definition, resolveInputs(definition, {}))).toBe(false);
+  });
+
+  it('izbrani "Ne vemo" pri vzroku sam po sebi ne pomeni izmerjenega področja', () => {
+    // Odkar vzrok nima privzetka, je izbrani "Ne vemo" različen od privzetka —
+    // brez izrecnega pravila bi področje brez ene same številke izpadlo iz
+    // razdelka "Česa nismo izmerili" in vstopilo v oceno zanesljivosti.
+    const causeField = definition.fields.find((field) => field.key === MAIN_CAUSE_KEY);
+    const unknownChoice = causeField?.choices?.find((choice) => choice.unknown);
+    const values = resolveInputs(definition, { mainCause: unknownChoice!.value });
+
+    expect(isModuleAnswered(definition, values)).toBe(false);
   });
 
   it('manjkajoče vrednosti ne veljajo za izpolnjene', () => {
@@ -395,8 +447,65 @@ describe('Celovitost registra', () => {
       for (const field of definition.fields) {
         if (field.kind !== 'choice') continue;
         expect(field.choices, `${definition.id}.${field.key}`).toBeDefined();
+        // Dovoljeni izjemi, obe namenoma brez začetne izbire: glavni vzrok (tiha
+        // privzeta vrednost ne sme odločati o naslovljivem deležu) in kontekstna
+        // vprašanja (vnaprej izbran "Excel" je v CRM potoval kot podatek).
+        if (field.key === MAIN_CAUSE_KEY || field.contextOnly) {
+          expect(field.default, `${definition.id}.${field.key}`).toBe(UNANSWERED_CHOICE);
+          continue;
+        }
         expect(field.choices!.map((choice) => choice.value)).toContain(field.default);
       }
+    }
+  });
+
+  it('sentinela "ni odgovorjeno" ni med možnostmi in pripada vzroku ali kontekstu', () => {
+    // Ključno razlikovanje: sentinela NE sme biti UNKNOWN_ANSWER (−1), ker jo
+    // withoutUnknowns tik pred compute() prepiše v 0 — kar je prvi vzrok na
+    // seznamu in s tem najvišji delež v sistemu.
+    expect(MAIN_CAUSE_UNANSWERED).not.toBe(UNKNOWN_ANSWER);
+    expect(MAIN_CAUSE_UNANSWERED).toBe(UNANSWERED_CHOICE);
+
+    for (const definition of Object.values(MODULE_REGISTRY)) {
+      for (const field of definition.fields) {
+        if (field.kind !== 'choice') continue;
+        expect(
+          field.choices!.map((choice) => choice.value),
+          `${definition.id}.${field.key}`,
+        ).not.toContain(UNANSWERED_CHOICE);
+        if (field.default === UNANSWERED_CHOICE) {
+          // Polje brez začetne izbire sme biti samo tako, ki v izračun ne vstopa
+          // s formulo za delež (vzrok) ali sploh ne (kontekst) — diagnostika in
+          // deleži zaloge imajo privzetek med možnostmi ("Nismo preverili", "Ne vem").
+          expect(
+            field.key === MAIN_CAUSE_KEY || field.contextOnly === true,
+            `${definition.id}.${field.key}: sentinelo smeta uporabiti samo vzrok in kontekstno polje`,
+          ).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('neodgovorjen glavni vzrok da konservativen delež tudi skozi motor', () => {
+    for (const definition of Object.values(MODULE_REGISTRY)) {
+      if (!definition.fields.some((field) => field.key === MAIN_CAUSE_KEY)) continue;
+
+      // Prazen vnos gre skozi resolveInputs IN withoutUnknowns — natanko pot
+      // obiskovalca, ki radiev ne izbere. Osem modulskih testov kliče compute()
+      // neposredno in te poti ne prehodi, zato pasti s sentinelo −1 ne bi ujeli.
+      const outputs = computeModules([definition], {}, DEFAULT_COST_CONTEXT).filter(
+        (output) => output.addressableShare !== undefined,
+      );
+      expect(outputs.length, definition.id).toBeGreaterThan(0);
+      for (const output of outputs) {
+        expect(output.addressableShare, `${definition.id}: ${output.label}`).toBe(
+          ADDRESSABLE_SHARE.unknown,
+        );
+      }
+
+      // Ker je unknown enak people (0,45), sama vrednost ne dokaže ničesar:
+      // dokaz je, da sentineli ne ustreza NOBENA ponujena možnost.
+      expect(mainCauseLabel(definition, MAIN_CAUSE_UNANSWERED), definition.id).toBeNull();
     }
   });
 

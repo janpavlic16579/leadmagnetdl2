@@ -13,28 +13,28 @@ import type { FieldChoice, ModuleField, RiskLevel } from './moduleTypes';
 export const MONTHS_PER_YEAR = 12;
 
 /**
- * Privzeti letni strošek kapitala, kadar obiskovalec vprašanja ne odgovori.
+ * Letni strošek kapitala, umerjen avgusta 2026: 6 % → 8,5 %.
  *
- * Ni več konstanta v formulah: strošek kapitala je od koraka 5 prenove del skupne
- * finančne osnove (ComputeContext.capitalCostRate) in ga vprašajo dejavnosti,
- * katerih moduli množijo denar v terjatvah ali zalogah. Ta vrednost je samo še
- * privzetek (contextTypes.emptyProfileFor in DEFAULT_COST_CONTEXT) — prej je bila
- * fiksna tu, legacy modul pa je isti koncept spraševal z 10 %.
+ * NI vir resnice v izvajanju. Strošek kapitala je od koraka 5 prenove del skupne
+ * finančne osnove (ComputeContext.capitalCostRate); privzetek, ki dejansko vstopa
+ * v izračun, je DEFAULT_COST_CONTEXT v moduleTypes.ts in `fallback` v
+ * config/contexts/*.ts. Ta konstanta ostaja kot zapisana referenca in kot
+ * pričakovanje v testih — ob spremembi je treba premakniti VSE tri.
  *
- * KALIBRACIJA: začetna ocena, ne empirija. Po prvih ~50 vnosih jo je treba preveriti
- * na realnih podatkih — enako kot naslovljive deleže in pasove izboljšave.
+ * Zakaj 8,5 in ne 6: 6 % je bila obrestna mera posojila, ne strošek kapitala
+ * podjetja. Konvencija za denar, vezan v zalogah in terjatvah, je WACC — KPMG
+ * Cost of Capital Study 2025 meri povprečje 8,5 %, evropska MSP z velikostno
+ * premijo 10–14 %, faktoring pa je efektivno 6–12 % letno. Dolžniška spodnja meja
+ * je ~4 % (ECB MIR, junij 2026: mala posojila 3,91 %).
+ *
+ * Zakaj 8,5 in ne 8: pasovi vprašanja so zaprti na obeh straneh in se stikajo pri
+ * 0,08 (5–8 % in 8–12 %). Privzetek 0,08 bi ustrezal DVEMA pasovoma —
+ * contexts.test.ts to ujame, industryAverageScaleBand pa bi vrnil prvega in
+ * obiskovalec bi videl 8 % ob razponu, ki se pri 8 % konča. 8,5 % je hkrati
+ * natanko izmerjena vrednost KPMG. Izpeljava:
+ * docs/erp-koristi-benchmarki-2026-08.md, razdelek B.
  */
-export const RECEIVABLES_CAPITAL_COST = 0.06;
-
-/**
- * Isti letni strošek kapitala za denar, vezan v zalogah.
- *
- * Sklic in ne nova konstanta: denar v zalogi ni nič cenejši od denarja v terjatvah,
- * dve številki pa bi se ob prvi kalibraciji razšli. Sprostljiva zaloga je enkraten
- * denarni učinek, ta strošek pa letni — zato sta v poročilu ločena (raziskava
- * maloprodaje, F02 in F03).
- */
-export const INVENTORY_CAPITAL_COST = RECEIVABLES_CAPITAL_COST;
+export const RECEIVABLES_CAPITAL_COST = 0.085;
 
 /**
  * Vrednost, ki pomeni "na to vprašanje nismo odgovorili".
@@ -67,9 +67,15 @@ export const ASSURANCE_CHOICES: FieldChoice[] = [
   { value: ASSURANCE_UNANSWERED, label: 'Nismo preverili' },
 ];
 
-/** Opomba ob paru, na katerega obiskovalec ni odgovoril. */
+/**
+ * Opomba ob paru, ki je ostal pri "Nismo preverili".
+ *
+ * Ne "niste odgovorili": privzeta izbira JE "Nismo preverili" in radio je ob
+ * prvem izrisu označen — trditev, da odgovora ni bilo, je ob označenem radiu
+ * izmerljivo napačna in je bila prva stvar, ki jo je pregled UX očital rezultatu.
+ */
 export const ASSURANCE_UNANSWERED_NOTE =
-  'Ni ocenjeno — na ta vprašanja niste odgovorili. Stopnje tveganja zato ne prikazujemo; ocene si ne izmišljamo.';
+  'Ni ocenjeno — ti vprašanji sta ostali pri „Nismo preverili". Stopnje tveganja zato ne prikazujemo; ocene si ne izmišljamo.';
 
 export function riskLevelFromScore(score: number, maxScore: number): RiskLevel {
   const ratio = score / maxScore;
@@ -100,24 +106,29 @@ export function assuranceRiskLevel(...answers: number[]): RiskLevel | undefined 
 
 /**
  * Deleži za izbrane razpone znižanja zaloge. Vrednosti polja so INDEKSI, ne
- * deleži: "Ne vem" pade na isti konservativni delež kot "Do 5 %", enaki
- * vrednosti pa bi v ModuleInput označili dva radia hkrati (glej FieldChoice).
+ * deleži: enake vrednosti bi v ModuleInput označile dva radia hkrati (glej
+ * FieldChoice).
  *
- * ODPRTO VPRAŠANJE KALIBRACIJE (ni popravljeno namenoma).
- * Pregled maloprodaje (ZM-06) predlaga [0.03, 0.08, 0.15, 0.20, 0.03] z utemeljitvijo,
- * da je zgornji pas 0,22 približno 2,2-krat nad najvišjo vrednostjo iz raziskave
- * (sklic "A18"). Te trditve v dostopnem gradivu ni bilo mogoče preveriti: v
- * Raziskava_maloprodaja_PANTHEON.md je ni, register v .xlsx pa se ni dal prebrati.
+ * KALIBRIRANO avgusta 2026 proti zunanjemu viru. Prej [0.05, 0.08, 0.15, 0.22, 0.05]:
  *
- * Zamenjava ene neutemeljene številke z drugo neutemeljeno ni izboljšava, zato
- * vrednosti ostajajo. Preden se spremenijo, je treba iz registra prebrati dejansko
- * predpostavko A18 in jo zapisati sem kot vir.
+ * - "Ne vem" (indeks 4) 0,05 → 0,10. Doslej je padel na isti delež kot "Do 5 %",
+ *   kar je bila POLOVICA spodnjega roba izmerjenega razpona: Aberdeen (anketa
+ *   1.680 podjetij) meri povprečno znižanje stroškov zalog ob uvedbi ERP 17,2 %
+ *   (13,4–25 % po ponudnikih), konservativno sidro pred CFO pa je 10–15 %.
+ *   Neodgovor je torej obljubljal manj od najslabšega izmerjenega projekta.
+ * - "Več kot 20 %" (indeks 3) 0,22 → 0,25. Stranka je izrekla "več kot 20";
+ *   sredina odprtega razpona je kvečjemu 25, kar je hkrati Aberdeenov zgornji rob.
+ *
+ * S tem odpade odprto vprašanje o nepreverljivem sklicu "A18" iz pregleda
+ * maloprodaje (ZM-06): namesto rekonstrukcije stare predpostavke so pasovi
+ * privezani na zapisan in preverljiv zunanji vir
+ * (docs/erp-koristi-benchmarki-2026-08.md, razdelek A1).
  *
  * Dodatna previdnost, kadar se to zgodi: ta nabor uporablja ŠEST dejavnosti, v
  * storitve.ts pa isti delež množi nezaračunano delo (WIP) in ne zaloge blaga —
  * maloprodajna predpostavka tam ne velja in potrebuje svojo kalibracijo.
  */
-const REDUCIBLE_SHARES = [0.05, 0.08, 0.15, 0.22, 0.05];
+const REDUCIBLE_SHARES = [0.05, 0.08, 0.15, 0.25, 0.1];
 
 export const REDUCIBLE_SHARE_KEY = 'reducibleShare';
 

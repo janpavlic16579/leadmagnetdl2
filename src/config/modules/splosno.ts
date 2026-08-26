@@ -1,4 +1,5 @@
 import { addressableShareOf, mainCauseField, type CauseOption } from './addressableShare';
+import { UNANSWERED_CHOICE } from './moduleTypes';
 import type { ModuleDefinition, RiskLevel } from './moduleTypes';
 import {
   ASSURANCE_CHOICES,
@@ -93,7 +94,7 @@ export const podatkiSp: ModuleDefinition = {
       key: 'toolCount',
       label: 'V koliko ločenih orodjih vodite ključne poslovne podatke?',
       kind: 'choice',
-      default: 2,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       choices: [
         { value: 0, label: 'V enem' },
@@ -198,7 +199,7 @@ export const usklajevanjeSp: ModuleDefinition = {
       key: 'infoAccess',
       label: 'Kako pridete do ključnih poslovnih številk?',
       kind: 'choice',
-      default: 2,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       choices: [
         { value: 0, label: 'Sproti, iz sistema' },
@@ -308,7 +309,7 @@ export const napakeSp: ModuleDefinition = {
       key: 'errorDetection',
       label: 'Kdaj napako običajno opazite?',
       kind: 'choice',
-      default: 2,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       choices: [
         { value: 0, label: 'Takoj, ob nastanku' },
@@ -339,7 +340,12 @@ export const napakeSp: ModuleDefinition = {
         addressableShare,
       },
       {
-        bucket: 'directLoss',
+        // Nezaslužena marža in ne neposredna izguba — enako kot v proizvodnji,
+        // logistiki in storitvah. Splošni segment je bil edini, kjer je ta postavka
+        // pristala med denarjem, ki je dejansko odtekel: posel, do katerega ni
+        // prišlo, stoji na predpostavki in mora zdržati ugovor "tega naročila morda
+        // tako ne bi dobili", ne da bi s seboj podrl dokazljivi del zneska.
+        bucket: 'lostMargin',
         label: 'Izgubljena prispevna marža',
         valueEUR: input.annualLostMarginEUR,
         addressableShare,
@@ -507,7 +513,7 @@ export const zalogeSp: ModuleDefinition = {
       key: 'stockVisibility',
       label: 'Kako dober je vaš pregled nad dejanskimi zalogami?',
       kind: 'choice',
-      default: 2,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       choices: [
         { value: 0, label: 'Sproten in po lokacijah' },

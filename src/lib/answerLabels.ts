@@ -7,7 +7,11 @@ import type {
   SegmentContext,
 } from '../config/contexts';
 import { MAIN_CAUSE_KEY } from '../config/modules/addressableShare';
-import { isUnknownAnswer } from '../config/modules/moduleTypes';
+import {
+  isUnansweredChoice,
+  isUnknownAnswer,
+  isUnknownChoiceValue,
+} from '../config/modules/moduleTypes';
 import type { ModuleDefinition, ModuleField } from '../config/modules/moduleTypes';
 import { formatNumber, formatPercent } from './format';
 
@@ -116,7 +120,10 @@ export function fieldAnswerText(field: ModuleField, value: number): string {
   // kjer je stranka izrecno povedala, da podatka nima.
   if (isUnknownAnswer(value)) return '„Ne vem"';
   if (field.kind === 'choice') {
-    return field.choices?.find((choice) => choice.value === value)?.label ?? String(value);
+    // Vrednost izven seznama pomeni, da izbire ni bilo (MAIN_CAUSE_UNANSWERED).
+    // Prej je padla na String(value) — prodajnik bi v pripravi bral "99".
+    const choice = field.choices?.find((option) => option.value === value);
+    return choice ? choice.label : 'Ni odgovora';
   }
   if (field.kind === 'checkbox') {
     return value === 1 ? 'Da' : 'Ne';
@@ -138,20 +145,27 @@ export function isAnswered(field: ModuleField, value: number | undefined): boole
   return value !== undefined && value !== field.default;
 }
 
-/** Je pri izbirnem polju izbran odgovor "Ne vem". */
+/**
+ * Je pri izbirnem polju izbran odgovor "Ne vem".
+ *
+ * Preusmeritev in ne druga definicija: pojem je isti kot v motorju in oceni
+ * zanesljivosti, dve kopiji pa bi se ob prvi spremembi razšli.
+ */
 export function isUnknownChoice(field: ModuleField, value: number | undefined): boolean {
-  if (field.kind !== 'choice') return false;
-  return field.choices?.find((choice) => choice.value === value)?.unknown === true;
+  return isUnknownChoiceValue(field, value);
 }
 
 /**
  * Od kod vrednost prihaja — v enem izrazu, ki se izpiše ob odgovoru.
  *
- * Trije primeri, ki jih mora prodajnik ločiti: strankin podatek, izrecno priznano
- * neznanje in nedotaknjen privzetek. Zadnja dva sta oba "mehka", a povesta različno:
- * "Ne vem" je odgovor, privzetek pa je odsotnost odgovora.
+ * Štirje primeri, ki jih mora prodajnik ločiti: strankin podatek, izrecno priznano
+ * neznanje, neodgovorjeno vprašanje in nedotaknjen privzetek. Zadnji trije so vsi
+ * "mehki", a povedo različno: "Ne vem" je odgovor, neodgovor je molk, privzetek pa
+ * je vrednost, ki jo je vprašalnik ponudil sam. Prav ta razlika odloči, kaj se
+ * prodajnik na sestanku sploh splača vprašati.
  */
 export function answerSource(field: ModuleField, value: number | undefined): string {
   if (isUnknownChoice(field, value) || isUnknownAnswer(value)) return '„Ne vem"';
+  if (isUnansweredChoice(field, value)) return 'ni odgovora';
   return isAnswered(field, value) ? 'vneseno' : 'privzeto';
 }

@@ -106,6 +106,10 @@ const SOURCES = {
 
 describe('Vdelana pisava', () => {
   it('pokriva slovenske znake in evro', () => {
+    // Nizov, zapisanih v src/lib/, spodnji pregled po content/ in config/ ne
+    // zajame — znak, ki ga uporablja izris v pdf.ts, mora zato stati na tem
+    // seznamu. Pisava npr. NIMA "•" (preverjeno), zato okvir "Česa ta znesek ne
+    // vsebuje" našteva z "–".
     for (const char of 'čšžćđČŠŽ€–—…„"·×°') {
       expect(COVERED.has(char.codePointAt(0) ?? 0), `manjka ${char}`).toBe(true);
     }

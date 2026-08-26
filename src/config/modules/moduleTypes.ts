@@ -56,6 +56,23 @@ export function isUnknownAnswer(value: number | undefined): boolean {
 }
 
 /**
+ * Privzetek izbirnega polja, ki pomeni "ni izbrano" — vrednost namenoma ni med
+ * možnostmi, zato ob prvem izrisu ni označen noben radio.
+ *
+ * Najprej jo je uvedel glavni vzrok (MAIN_CAUSE_UNANSWERED v addressableShare.ts,
+ * ki je zdaj vzdevek te konstante), nato kontekstna vprašanja: privzeto izbran
+ * "Excel" ali "Po e-pošti in po spominu" je v CRM in prodajno pripravo potoval
+ * kot podatek, direktor z urejenim sistemom pa je na petih mestih našel vnaprej
+ * izbrano trditev, da dela s papirjem.
+ *
+ * Zakaj 99 in ne −1: UNKNOWN_ANSWER (−1) withoutUnknowns tik pred compute()
+ * prepiše v 0 — kar je prva možnost na seznamu. Pozitivna sentinela je proti
+ * takim posplošitvam strukturno odporna. Da je ni med možnostmi nobenega polja,
+ * varuje moduleEngine.test.ts.
+ */
+export const UNANSWERED_CHOICE = 99;
+
+/**
  * 'percent' polja so ulomek povsod — v default, min, max, step in v compute().
  * Samo widget jih pomnoži s 100 za prikaz. Doslej je bila ta pretvorba raztresena
  * po JSX-u v StepInputs in je bila vir tihe neskladnosti.
@@ -174,6 +191,27 @@ export interface ModuleField {
   contextOnly?: true;
 }
 
+/**
+ * Izbirno polje BREZ odgovora: vrednost ne ustreza nobeni ponujeni možnosti.
+ *
+ * Splošno in ne vezano na MAIN_CAUSE_UNANSWERED — pravilo je "česar ni na seznamu,
+ * ni izbral nihče" in bo veljalo za vsako prihodnje polje, ki se začne prazno.
+ *
+ * `undefined` NI neodgovor: pomeni nerazrešen vnos, ki ga resolveInputs vedno
+ * dopolni. Šteti ga sem bi diagnostiko, ki v komponente pride prek
+ * `values[id] ?? {}`, po nepotrebnem razglasilo za neodgovorjeno.
+ */
+export function isUnansweredChoice(field: ModuleField, value: number | undefined): boolean {
+  if (field.kind !== 'choice' || value === undefined) return false;
+  return !field.choices?.some((choice) => choice.value === value);
+}
+
+/** Je pri izbirnem polju izbrana možnost, označena z `unknown` ("Ne vem"). */
+export function isUnknownChoiceValue(field: ModuleField, value: number | undefined): boolean {
+  if (field.kind !== 'choice') return false;
+  return field.choices?.some((choice) => choice.value === value && choice.unknown === true) === true;
+}
+
 export type RiskLevel = 'low' | 'medium' | 'high';
 
 /** Kar vrne compute(); moduleId doda motor, da ga modulu ni treba ponavljati. */
@@ -187,6 +225,20 @@ export interface ModuleOutputDraft {
   riskLevel?: RiskLevel;
   /** Npr. "marža pod tveganjem: 3–6 % prihodkov" — namerno pas, ne točen znesek. */
   note?: string;
+  /**
+   * Zgornja meja naslovljivosti TE postavke, ne glede na glavni vzrok.
+   *
+   * Glavni vzrok velja za celo področje, postavke pod njim pa niso enake narave:
+   * izmet materiala ima tehnološko dno (razrez, zagon, izplen), prazni kilometri
+   * geografsko — ure prepisovanja podatkov ju nimata. Brez meje bi vzrok "zastarele
+   * sestavnice" trdil, da je odpravljivih 75 % izmeta, kar ni mogoče niti načeloma.
+   *
+   * Uporabi SAMO tam, kjer obstaja fizikalna ali geografska meja, in vrednost
+   * utemelji ob postavki. Ni splošni dušilec: potencial se sicer računa iz vzroka
+   * in dva koeficienta za isto stvar sta natanko napaka, ki je bila avgusta 2026
+   * odpravljena.
+   */
+  addressableCap?: number;
   /**
    * Delež te postavke, ki ga je z boljšimi procesi sploh mogoče nasloviti (0–1),
    * izpeljan iz modulovega odgovora o glavnem vzroku.
@@ -290,5 +342,9 @@ export const DEFAULT_COST_CONTEXT: ComputeContext = {
   chargeOutRateEUR: 55,
   annualRevenueEUR: 0,
   contributionMarginRate: 0.25,
-  capitalCostRate: 0.06,
+  // Umerjeno avgusta 2026 s 6 % na 8,5 %: oportunitetni strošek vezanega denarja
+  // je strošek kapitala podjetja (WACC 8,5 %, KPMG 2025), ne obrestna mera
+  // posojila (~4 %). Isto vrednost nosita RECEIVABLES_CAPITAL_COST in `fallback`
+  // v config/contexts/*.ts — vse tri se premikajo skupaj.
+  capitalCostRate: 0.085,
 };

@@ -40,6 +40,10 @@ jobs:
           # svežnju, zato se mora končna točka braniti sama (omejevanje hitrosti,
           # CORS, preverjanje izvora) in ne s skrivnostjo naslova.
           VITE_LEAD_WEBHOOK_URL: ${{ vars.VITE_LEAD_WEBHOOK_URL }}
+          # Javni naslov objave. Brez njega gradnja NE vstavi canonical, og:url
+          # in og:image — deljena povezava je brez predogledne kartice (vtičnik
+          # canonicalUrl v vite.config.ts to ob gradnji tudi glasno izpiše).
+          VITE_PUBLIC_URL: ${{ vars.VITE_PUBLIC_URL }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

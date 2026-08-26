@@ -59,12 +59,30 @@
   font-weight: 600;
 }
 
+/*
+ * Tanka vrstica napredka na vrhu koraka (izrisuje jo CalculatorFlow).
+ *
+ * Besedilni števec "Korak N od M" je bil edini signal napredovanja — pri devetih
+ * in več korakih premalo za občutek "sem že skoraj tam". Vrstica nosi isto
+ * informacijo brez branja; dostopnost pokrije role="progressbar" na elementu.
+ */
+.progressTrack {
+  height: 4px;
+  background: var(--color-border);
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--color-primary);
+  transition: width 200ms ease;
+}
+
 .input,
 .select {
   min-height: 44px;
   padding: var(--space-2) var(--space-3);
   font-size: var(--font-size-md);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-md);
   background: var(--color-surface);
   color: var(--color-text);

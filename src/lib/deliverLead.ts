@@ -72,6 +72,11 @@ export interface DeliverLeadInput {
   /** Id področja z največjim letnim zneskom (moduleEngine.findHighestModule). */
   highestModule: string | null;
   accountingCapacity?: number;
+  /**
+   * Izračunan razlog nizke zanesljivosti za strankin PDF (brezosebna oblika,
+   * lib/confidenceReason.ts) — namesto splošnega "podatki manjkajo".
+   */
+  confidenceReasonPdf?: string | null;
   /** Pokritost, kot jo vidi obiskovalec — hero znesek meri samo izbrana področja. */
   coverage: {
     measuredCount: number;
@@ -143,12 +148,14 @@ export async function deliverLead(
     // Samo ime podjetja: poročilo gre upravi stranke, ki ve, kdo ga je izpolnil,
     // in se posreduje interno — osebni podatki v njem so odveč.
     companyName: input.contact.companyName,
+    employeeCount: input.employeeCount,
     outputs: input.outputs,
     totals: input.totals,
     totalsRange: input.totalsRange,
     coverage: input.coverage,
     highestModule: input.highestModule,
     accountingCapacity: input.accountingCapacity,
+    confidenceReason: input.confidenceReasonPdf,
   });
 
   // Gumb za ponovni prenos na zahvalnem zaslonu visi na tem stanju.
@@ -211,6 +218,13 @@ export async function deliverLead(
   // datoteka, ki je nujna — strankino poročilo.
   await hooks.downloadSequentially(salesFile ? [customerFile, salesFile] : [customerFile]);
 
+  // Ali je lead sploh prišel do prodaje. lm10_lead_submitted zgoraj se namerno
+  // sproži pred dostavo; brez tega para bi se konverzije štele tudi takrat, ko
+  // do prodaje niso prišle — v produkciji brez webhooka torej VSE.
+  if (!webhookUrl) {
+    track('lm10_delivery_failed', { reason: 'no_webhook' });
+  }
+
   // Webhook ŠELE ZDAJ: prej je njegov rok stal med obema prenosoma (glej glavo).
   // Za obiskovalca se ne spremeni nič — datoteki ima že obe.
   if (webhookUrl && report) {
@@ -238,6 +252,12 @@ export async function deliverLead(
           )
         : false;
 
+      if (delivered) {
+        track('lm10_delivery_ok', { channel: 'webhook' });
+      } else {
+        track('lm10_delivery_failed', { reason: record ? 'rejected' : 'no_record' });
+      }
+
       // Rezerva: brez uspele dostave svetovalec do priprave nima nobene poti.
       // `!salesFile` izloči interni način, kjer je datoteka že prenesena.
       if (!delivered && !salesFile) {
@@ -246,6 +266,7 @@ export async function deliverLead(
       }
     } catch {
       // Kot zgoraj: strankino poročilo je že preneseno in prodajni del sme odpasti.
+      track('lm10_delivery_failed', { reason: 'error' });
     }
   }
 

@@ -14,3 +14,10 @@
   display: flex;
   align-items: center;
 }
+
+/* Sporočilo ob kliku na "Naprej" brez vnosa — gumb ni onemogočen (glej .tsx). */
+.missing {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-danger);
+}

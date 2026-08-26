@@ -11,6 +11,7 @@ import {
 import { ADDRESSABLE_SHARE } from './addressableShare';
 import type { ComputeContext, ModuleDefinition, ModuleOutputDraft } from './moduleTypes';
 import { resolveInputs } from '../../lib/moduleEngine';
+import { reducibleShareOf } from './shared';
 
 /**
  * Testi držijo iste tri lastnosti kot pri proizvodnji in logistiki: postavka je v
@@ -82,12 +83,17 @@ describe('Presežna zaloga, odpisi in znižanja', () => {
     expect(item.addressableShare).toBeUndefined();
   });
 
-  it('"Ne vem" pade na najkonservativnejši delež znižanja', () => {
-    const unknown = run(zalogeMp, { inventoryValueEUR: 800_000, reducibleShare: 4 });
-    const lowest = run(zalogeMp, { inventoryValueEUR: 800_000, reducibleShare: 0 });
-    expect(pick(unknown, 'Sprostljiv obratni kapital v zalogah').valueEUR).toBe(
-      pick(lowest, 'Sprostljiv obratni kapital v zalogah').valueEUR,
-    );
+  // Doslej je "Ne vem" padel na natanko isti delež kot najnižji pas (0,05).
+  // To ni bila konservativnost, ampak polovica spodnjega roba tega, kar Aberdeen
+  // izmeri ob uvedbi ERP (13,4–25 %, konservativno sidro 10–15 %) — neodgovor je
+  // obljubljal manj od najslabšega izmerjenega projekta. Odslej 0,10.
+  it('"Ne vem" pade na izmerjeno spodnjo mejo, ne na najnižji pas', () => {
+    const valueOf = (share: number) =>
+      pick(run(zalogeMp, { inventoryValueEUR: 800_000, reducibleShare: share }), 'Sprostljiv obratni kapital v zalogah').valueEUR ?? 0;
+
+    expect(valueOf(4)).toBe(800_000 * reducibleShareOf(4));
+    expect(valueOf(4)).toBeGreaterThan(valueOf(0));
+    expect(valueOf(4)).toBeLessThan(valueOf(2));
   });
 
   it('vzrok v podatkih da najvišji naslovljiv delež', () => {
@@ -98,16 +104,45 @@ describe('Presežna zaloga, odpisi in znižanja', () => {
 });
 
 describe('Prazne police in nedobavljivi artikli', () => {
-  const outputs = run(razpolozljivostMp, {
-    lostSalesSharePercent: 0.02,
-    substitutionShare: 0,
-    expressDeliveryCostEUR: 15_000,
-    stockCheckHoursPerMonth: 30,
-    mainCause: 1,
-  });
+  // Prihodek in marža prideta iz skupne finančne osnove, zato ju scenarij poda
+  // prek konteksta — brez njiju je postavka praznih polic vedno 0.
+  const RETAIL_CONTEXT: ComputeContext = {
+    ...CONTEXT,
+    annualRevenueEUR: 2_000_000,
+    contributionMarginRate: 0.31,
+  };
+  const outputs = razpolozljivostMp.compute(
+    resolveInputs(razpolozljivostMp, {
+      stockoutDemandShare: 1, // 2–5 % povpraševanja → 0,035
+      substitutionShare: 2, // manjši del kupcev nadomesti → 0,2 zadržanega
+      expressDeliveryCostEUR: 15_000,
+      stockCheckHoursPerMonth: 30,
+      mainCause: 1,
+    }),
+    RETAIL_CONTEXT,
+  );
 
   it('nezaslužena marža praznih polic ima svoj koš, ločen od odtekanja denarja', () => {
     expect(pick(outputs, 'Nezaslužena marža zaradi praznih polic').bucket).toBe('lostMargin');
+  });
+
+  // Vprašanje meri BRUTO povpraševanje ob prazni polici; substitucija ga zniža
+  // natanko enkrat. Prej je vprašanje spraševalo po že izgubljeni prodaji, formula
+  // pa je substitucijo odštela še drugič — isti vzorec dvojnega diskonta, ki je bil
+  // avgusta 2026 odpravljen pri potencialu.
+  it('substitucija se odšteje natanko enkrat', () => {
+    expect(pick(outputs, 'Nezaslužena marža zaradi praznih polic').valueEUR).toBeCloseTo(
+      2_000_000 * 0.035 * 0.31 * (1 - 0.2),
+      6,
+    );
+  });
+
+  it('brez odgovora o povpraševanju postavka ostane 0 — prazen obrazec ne izmisli zneska', () => {
+    const untouched = razpolozljivostMp.compute(
+      resolveInputs(razpolozljivostMp, {}),
+      RETAIL_CONTEXT,
+    );
+    expect(pick(untouched, 'Nezaslužena marža zaradi praznih polic').valueEUR).toBe(0);
   });
 
   it('ekspresne dobave so denar, ki odteče, iskanje zaloge pa porabljen čas', () => {
@@ -310,7 +345,10 @@ describe('Skupne lastnosti stroškovnih modulov', () => {
     }
   });
 
-  it('privzeti glavni vzrok je "Ne vemo" in da konservativen delež', () => {
+  // Vprašanje o glavnem vzroku nima privzetka (MAIN_CAUSE_UNANSWERED): brez izbire
+  // ni označen noben radio, delež pa pade na konservativni 'unknown'. Ta test hodi
+  // prek compute() in NE prek withoutUnknowns — celotno pot varuje moduleEngine.test.ts.
+  it('neodgovorjen glavni vzrok da konservativen delež', () => {
     for (const definition of COSTED_MODULES) {
       const outputs = run(definition).filter((output) => output.addressableShare !== undefined);
       expect(outputs.length, definition.id).toBeGreaterThan(0);

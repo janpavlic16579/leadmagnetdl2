@@ -46,7 +46,7 @@ const BASE: SalesReport = {
     confidence: 'low',
     confidenceReason: 'Zneski so spodnja meja.',
   },
-  softness: { hourAssumptions: [], unknownAnswers: [], untouchedFields: [], plausibilityWarning: null },
+  softness: { hourAssumptions: [], unknownAnswers: [], unansweredChoices: [], untouchedFields: [], plausibilityWarning: null },
   triage: [],
   measured: [],
   risks: [],

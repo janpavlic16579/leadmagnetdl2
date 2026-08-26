@@ -58,6 +58,29 @@ describe('computeAddressablePotentialEUR', () => {
     expect(potentialEUR).toBeCloseTo(15_000, 6);
   });
 
+  // Zgornja meja postavke obstaja tam, kjer ima problem fizikalno dno: izmet
+  // materiala (razrez, zagon, izplen) in prazni kilometri (vozilo se mora vrniti).
+  // Vzrok velja za celo področje, narava postavk pod njim pa ni enaka.
+  it('zgornja meja postavke omeji delež, kadar je vzrok višji od nje', () => {
+    const potentialEUR = computeAddressablePotentialEUR([
+      output({ bucket: 'directLoss', valueEUR: 10_000, addressableShare: 0.75, addressableCap: 0.5 }),
+    ]);
+
+    expect(potentialEUR).toBeCloseTo(5_000, 6);
+  });
+
+  it('meja deleža NE zniža, kadar je vzrok že pod njo — ni drugi množitelj', () => {
+    const capped = computeAddressablePotentialEUR([
+      output({ bucket: 'directLoss', valueEUR: 10_000, addressableShare: 0.3, addressableCap: 0.5 }),
+    ]);
+    const uncapped = computeAddressablePotentialEUR([
+      output({ bucket: 'directLoss', valueEUR: 10_000, addressableShare: 0.3 }),
+    ]);
+
+    expect(capped).toBeCloseTo(3_000, 6);
+    expect(capped).toBe(uncapped);
+  });
+
   it('enkratnega kapitala ne šteje — ta znesek je že sam potencial', () => {
     const potentialEUR = computeAddressablePotentialEUR([
       output({ bucket: 'oneTimeCapital', valueEUR: 500_000, addressableShare: 0.75 }),

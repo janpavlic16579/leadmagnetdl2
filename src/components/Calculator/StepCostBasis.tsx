@@ -249,6 +249,18 @@ function CostField({ question, value, onChange }: CostFieldProps) {
         </p>
       )}
 
+      {/*
+        Prazno polje NI nič: izračun tedaj teče s panožnim povprečjem. To je bilo
+        doslej tiho — obiskovalec, ki je polje zavestno preskočil, je dobil zneske
+        iz številke, ki je ni nikoli videl. Posledica mora biti izpisana ob polju.
+      */}
+      {value.source === 'none' && (
+        <p className={styles.averageNote}>
+          Polje je prazno — v izračunu zato velja povprečje panoge ({question.fallbackEUR} EUR/h)
+          kot ocena.
+        </p>
+      )}
+
       {bandsOpen && (
         <fieldset id={`${groupId}-bands`} className={styles.bands}>
           {/* Skrita, ne odstranjena: predpona je zdaj v vrstici izhodov, skupina
@@ -280,6 +292,14 @@ function CostField({ question, value, onChange }: CostFieldProps) {
             ))}
           </div>
         </fieldset>
+      )}
+
+      {/* Izbran razpon pove pas, ne številke — s katero bo izračun zares tekel,
+          doslej ni pisalo nikjer. */}
+      {value.source === 'band' && (
+        <p className={styles.averageNote}>
+          Računamo s sredino izbranega razpona — {value.valueEUR} EUR/h.
+        </p>
       )}
     </div>
   );
@@ -372,6 +392,16 @@ function ScaleField({ question, value, onChange }: ScaleFieldProps) {
         </p>
       )}
 
+      {/* Ista posledica kot pri urni postavki — a samo tam, kjer povprečje sploh
+          obstaja: prihodek privzetka nima (prometa si ne izmišljamo) in njegovo
+          prazno polje že pojasnjuje besedilo pod vprašanjem. */}
+      {value.source === 'none' && hasIndustryAverage && (
+        <p className={styles.averageNote}>
+          Polje je prazno — v izračunu zato velja povprečje panoge ({toDisplay(question.fallback)}{' '}
+          {question.unit}) kot ocena.
+        </p>
+      )}
+
       {bandsOpen && (
         <fieldset id={`${groupId}-bands`} className={styles.bands}>
           <legend className={styles.srOnly}>Izberi razpon</legend>
@@ -401,6 +431,12 @@ function ScaleField({ question, value, onChange }: ScaleFieldProps) {
             ))}
           </div>
         </fieldset>
+      )}
+
+      {value.source === 'band' && (
+        <p className={styles.averageNote}>
+          Računamo s sredino izbranega razpona — {toDisplay(value.value)} {question.unit}.
+        </p>
       )}
     </div>
   );
