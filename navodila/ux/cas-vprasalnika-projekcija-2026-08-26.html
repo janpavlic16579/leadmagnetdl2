@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="sl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Koliko časa vzame vprašalnik kalkulatorja LM-10 pri 3 do 10 izbranih področjih.">
+<style>*{margin:0;padding:0;box-sizing:border-box}img{max-width:100%}</style>
+<title>Časovni proračun vprašalnika</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+:root {
+  color-scheme: light;
+  --ground:#f4f6f8; --surface:#ffffff; --surface-2:#eaeef3; --surface-3:#dfe5ec;
+  --ink:#0f1418; --ink-2:#4b545d; --ink-3:#79838d;
+  --rule:#d6dde5; --rule-strong:#b9c3cd;
+  --accent:#1c5cab; --accent-soft:#e7f0fb;
+  --warn:#b8481a; --warn-soft:#fceee6;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+  --band:rgba(42,120,214,.12);
+  --shadow:0 1px 2px rgba(15,20,24,.05), 0 8px 24px -16px rgba(15,20,24,.22);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground:#101417; --surface:#191e23; --surface-2:#212830; --surface-3:#2a323b;
+    --ink:#eef2f6; --ink-2:#b3bcc5; --ink-3:#828d97;
+    --rule:#2b333b; --rule-strong:#3d4750;
+    --accent:#6da7ec; --accent-soft:#182739;
+    --warn:#ef9166; --warn-soft:#2c1f19;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+    --band:rgba(57,135,229,.16);
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground:#101417; --surface:#191e23; --surface-2:#212830; --surface-3:#2a323b;
+  --ink:#eef2f6; --ink-2:#b3bcc5; --ink-3:#828d97;
+  --rule:#2b333b; --rule-strong:#3d4750;
+  --accent:#6da7ec; --accent-soft:#182739;
+  --warn:#ef9166; --warn-soft:#2c1f19;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+  --band:rgba(57,135,229,.16);
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+}
+
+* { box-sizing:border-box; }
+body {
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:"Newsreader",Georgia,"Times New Roman",serif;
+  font-size:17px; line-height:1.62; -webkit-font-smoothing:antialiased;
+}
+.wrap { max-width:1080px; margin:0 auto; padding:0 clamp(18px,4vw,40px) 96px; }
+.prose { max-width:64ch; }
+
+h1,h2,h3 { font-family:"Bricolage Grotesque","Helvetica Neue",Arial,sans-serif; text-wrap:balance; margin:0; letter-spacing:-.02em; }
+h1 { font-size:clamp(2.1rem,5.2vw,3.35rem); font-weight:700; line-height:1.02; }
+h2 { font-size:clamp(1.32rem,2.6vw,1.72rem); font-weight:700; line-height:1.15; }
+h3 { font-size:1.02rem; font-weight:700; line-height:1.3; }
+p { margin:0; }
+strong { font-weight:600; color:var(--ink); }
+
+.eyebrow {
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.68rem; font-weight:500;
+  letter-spacing:.16em; text-transform:uppercase; color:var(--ink-3);
+}
+.mono { font-family:"IBM Plex Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums; }
+
+/* ---------- header ---------- */
+header.top { border-bottom:1px solid var(--rule); padding:clamp(44px,7vw,84px) 0 clamp(28px,4vw,40px); }
+header.top .lede { margin-top:20px; font-size:1.14rem; color:var(--ink-2); max-width:60ch; }
+.meta { display:flex; flex-wrap:wrap; gap:8px 22px; margin-top:26px; }
+.meta span { font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.72rem; letter-spacing:.06em; color:var(--ink-3); }
+
+/* ---------- answer block ---------- */
+.answer { margin-top:clamp(34px,5vw,52px); display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(215px,1fr)); }
+.tile {
+  background:var(--surface); border:1px solid var(--rule); border-radius:3px;
+  padding:20px 20px 18px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:2px;
+}
+.tile .k { font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.68rem; letter-spacing:.13em; text-transform:uppercase; color:var(--ink-3); }
+.tile .v { font-family:"Bricolage Grotesque",sans-serif; font-weight:700; font-size:2.5rem; line-height:1.05; letter-spacing:-.035em; font-variant-numeric:tabular-nums; margin-top:6px; }
+.tile .u { font-size:.9rem; color:var(--ink-2); margin-top:4px; }
+.tile.hi { background:var(--accent-soft); border-color:color-mix(in srgb,var(--accent) 34%,transparent); }
+.tile.hi .v { color:var(--accent); }
+.tile.warn { background:var(--warn-soft); border-color:color-mix(in srgb,var(--warn) 34%,transparent); }
+.tile.warn .v { color:var(--warn); }
+
+.formula {
+  margin-top:16px; background:var(--surface-2); border:1px solid var(--rule); border-radius:3px;
+  padding:18px 20px; display:flex; flex-wrap:wrap; align-items:baseline; gap:10px 14px;
+}
+.formula .fx { font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:1.02rem; font-weight:600; letter-spacing:-.01em; }
+.formula .note { font-size:.92rem; color:var(--ink-2); }
+
+/* ---------- sections ---------- */
+section { padding-top:clamp(52px,7vw,80px); }
+.sechead { display:flex; align-items:baseline; gap:14px; border-bottom:1px solid var(--rule); padding-bottom:12px; margin-bottom:26px; }
+.sechead .n { font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.72rem; color:var(--ink-3); letter-spacing:.1em; }
+.sechead h2 { flex:1; }
+.sub { color:var(--ink-2); font-size:1.02rem; max-width:62ch; margin-bottom:26px; }
+
+/* ---------- figure ---------- */
+figure { margin:0; background:var(--surface); border:1px solid var(--rule); border-radius:3px; box-shadow:var(--shadow); overflow:hidden; }
+figure .cap { padding:16px 20px 0; }
+figure .cap .t { font-family:"Bricolage Grotesque",sans-serif; font-weight:700; font-size:1rem; letter-spacing:-.01em; }
+figure .cap .d { font-size:.9rem; color:var(--ink-2); margin-top:3px; max-width:70ch; }
+.chartbox { position:relative; padding:8px 12px 16px; overflow-x:auto; }
+.chartbox svg { display:block; width:100%; height:auto; }
+.legend { display:flex; flex-wrap:wrap; gap:8px 20px; padding:0 20px 16px; }
+.legend .it { display:inline-flex; align-items:center; gap:8px; font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.74rem; color:var(--ink-2); }
+.legend .sw { width:16px; height:3px; border-radius:2px; flex:none; }
+.legend .sw.dash { height:0; border-top:2px dashed var(--warn); border-radius:0; }
+
+.tip {
+  position:absolute; pointer-events:none; opacity:0; transform:translate(-50%,-108%);
+  background:var(--ink); color:var(--ground); border-radius:3px; padding:8px 11px;
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.72rem; line-height:1.5;
+  white-space:nowrap; transition:opacity .1s linear; z-index:5; box-shadow:0 6px 20px -8px rgba(0,0,0,.5);
+}
+.tip.on { opacity:1; }
+.tip b { font-weight:600; }
+
+/* ---------- table ---------- */
+.tablewrap { overflow-x:auto; border:1px solid var(--rule); border-radius:3px; background:var(--surface); box-shadow:var(--shadow); }
+table { border-collapse:collapse; width:100%; font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.79rem; font-variant-numeric:tabular-nums; }
+th,td { padding:9px 12px; text-align:right; border-bottom:1px solid var(--rule); white-space:nowrap; }
+th:first-child,td:first-child { text-align:left; font-family:"Newsreader",serif; font-size:.94rem; white-space:nowrap; position:sticky; left:0; background:var(--surface); }
+thead th { font-size:.68rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3); font-weight:500; border-bottom:1px solid var(--rule-strong); }
+tbody tr:last-child td { border-bottom:none; }
+tbody tr:hover td { background:var(--surface-2); }
+tbody tr:hover td:first-child { background:var(--surface-2); }
+td.na { color:var(--ink-3); }
+td.over { color:var(--warn); }
+.tnote { font-size:.86rem; color:var(--ink-3); margin-top:10px; max-width:70ch; }
+
+/* ---------- findings ---------- */
+.finds { display:grid; gap:1px; background:var(--rule); border:1px solid var(--rule); border-radius:3px; overflow:hidden; }
+.find { background:var(--surface); padding:20px 22px; display:grid; grid-template-columns:auto 1fr; gap:6px 18px; align-items:start; }
+.find .big { font-family:"Bricolage Grotesque",sans-serif; font-weight:700; font-size:1.55rem; letter-spacing:-.03em; font-variant-numeric:tabular-nums; grid-row:span 2; min-width:5.2ch; }
+.find .big.w { color:var(--warn); }
+.find .big.a { color:var(--accent); }
+.find h3 { align-self:end; }
+.find p { font-size:.96rem; color:var(--ink-2); }
+
+/* ---------- method ---------- */
+.cols { display:grid; gap:26px; grid-template-columns:repeat(auto-fit,minmax(268px,1fr)); }
+.mtable { width:100%; border-collapse:collapse; font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.78rem; }
+.mtable td { border-bottom:1px solid var(--rule); padding:6px 0; text-align:right; white-space:normal; }
+.mtable td:first-child { text-align:left; font-family:"Newsreader",serif; font-size:.92rem; color:var(--ink-2); position:static; background:none; }
+.small { font-size:.9rem; color:var(--ink-2); }
+ul.tight { margin:10px 0 0; padding-left:1.1em; }
+ul.tight li { margin-bottom:7px; font-size:.96rem; color:var(--ink-2); }
+ul.tight li::marker { color:var(--ink-3); }
+
+footer { margin-top:clamp(56px,8vw,88px); border-top:1px solid var(--rule); padding-top:22px; font-size:.86rem; color:var(--ink-3); }
+a { color:var(--accent); }
+:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+@media (prefers-reduced-motion: reduce) { * { transition:none !important; animation:none !important; } }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="eyebrow">LM-10 · Kalkulator skritih stroškov</div>
+  <h1>Koliko časa vzame<br>vprašalnik</h1>
+  <p class="lede">Model, umerjen na dejansko strukturo vprašalnika v kodi: 7 segmentov, 7–11 stroškovnih področij, 3–7 polj na področje. Odgovarja na eno vprašanje — koliko minut stane obiskovalca, če izbere 3, 5 ali vseh 10 področij.</p>
+  <div class="meta">
+    <span>Vir: src/config/{segments,modules,contexts}</span>
+    <span>Umerjeno na UX meritev 25. 8. 2026</span>
+    <span>26. avgust 2026</span>
+  </div>
+</header>
+
+<div class="answer">
+  <div class="tile hi">
+    <div class="k">Priporočena 3 področja</div>
+    <div class="v" id="t3">—</div>
+    <div class="u">povprečje segmentov, realen tempo</div>
+  </div>
+  <div class="tile">
+    <div class="k">5 področij</div>
+    <div class="v" id="t5">—</div>
+    <div class="u">+2 področji nad priporočilom</div>
+  </div>
+  <div class="tile warn">
+    <div class="k">10 področij</div>
+    <div class="v" id="t10">—</div>
+    <div class="u">štirje segmenti, ki jih toliko ponujajo</div>
+  </div>
+  <div class="tile">
+    <div class="k">Cena enega področja</div>
+    <div class="v" id="tb">—</div>
+    <div class="u">prirast je stalen, 2:18–2:30 po segmentih</div>
+  </div>
+</div>
+
+<div class="formula">
+  <span class="fx">čas ≈ 6:25 + 2:25 × <em>k</em></span>
+  <span class="note"><em>k</em> = število izbranih področij. Fiksni del (dejavnost, zaposleni, kontekst, triaža, finančna osnova, diagnostika) je 5:42–6:58 po segmentih, vsako dodatno področje 2:18–2:30. Znotraj enega segmenta je odklon od premice pod 3 %; ta enotna formula čez vse segmente odstopa do 7 %.</span>
+</div>
+
+<section>
+  <div class="sechead"><span class="n">01</span><h2>Projekcija 1–11 področij</h2></div>
+  <p class="sub">Tri hitrosti izpolnjevanja iste poti. Modra črta je realen tempo — obiskovalec bere vprašanja, številke oceni na pamet in ne odpira pojasnil. Senčeni pas kaže razpon med najhitrejšim in najpočasnejšim segmentom pri realnem tempu.</p>
+  <figure>
+    <div class="cap">
+      <div class="t">Čas do rezultata glede na število izbranih področij</div>
+      <div class="d">Povprečje sedmih segmentov. Vodoravna črtkana črta je obljuba iz aplikacije: »za priporočena tri področja vzame okoli deset minut«. Od osmega področja naprej povprečje zajema samo segmente, ki toliko področij sploh ponujajo (8 → šest segmentov, 9 in 10 → štirje, 11 → samo maloprodaja); te točke so prazne.</div>
+    </div>
+    <div class="chartbox" id="c1"><div class="tip" id="tip1"></div></div>
+    <div class="legend">
+      <span class="it"><span class="sw" style="background:var(--s1)"></span>Realen tempo</span>
+      <span class="it"><span class="sw" style="background:var(--s3)"></span>Hiter (preleti, ocenjuje na pamet)</span>
+      <span class="it"><span class="sw" style="background:var(--s2)"></span>Temeljit (odpira pojasnila, preverja)</span>
+      <span class="it"><span class="sw dash"></span>Obljuba v aplikaciji (10 min)</span>
+      <span class="it"><span class="sw" style="height:9px;width:9px;border-radius:50%;background:var(--surface);border:2px solid var(--ink-3)"></span>Manj kot sedem segmentov v povprečju</span>
+    </div>
+  </figure>
+</section>
+
+<section>
+  <div class="sechead"><span class="n">02</span><h2>Kje čas nastane</h2></div>
+  <p class="sub">Šest korakov je fiksnih — obiskovalec jih opravi enkrat, ne glede na izbiro. Sedma vrstica je edina, ki se množi: vsako obkljukano področje je ena stran s 5–7 polji.</p>
+  <figure>
+    <div class="cap">
+      <div class="t">Trajanje posameznega dela poti (proizvodnja)</div>
+      <div class="d">Proizvodnja, vključno z branjem naslova in klikom »Naprej« na vsakem zaslonu. Šest zgornjih vrstic je skupaj 6:20 in se opravi enkrat.</div>
+    </div>
+    <div class="chartbox" id="c2"><div class="tip" id="tip2"></div></div>
+    <div class="legend">
+      <span class="it"><span class="sw" style="background:var(--s1)"></span>Enkratni korak</span>
+      <span class="it"><span class="sw" style="background:var(--s2)"></span>Ponovi se ob vsakem izbranem področju</span>
+    </div>
+  </figure>
+</section>
+
+<section>
+  <div class="sechead"><span class="n">03</span><h2>Po dejavnostih</h2></div>
+  <p class="sub">Pri priporočenih treh področjih so segmenti skoraj enaki — razlika je pod dvema minutama. Razlika nastane šele na zgornjem robu, ker segmenti ponujajo različno število področij: računovodski servis sedem, maloprodaja enajst.</p>
+  <figure>
+    <div class="cap">
+      <div class="t">Priporočena tri področja proti vsem ponujenim</div>
+      <div class="d">Realen tempo. Številka ob palici je največje število področij v segmentu.</div>
+    </div>
+    <div class="chartbox" id="c3"><div class="tip" id="tip3"></div></div>
+    <div class="legend">
+      <span class="it"><span class="sw" style="background:var(--s1)"></span>3 področja</span>
+      <span class="it"><span class="sw" style="background:var(--s2)"></span>Vsa ponujena področja</span>
+    </div>
+  </figure>
+</section>
+
+<section>
+  <div class="sechead"><span class="n">04</span><h2>Tabela</h2></div>
+  <p class="sub">Realen tempo, minute:sekunde, do prikaza rezultata. Oranžno je vse nad petnajstimi minutami — mejo, kjer se po UX pregledu obiskovalec iz oglasa začne osipati.</p>
+  <div class="tablewrap"><table id="tbl"></table></div>
+  <p class="tnote">Do oddaje e-naslova prištejte še ≈2:50 (branje rezultata in obrazec s šestimi polji ter tremi privolitvami). Maloprodaja ponuja 11 področij, ne 10, kot navaja tabela v README — 6 panožnih in 5 horizontalnih.</p>
+</section>
+
+<section>
+  <div class="sechead"><span class="n">05</span><h2>Kaj iz tega sledi</h2></div>
+  <div class="finds">
+    <div class="find">
+      <div class="big w">+38 %</div>
+      <h3>Obljuba »okoli deset minut« ne drži niti pri treh področjih</h3>
+      <p>Realen tempo da 13:47 povprečno (12:57–14:37 po segmentih). Deset minut doseže samo obiskovalec, ki vprašanja preleti — in prav ta vpiše najslabše podatke.</p>
+    </div>
+    <div class="find">
+      <div class="big w">2,4×</div>
+      <h3>Opomba v triaži podcenjuje ceno kljukice</h3>
+      <p>Zaslon triaže pravi, da je vsako področje »ena stran vprašanj, približno minuta«. Izmerjeno je 2:12–2:56. Kdor po tej opombi obkljuka šest področij, pričakuje +3 minute, dobi pa +7.</p>
+    </div>
+    <div class="find">
+      <div class="big a">6:25</div>
+      <h3>Fiksni del je skoraj polovica priporočene poti</h3>
+      <p>Preden obiskovalec odgovori na prvo vsebinsko vprašanje o svojem stroškovnem področju, je porabil 6–7 minut. Največji posamični kos je triaža: 10 ocen po 4 možnosti, 2:10.</p>
+    </div>
+    <div class="find">
+      <div class="big a">3</div>
+      <h3>Zgornja meja je realno tri do štiri področja</h3>
+      <p>Pri petih področjih je pot dolga kot celotno srečanje s prodajnikom (18–20 min), pri desetih pol ure. Triaža zato ni le razvrstitev — je edina varovalka pred pol ure dolgim obrazcem.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sechead"><span class="n">06</span><h2>Metoda</h2></div>
+  <div class="cols">
+    <div>
+      <h3>Kako je model sestavljen</h3>
+      <p class="small" style="margin-top:8px">Struktura je prešteta iz kode, ne ocenjena: za vsak segment število triažnih področij, polj po modulu in tip vsakega polja. Vsakemu tipu interakcije je pripisan čas, skupek pa je umerjen tako, da proizvodnja pri treh področjih pade v izmerjeni pas 13–15 minut iz UX raziskave z 25. 8.</p>
+      <table class="mtable" style="margin-top:14px">
+        <tr><td>Zaslon (naslov, uvod, »Naprej«)</td><td>10 s</td></tr>
+        <tr><td>Številčno polje (ure/mesec, EUR)</td><td>30 s</td></tr>
+        <tr><td>Odstotek ali drsnik</td><td>22 s</td></tr>
+        <tr><td>Izbirno polje v področju (vzrok, način dela)</td><td>16 s</td></tr>
+        <tr><td>Vprašanje finančne osnove (pas ali vnos)</td><td>25 s</td></tr>
+        <tr><td>Kontekstno ali triažno vprašanje</td><td>12 s</td></tr>
+        <tr><td>Diagnostika (ponovljena lestvica)</td><td>10 s</td></tr>
+      </table>
+      <p class="small" style="margin-top:12px">Hiter tempo je ×0,65, temeljit ×1,7 — slednji pomeni odpiranje pojasnil »?« (dodatnih 30–150 besed na področje), ne pa iskanja podatkov v ERP. Kdor gre po številke v sistem, je zunaj tega modela.</p>
+    </div>
+    <div>
+      <h3>Česa model ne zajema</h3>
+      <ul class="tight">
+        <li>Prekinitev in vračanja — seja se sicer shrani, a vsak ponoven vstop stane orientacijo.</li>
+        <li>Mobilnega drsenja: triaža je na 390 px visoka 4,1 zaslona, kar model šteje kot en zaslon.</li>
+        <li>Podvprašanja pri dejavnosti »Drugo« (+1 izbira, ≈12 s).</li>
+        <li>Modula E — tehnična opozorila, tri kljukice, vidna samo obstoječim uporabnikom PANTHEON (+18 s).</li>
+        <li>Popravljanja že vnesenih vrednosti in vračanja na prejšnje korake.</li>
+      </ul>
+      <h3 style="margin-top:22px">Preverjanje</h3>
+      <p class="small" style="margin-top:8px">Model da pri proizvodnji s tremi področji 39 vnosnih polj; UX pregled je na isti poti naštel 43 interakcij (šteje tudi kljukice v triaži in gumbe). Pri vseh področjih model da 86 polj proti izmerjenim ≈88. Odstopanje je pod 10 % in v pričakovani smeri.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  Izračunano iz delovnega drevesa <span class="mono">ROI calc 2</span> na dan 26. 8. 2026. Vhodni podatki: <span class="mono">src/config/segments.ts</span>, <span class="mono">src/config/modules/*</span>, <span class="mono">src/config/contexts/*</span>. Umeritev: <span class="mono">navodila/ux/POROCILO-globoka-ux-raziskava-2026-08-25.md</span>.
+</footer>
+
+</div>
+
+<script>
+const SEG = [
+ {id:"proizvodnja",label:"Proizvodnja",max:10,p:[[1,333,512,870],[2,423,650,1105],[3,519,798,1357],[4,605,930,1581],[5,719,1106,1880],[6,805,1238,2105],[7,900,1384,2353],[8,995,1530,2601],[9,1089,1676,2849],[10,1175,1808,3074]]},
+ {id:"logistika",label:"Logistika in transport",max:8,p:[[1,332,510,867],[2,436,670,1139],[3,550,846,1438],[4,646,994,1690],[5,732,1126,1914],[6,818,1258,2139],[7,913,1404,2387],[8,1008,1550,2635]]},
+ {id:"trgovina",label:"Veleprodaja in distribucija",max:10,p:[[1,359,553,940],[2,465,715,1216],[3,560,861,1464],[4,665,1023,1739],[5,779,1199,2038],[6,865,1331,2263],[7,960,1477,2511],[8,1055,1623,2759],[9,1150,1769,3007],[10,1236,1901,3232]]},
+ {id:"maloprodaja",label:"Maloprodaja",max:11,p:[[1,358,551,937],[2,454,699,1188],[3,570,877,1491],[4,665,1023,1739],[5,751,1155,1964],[6,865,1331,2263],[7,951,1463,2487],[8,1046,1609,2735],[9,1141,1755,2984],[10,1236,1901,3232],[11,1321,2033,3456]]},
+ {id:"storitve",label:"Storitve in projekti",max:10,p:[[1,349,537,913],[2,439,675,1148],[3,544,837,1423],[4,630,969,1647],[5,716,1101,1872],[6,801,1233,2096],[7,896,1379,2344],[8,991,1525,2593],[9,1086,1671,2841],[10,1172,1803,3065]]},
+ {id:"racunovodstvo",label:"Računovodski servis",max:7,p:[[1,328,504,857],[2,408,628,1068],[3,514,790,1343],[4,608,936,1591],[5,723,1112,1890],[6,809,1244,2115],[7,904,1390,2363]]},
+ {id:"splosno",label:"Splošno / direktor",max:8,p:[[1,333,513,872],[2,419,645,1097],[3,505,777,1321],[4,600,923,1569],[5,677,1041,1770],[6,772,1187,2018],[7,866,1333,2266],[8,961,1479,2514]]}
+];
+const KMAX = 11;
+const fmt = s => Math.floor(s/60)+":"+String(Math.round(s%60)).padStart(2,"0");
+const at = (s,k) => { const r = s.p.find(x=>x[0]===k); return r||null; };
+
+// cross-segment aggregates
+const agg = [];
+for (let k=1;k<=KMAX;k++){
+  const rows = SEG.map(s=>at(s,k)).filter(Boolean);
+  if(!rows.length) continue;
+  const m = i => rows.reduce((a,r)=>a+r[i],0)/rows.length;
+  agg.push({k, n:rows.length, fast:m(1), real:m(2), thorough:m(3),
+            lo:Math.min(...rows.map(r=>r[2])), hi:Math.max(...rows.map(r=>r[2]))});
+}
+const A = k => agg.find(a=>a.k===k);
+document.getElementById("t3").textContent  = fmt(A(3).real);
+document.getElementById("t5").textContent  = fmt(A(5).real);
+document.getElementById("t10").textContent = fmt(A(10).real);
+document.getElementById("tb").textContent  = "+"+fmt(SEG.reduce((a,s)=>a+(at(s,s.max)[2]-at(s,3)[2])/(s.max-3),0)/SEG.length);
+
+const NS="http://www.w3.org/2000/svg";
+const el=(n,a={})=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+function tipOn(tip,box,x,y,html){ tip.innerHTML=html; tip.classList.add("on");
+  const r=box.getBoundingClientRect(); tip.style.left=Math.max(60,Math.min(r.width-60,x))+"px"; tip.style.top=y+"px"; }
+function tipOff(tip){ tip.classList.remove("on"); }
+
+/* ============ CHART 1 : projection line ============ */
+function chart1(){
+  const box=document.getElementById("c1"), tip=document.getElementById("tip1");
+  box.querySelectorAll("svg").forEach(n=>n.remove());
+  const W=1000,H=430,ml=54,mr=22,mt=18,mb=46;
+  const iw=W-ml-mr, ih=H-mt-mb;
+  const ymax=3600;
+  const X=k=>ml+((k-1)/(KMAX-1))*iw, Y=s=>mt+ih-(s/ymax)*ih;
+  const svg=el("svg",{viewBox:`0 0 ${W} ${H}`,role:"img","aria-label":"Čas do rezultata glede na število izbranih področij"});
+
+  // recommended-zone shading 3..10
+  svg.appendChild(el("rect",{x:X(3),y:mt,width:X(10)-X(3),height:ih,fill:css("--surface-2"),opacity:".55"}));
+
+  // grid + y labels (every 5 min)
+  for(let m=0;m<=60;m+=10){
+    const y=Y(m*60);
+    svg.appendChild(el("line",{x1:ml,x2:W-mr,y1:y,y2:y,stroke:css("--rule"),"stroke-width":1}));
+    const t=el("text",{x:ml-10,y:y+4,"text-anchor":"end",fill:css("--ink-3"),"font-size":"12","font-family":"IBM Plex Mono, monospace"});
+    t.textContent=m+" min"; svg.appendChild(t);
+  }
+  // x labels
+  for(let k=1;k<=KMAX;k++){
+    const t=el("text",{x:X(k),y:H-mb+22,"text-anchor":"middle",fill:k>=3&&k<=10?css("--ink-2"):css("--ink-3"),"font-size":"12","font-family":"IBM Plex Mono, monospace","font-weight":k>=3&&k<=10?"500":"400"});
+    t.textContent=k; svg.appendChild(t);
+  }
+  const xl=el("text",{x:ml+iw/2,y:H-6,"text-anchor":"middle",fill:css("--ink-3"),"font-size":"11.5","font-family":"IBM Plex Mono, monospace","letter-spacing":"0.1em"});
+  xl.textContent="ŠTEVILO IZBRANIH PODROČIJ"; svg.appendChild(xl);
+
+  // min-max band for realistic pace
+  let up="",dn="";
+  agg.forEach((a,i)=>{ up+=(i?"L":"M")+X(a.k)+","+Y(a.hi); });
+  [...agg].reverse().forEach(a=>{ dn+="L"+X(a.k)+","+Y(a.lo); });
+  svg.appendChild(el("path",{d:up+dn+"Z",fill:css("--band"),stroke:"none"}));
+
+  // promise line at 10 min
+  svg.appendChild(el("line",{x1:ml,x2:W-mr,y1:Y(600),y2:Y(600),stroke:css("--warn"),"stroke-width":2,"stroke-dasharray":"7 6"}));
+  const pl=el("text",{x:W-mr-4,y:Y(600)-9,"text-anchor":"end",fill:css("--warn"),"font-size":"12","font-family":"IBM Plex Mono, monospace","font-weight":"500"});
+  pl.textContent="obljuba: 10 min"; svg.appendChild(pl);
+
+  const series=[["thorough","--s2","Temeljit"],["real","--s1","Realen"],["fast","--s3","Hiter"]];
+  series.forEach(([key,c])=>{
+    let d="";
+    agg.forEach((a,i)=>{ d+=(i?"L":"M")+X(a.k)+","+Y(a[key]); });
+    svg.appendChild(el("path",{d,fill:"none",stroke:css(c),"stroke-width":2.5,"stroke-linejoin":"round","stroke-linecap":"round"}));
+    agg.forEach(a=>{
+      const full=a.n===7;
+      svg.appendChild(el("circle",{cx:X(a.k),cy:Y(a[key]),r:4.2,
+        fill:full?css(c):css("--surface"),stroke:full?css("--surface"):css(c),"stroke-width":2}));
+    });
+  });
+  // end labels
+  [["thorough","--s2","temeljit"],["real","--s1","realen"],["fast","--s3","hiter"]].forEach(([key,c,lab])=>{
+    const a=agg[agg.length-1];
+    const t=el("text",{x:X(a.k)-10,y:Y(a[key])-11,"text-anchor":"end",fill:css(c),"font-size":"12.5","font-family":"IBM Plex Mono, monospace","font-weight":"600"});
+    t.textContent=fmt(a[key])+" "+lab; svg.appendChild(t);
+  });
+
+  // crosshair + hover
+  const cross=el("line",{y1:mt,y2:mt+ih,stroke:css("--rule-strong"),"stroke-width":1,opacity:"0"});
+  svg.appendChild(cross);
+  const hit=el("rect",{x:ml,y:mt,width:iw,height:ih,fill:"transparent"});
+  svg.appendChild(hit);
+  const move=ev=>{
+    const r=svg.getBoundingClientRect();
+    const px=(ev.clientX-r.left)/r.width*W;
+    let k=Math.round(1+((px-ml)/iw)*(KMAX-1)); k=Math.max(1,Math.min(KMAX,k));
+    const a=A(k); if(!a) return;
+    cross.setAttribute("x1",X(k)); cross.setAttribute("x2",X(k)); cross.setAttribute("opacity","1");
+    const bx=box.getBoundingClientRect();
+    tipOn(tip,box,(X(k)/W)*bx.width,(Y(a.thorough)/H)*bx.height,
+      `<b>${k} ${k===1?"področje":k===2?"področji":k<=4?"področja":"področij"}</b><br>realen &nbsp;<b>${fmt(a.real)}</b> (${fmt(a.lo)}–${fmt(a.hi)})<br>hiter &nbsp;&nbsp;&nbsp;${fmt(a.fast)}<br>temeljit ${fmt(a.thorough)}<br>${a.n<7?a.n+" od 7 segmentov":""}`);
+  };
+  hit.addEventListener("mousemove",move);
+  hit.addEventListener("mouseleave",()=>{cross.setAttribute("opacity","0");tipOff(tip);});
+  box.insertBefore(svg,tip);
+}
+
+/* ============ CHART 2 : where time goes ============ */
+const STEPS=[
+  ["Dejavnost",22,0,"spustni seznam, 8 možnosti"],
+  ["Zaposleni",22,0,"eno število, ne vstopa v izračun"],
+  ["Kontekst",46,0,"3 vprašanja × 5 možnosti"],
+  ["Triaža",130,0,"10 področij × 4 ocene"],
+  ["Finančna osnova",110,0,"2 urni postavki, prihodek, marža"],
+  ["Diagnostika",50,0,"4 vprašanja × 5 možnosti"],
+  ["Eno področje",143,1,"5–7 polj, od tega 3–5 številk; povprečje desetih področij proizvodnje (2:12–2:56)"]
+];
+function chart2(){
+  const box=document.getElementById("c2"), tip=document.getElementById("tip2");
+  box.querySelectorAll("svg").forEach(n=>n.remove());
+  const rowH=44,W=1000,ml=176,mr=96,mt=10,mb=34;
+  const H=mt+STEPS.length*rowH+mb, iw=W-ml-mr;
+  const max=180, X=s=>(s/max)*iw;
+  const svg=el("svg",{viewBox:`0 0 ${W} ${H}`,role:"img","aria-label":"Trajanje posameznega dela poti"});
+  for(let s=0;s<=180;s+=30){
+    const x=ml+X(s);
+    svg.appendChild(el("line",{x1:x,x2:x,y1:mt,y2:mt+STEPS.length*rowH,stroke:css("--rule"),"stroke-width":1}));
+    const t=el("text",{x,y:H-12,"text-anchor":"middle",fill:css("--ink-3"),"font-size":"12","font-family":"IBM Plex Mono, monospace"});
+    t.textContent=fmt(s); svg.appendChild(t);
+  }
+  STEPS.forEach((st,i)=>{
+    const [name,sec,rep,desc]=st;
+    const y=mt+i*rowH, bh=22, c=css(rep?"--s2":"--s1");
+    const lab=el("text",{x:ml-16,y:y+rowH/2+5,"text-anchor":"end",fill:css("--ink"),"font-size":"15","font-family":"Newsreader, serif","font-weight":rep?"500":"400"});
+    lab.textContent=name; svg.appendChild(lab);
+    const bar=el("rect",{x:ml,y:y+(rowH-bh)/2,width:Math.max(4,X(sec)),height:bh,rx:4,fill:c});
+    svg.appendChild(bar);
+    const v=el("text",{x:ml+X(sec)+12,y:y+rowH/2+5,fill:css("--ink-2"),"font-size":"13","font-family":"IBM Plex Mono, monospace","font-weight":"500"});
+    v.textContent=fmt(sec)+(rep?" × k":""); svg.appendChild(v);
+    const hit=el("rect",{x:0,y,width:W,height:rowH,fill:"transparent"});
+    hit.addEventListener("mouseenter",()=>{ const bx=box.getBoundingClientRect();
+      tipOn(tip,box,(ml+X(sec)/2)/W*bx.width,(y+8)/H*bx.height,`<b>${name} — ${fmt(sec)}</b><br>${desc}`); });
+    hit.addEventListener("mouseleave",()=>tipOff(tip));
+    svg.appendChild(hit);
+  });
+  box.insertBefore(svg,tip);
+}
+
+/* ============ CHART 3 : per segment ============ */
+function chart3(){
+  const box=document.getElementById("c3"), tip=document.getElementById("tip3");
+  box.querySelectorAll("svg").forEach(n=>n.remove());
+  const rowH=58,W=1000,ml=210,mr=110,mt=10,mb=34;
+  const H=mt+SEG.length*rowH+mb, iw=W-ml-mr;
+  const max=2100, X=s=>(s/max)*iw;
+  const svg=el("svg",{viewBox:`0 0 ${W} ${H}`,role:"img","aria-label":"Primerjava po dejavnostih"});
+  for(let m=0;m<=35;m+=5){
+    const x=ml+X(m*60);
+    svg.appendChild(el("line",{x1:x,x2:x,y1:mt,y2:mt+SEG.length*rowH,stroke:css("--rule"),"stroke-width":1}));
+    const t=el("text",{x,y:H-12,"text-anchor":"middle",fill:css("--ink-3"),"font-size":"12","font-family":"IBM Plex Mono, monospace"});
+    t.textContent=m+" min"; svg.appendChild(t);
+  }
+  const order=[...SEG].sort((a,b)=>at(b,b.max)[2]-at(a,a.max)[2]);
+  order.forEach((s,i)=>{
+    const y=mt+i*rowH, bh=17, gap=4;
+    const v3=at(s,3)[2], vm=at(s,s.max)[2];
+    const lab=el("text",{x:ml-16,y:y+rowH/2+5,"text-anchor":"end",fill:css("--ink"),"font-size":"15","font-family":"Newsreader, serif"});
+    lab.textContent=s.label; svg.appendChild(lab);
+    svg.appendChild(el("rect",{x:ml,y:y+rowH/2-bh-gap/2,width:Math.max(4,X(v3)),height:bh,rx:4,fill:css("--s1")}));
+    svg.appendChild(el("rect",{x:ml,y:y+rowH/2+gap/2,width:Math.max(4,X(vm)),height:bh,rx:4,fill:css("--s2")}));
+    const t1=el("text",{x:ml+X(v3)+10,y:y+rowH/2-gap/2-4,fill:css("--ink-2"),"font-size":"12.5","font-family":"IBM Plex Mono, monospace"});
+    t1.textContent=fmt(v3); svg.appendChild(t1);
+    const t2=el("text",{x:ml+X(vm)+10,y:y+rowH/2+bh+gap/2-3,fill:css("--ink-2"),"font-size":"12.5","font-family":"IBM Plex Mono, monospace","font-weight":"500"});
+    t2.textContent=fmt(vm)+"  ("+s.max+")"; svg.appendChild(t2);
+    const hit=el("rect",{x:0,y,width:W,height:rowH,fill:"transparent"});
+    hit.addEventListener("mouseenter",()=>{ const bx=box.getBoundingClientRect();
+      tipOn(tip,box,(ml+X(vm)/2)/W*bx.width,(y+10)/H*bx.height,
+       `<b>${s.label}</b><br>3 področja &nbsp;<b>${fmt(v3)}</b><br>vseh ${s.max} &nbsp;&nbsp;<b>${fmt(vm)}</b><br>prirast na področje ${fmt((vm-v3)/(s.max-3))}`); });
+    hit.addEventListener("mouseleave",()=>tipOff(tip));
+    svg.appendChild(hit);
+  });
+  box.insertBefore(svg,tip);
+}
+
+/* ============ TABLE ============ */
+(function(){
+  const t=document.getElementById("tbl");
+  let h="<thead><tr><th>Dejavnost</th>";
+  for(let k=3;k<=10;k++) h+=`<th>${k}</th>`;
+  h+="<th>maks.</th></tr></thead><tbody>";
+  SEG.forEach(s=>{
+    h+=`<tr><td>${s.label}</td>`;
+    for(let k=3;k<=10;k++){
+      const r=at(s,k);
+      h+= r ? `<td class="${r[2]>900?"over":""}">${fmt(r[2])}</td>` : `<td class="na">—</td>`;
+    }
+    h+=`<td class="na">${s.max}</td></tr>`;
+  });
+  h+=`<tr><td><strong>Povprečje</strong></td>`;
+  for(let k=3;k<=10;k++){ const a=A(k); h+=`<td class="${a.real>900?"over":""}"><strong>${fmt(a.real)}</strong></td>`; }
+  h+=`<td class="na">—</td></tr>`;
+  h+="</tbody>"; t.innerHTML=h;
+})();
+
+function drawAll(){ chart1(); chart2(); chart3(); }
+drawAll();
+let rt; addEventListener("resize",()=>{clearTimeout(rt);rt=setTimeout(drawAll,180);});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change",drawAll);
+new MutationObserver(drawAll).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+</script>
+
+</body>
+</html>
