@@ -1,5 +1,11 @@
 import { SHARED_COPY, type ResolvedSegmentCopy } from '../../config/copy';
-import { formatAmount, formatEUR, formatEURRange, formatHours } from '../../lib/format';
+import {
+  formatAmount,
+  formatEUR,
+  formatEURRange,
+  formatHours,
+  MIN_FIGURE_EUR,
+} from '../../lib/format';
 import type { ResultTotals } from '../../lib/potential';
 import { displayRange, type EURRange, type TotalsRange } from '../../lib/range';
 import styles from './ResultsSummary.module.css';
@@ -14,19 +20,14 @@ interface ResultsSummaryProps {
    * pri sebi — in isto besedilo je v drugačni različici živelo še v pdf.ts.
    */
   figures: ResolvedSegmentCopy['figures'];
+  /**
+   * Izračunan razlog nizke zanesljivosti (lib/confidenceReason.ts). Splošno
+   * besedilo iz registra pravi "večina ključnih podatkov manjka" — kar je
+   * napačno pri obiskovalcu, ki je vnesel vsa polja in le urni postavki prevzel
+   * kot panožno oceno; ta je bila do zdaj najpogostejša pot do nizke ocene.
+   */
+  confidenceReason?: string | null;
 }
-
-/**
- * Pod tem zneskom postavka ne dobi svoje kartice.
- *
- * "Sprostljiv obratni kapital: 1 EUR" ali "Nezaslužena letna marža: najmanj 45
- * EUR" pod polnim naslovom in tremi vrsticami pojasnila ne izgleda kot majhna
- * številka, ampak kot pokvarjen izračun — in vse druge zneske na strani potegne
- * s seboj v dvom. Postavka iz vsote ne izpade, le svojega poudarka ne dobi;
- * v razčlenitvi spodaj ostane vidna.
- */
-const MIN_FIGURE_EUR = 100;
-
 
 /**
  * Štiri ločene številke namesto ene velike.
@@ -38,7 +39,7 @@ const MIN_FIGURE_EUR = 100;
  * Kartica se izriše samo, kadar ima vrednost — segmenti brez potenciala tako
  * ostanejo pri treh ali manj, brez praznih ničel.
  */
-export function ResultsSummary({ totals, totalsRange, figures }: ResultsSummaryProps) {
+export function ResultsSummary({ totals, totalsRange, figures, confidenceReason }: ResultsSummaryProps) {
   const confidence = totals.confidence;
   const amount = (value: number, range?: EURRange) =>
     formatAmount(value, { range: displayRange(range), lowConfidence: confidence === 'low' });
@@ -48,7 +49,11 @@ export function ResultsSummary({ totals, totalsRange, figures }: ResultsSummaryP
       {confidence ? (
         <div className={styles.confidenceRow}>
           <span className={`${styles.badge} ${styles[confidence]}`}>{SHARED_COPY.confidenceLabel[confidence]}</span>
-          <span className={styles.confidenceNote}>{SHARED_COPY.confidenceNote[confidence]}</span>
+          <span className={styles.confidenceNote}>
+            {confidence === 'low' && confidenceReason
+              ? confidenceReason
+              : SHARED_COPY.confidenceNote[confidence]}
+          </span>
         </div>
       ) : null}
 
@@ -107,6 +112,7 @@ export function ResultsSummary({ totals, totalsRange, figures }: ResultsSummaryP
                 : formatEUR(totals.addressablePotentialEUR)
             }
             note={figures.potential.note}
+            wide
           />
         ) : null}
       </div>
@@ -114,9 +120,20 @@ export function ResultsSummary({ totals, totalsRange, figures }: ResultsSummaryP
   );
 }
 
-function Figure({ title, value, note }: { title: string; value: string; note: string }) {
+function Figure({
+  title,
+  value,
+  note,
+  wide,
+}: {
+  title: string;
+  value: string;
+  note: string;
+  /** Kartica čez celo širino mreže — potencial, da ne visi osirotel v prazni celici. */
+  wide?: boolean;
+}) {
   return (
-    <div className={styles.figure}>
+    <div className={wide ? `${styles.figure} ${styles.figureWide}` : styles.figure}>
       <h2 className={styles.figureTitle}>{title}</h2>
       <p className={styles.figureValue}>{value}</p>
       <p className={styles.figureNote}>{note}</p>

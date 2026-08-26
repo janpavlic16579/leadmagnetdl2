@@ -40,7 +40,7 @@ function retailReport() {
     values[definition.id] = resolveInputs(
       definition,
       definition.id === 'razpolozljivostMp'
-        ? { lostSalesSharePercent: 0.02, substitutionShare: 2, expressDeliveryCostEUR: 4_000 }
+        ? { stockoutDemandShare: 1, substitutionShare: 2, expressDeliveryCostEUR: 4_000 }
         : undefined,
     );
   }
@@ -86,8 +86,10 @@ function retailReport() {
 describe('lostMargin doseže vse potrošnike seštevkov', () => {
   it('scenarij ima neničelno nezasluženo maržo (sicer test ne priča ničesar)', () => {
     const { totals } = retailReport();
-    // 2 mio × 2 % × 0,30 × (1 − 0,2) = 9 600 EUR
-    expect(totals.lostMarginEUR).toBeCloseTo(9_600, 0);
+    // 2 mio × 3,5 % povpraševanja × 0,30 marže × (1 − 0,2 substitucije) = 16 800 EUR.
+    // Prvi člen je BRUTO povpraševanje ob prazni polici, ne že očiščena izguba —
+    // substitucija se odšteje natanko enkrat (glej maloprodaja.ts).
+    expect(totals.lostMarginEUR).toBeCloseTo(16_800, 0);
   });
 
   it('povzetek prodajne priprave nosi lostMarginEUR', () => {
@@ -102,7 +104,7 @@ describe('lostMargin doseže vse potrošnike seštevkov', () => {
       .filter((output) => output.bucket !== 'oneTimeCapital' && output.bucket !== 'risk')
       .reduce((sum, output) => sum + (output.valueEUR ?? 0), 0);
     expect(area.totalEUR).toBeCloseTo(annualSum, 5);
-    expect(area.totalEUR).toBeGreaterThan(9_000);
+    expect(area.totalEUR).toBeGreaterThan(16_000);
   });
 
   it('velikost posla in ICP bolečina štejeta tudi maržo', () => {

@@ -2,7 +2,7 @@ import type { SegmentCopy } from './copyTypes';
 
 export const STORITVE_COPY: SegmentCopy = {
   id: 'storitve',
-  displayName: 'Storitve in projekti 10–249 zaposlenih',
+  displayName: 'Storitve in projekti',
 
   landing: {
     heroTitle: 'Koliko dela letno opravite in ne zaračunate?',

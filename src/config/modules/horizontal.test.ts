@@ -193,7 +193,10 @@ describe('Skupne lastnosti horizontalnih modulov', () => {
     }
   });
 
-  it('privzeti glavni vzrok je "Ne vemo" in da konservativen delež', () => {
+  // Vprašanje o glavnem vzroku nima privzetka (MAIN_CAUSE_UNANSWERED): brez izbire
+  // ni označen noben radio, delež pa pade na konservativni 'unknown'. Ta test hodi
+  // prek compute() in NE prek withoutUnknowns — celotno pot varuje moduleEngine.test.ts.
+  it('neodgovorjen glavni vzrok da konservativen delež', () => {
     for (const definition of HORIZONTAL_MODULES) {
       const outputs = run(definition).filter((output) => output.addressableShare !== undefined);
       expect(outputs.length, definition.id).toBeGreaterThan(0);

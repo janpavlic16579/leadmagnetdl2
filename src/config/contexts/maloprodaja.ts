@@ -164,7 +164,10 @@ export const MALOPRODAJA_CONTEXT: SegmentContext = {
       { id: '8do12', label: '8–12 %', midpoint: 0.1, min: 0.08, max: 0.12 },
       { id: 'nad12', label: 'Več kot 12 %', midpoint: 0.15, min: 0.12, max: 0.18 },
     ],
-    fallback: 0.06,
+    // Sidro 2026: povprečni WACC 8,5 % (KPMG Cost of Capital Study 2025). Ne 8 %:
+    // ta se stika z mejo dveh pasov in bi povprečje panoge postavil na rob
+    // prikazanega razpona. Izpeljava: docs/erp-koristi-benchmarki-2026-08.md, B.
+    fallback: 0.085,
     unit: '%',
     asPercent: true,
   },

@@ -1,4 +1,5 @@
 import { useId, useRef, useState } from 'react';
+import { track } from '../../lib/analytics';
 import { isFilled, isValidEmail, normalizeTaxNumber, phoneState, taxNumberState } from '../../lib/validation';
 import { useStepHeading } from '../../lib/useStepHeading';
 import type { LeadConsents, LeadContact } from '../../types';
@@ -16,17 +17,10 @@ import styles from './EmailGate.module.css';
 const PRIVACY_POLICY_URL = '';
 
 /**
- * Prodajni kontakt za tiste, ki na klic nočejo čakati.
- *
- * Telefon je zapisan dvakrat: mednarodno za `tel:` (brskalnik na telefonu predpone
- * ne ugane) in domače za oči.
+ * Prodajni kontakt za tiste, ki na klic nočejo čakati — skupni zapis, isti kot
+ * na zadnji strani strankinega PDF-ja (config/salesContact.ts).
  */
-const SALES_CONTACT = {
-  label: 'Datalab prodaja',
-  phone: '01 252 89 50',
-  phoneHref: 'tel:+38612528950',
-  email: 'prodaja@datalab.si',
-} as const;
+import { SALES_CONTACT } from '../../config/salesContact';
 
 interface EmailGateProps {
   /**
@@ -138,13 +132,13 @@ export function EmailGate({
   };
   const firstInvalid = (
     [
-      [errors.firstName, firstNameRef],
-      [errors.lastName, lastNameRef],
-      [errors.companyName, companyNameRef],
-      [errors.email, emailRef],
-      [errors.consentProcessing, consentRef],
+      ['firstName', errors.firstName, firstNameRef],
+      ['lastName', errors.lastName, lastNameRef],
+      ['companyName', errors.companyName, companyNameRef],
+      ['email', errors.email, emailRef],
+      ['consentProcessing', errors.consentProcessing, consentRef],
     ] as const
-  ).find(([error]) => error !== null);
+  ).find(([, error]) => error !== null);
 
   async function handleSubmit(event: React.FormEvent) {
     // Brez tega privzeta oddaja ponovno naloži SPA in uniči vse module, triažne
@@ -155,9 +149,11 @@ export function EmailGate({
 
     if (firstInvalid) {
       setShowErrors(true);
+      // Katero polje ustavi največ ljudi — ime polja in nič vsebine.
+      track('lm10_form_blocked', { field: firstInvalid[0] });
       // Fokus na prvo pomanjkljivo polje: sporočilo pod poljem na dolgem obrazcu
       // lahko ostane zunaj zaslona, kazalec v polju pa pove, kje smo obtičali.
-      firstInvalid[1].current?.focus();
+      firstInvalid[2].current?.focus();
       return;
     }
 

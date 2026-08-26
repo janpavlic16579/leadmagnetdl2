@@ -54,6 +54,16 @@
   padding: var(--space-4);
 }
 
+/*
+ * Potencial čez celo širino mreže. Pri treh karticah je auto-fit mreža puščala
+ * desno celico prazno in edina številka, s katero prodaja lahko dela, je visela
+ * osirotela spodaj levo. Polna širina jo hkrati loči od sestavin zgoraj: kartici
+ * nad njo merita, ta sklepa.
+ */
+.figureWide {
+  grid-column: 1 / -1;
+}
+
 .figureTitle {
   font-size: var(--font-size-sm);
   font-weight: 600;

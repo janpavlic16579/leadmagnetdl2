@@ -16,14 +16,33 @@ function canonicalUrl(): Plugin {
     name: 'lm10-canonical-url',
     transformIndexHtml(html, context) {
       const base = context.server?.config.env.VITE_PUBLIC_URL ?? process.env.VITE_PUBLIC_URL
-      if (!base) return html
+      if (!base) {
+        // Samo pri gradnji (v dev strežniku je odsotnost normalna): brez naslova
+        // objava nima canonical, og:url in og:image — povezava se na LinkedInu
+        // in v e-pošti deli kot golo besedilo brez predogledne kartice.
+        if (!context.server) {
+          console.warn(
+            '\n[lm10] VITE_PUBLIC_URL ni nastavljen — zgrajena stran bo BREZ canonical, og:url in og:image.\n' +
+              '[lm10] Deljenje povezave bo brez predogledne slike. Nastavite repozitorijsko spremenljivko VITE_PUBLIC_URL.\n',
+          )
+        }
+        return html
+      }
       const url = base.replace(/\/+$/, '') + '/'
       const tags = [
         `<link rel="canonical" href="${url}" />`,
         `<meta property="og:url" content="${url}" />`,
-        `<meta property="og:image" content="${url}favicon.png" />`,
+        // Namenska 1200×630 kartica (public/og-image.png), ne 512-px favicon:
+        // LinkedIn in e-poštni odjemalci kvadratni logotip obrežejo ali spustijo.
+        `<meta property="og:image" content="${url}og-image.png" />`,
+        `<meta property="og:image:width" content="1200" />`,
+        `<meta property="og:image:height" content="630" />`,
       ].join('\n    ')
-      return html.replace('</head>', `  ${tags}\n  </head>`)
+      // Velika kartica ima smisel šele, ko og:image res obstaja — zato se
+      // twitter:card nadgradi tu in ne statično v index.html.
+      return html
+        .replace('<meta name="twitter:card" content="summary" />', '<meta name="twitter:card" content="summary_large_image" />')
+        .replace('</head>', `  ${tags}\n  </head>`)
     },
   }
 }

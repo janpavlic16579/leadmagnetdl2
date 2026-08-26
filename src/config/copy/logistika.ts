@@ -2,7 +2,7 @@ import type { SegmentCopy } from './copyTypes';
 
 export const LOGISTIKA_COPY: SegmentCopy = {
   id: 'logistika',
-  displayName: 'Logistika in transport 10–249 zaposlenih',
+  displayName: 'Logistika in transport',
 
   landing: {
     heroTitle: 'Koliko vas letno stanejo prazni kilometri in stojnine?',

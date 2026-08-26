@@ -42,9 +42,13 @@ export interface SegmentCopy {
   id: SegmentId;
 
   /**
-   * Ime dejavnosti, kot ga vidi obiskovalec ("Izračun prilagojen za: …"), kot
-   * pride v glavo strankinega PDF-ja in v prodajno pripravo. Ena oznaka za vse
-   * tri: dve bi se razšli pri prvem prepisu.
+   * ČISTO ime dejavnosti, brez velikostnega razpona ("Proizvodnja", ne
+   * "Proizvodnja 10–249 zaposlenih"): trdo zapisan razpon je ostal na zaslonu
+   * tudi pri vnosu 250+ zaposlenih. Dejanski razred pripne ob izrisu
+   * segmentLabelWithSize (copy/index.ts) iz vnesenega števila — tam, kjer ime
+   * vidi obiskovalec ("Izračun prilagojen za: …") in v glavi strankinega PDF-ja.
+   * Prodajna priprava (salesReport.qualification) razred vodi kot LOČENO polje
+   * sizeClass in ime uporablja golo.
    */
   displayName: string;
 
@@ -212,6 +216,13 @@ export const SHARED_COPY = {
   employeeCountTitle: 'Koliko ljudi zaposlujete?',
   employeeCountNote:
     'Podatek ne vstopa v noben znesek — iz njega izpeljemo velikostni razred podjetja in preverimo, ali so vnesene ure skladne z velikostjo vaše ekipe.',
+  /**
+   * Sporočilo ob kliku na "Naprej" brez vnosa. Gumb ni onemogočen: siv gumb ne
+   * pove, KAJ manjka, in samostojni podjetnik, ki pošteno vpiše 0, je obtičal
+   * brez razlage. Drugi stavek mu pove, da šteje tudi sebe.
+   */
+  employeeCountMissing:
+    'Vpišite število zaposlenih — vsaj 1. Če ste samostojni podjetnik brez zaposlenih, štejte sebe.',
 
   /**
    * Primarni gumb na rezultatu. Poimenuje DEJANJE, ki je povsod isto; kaj se
@@ -253,6 +264,50 @@ export const SHARED_COPY = {
   /** Trditev o zasebnosti. Panožna različica bi bila vabilo k razhajanju. */
   privacyNote:
     'Ves izračun poteka v vašem brskalniku. Nič od vnesenih podatkov ne zapusti brskalnika, dokler se sami ne odločite oddati obrazca za PDF poročilo.',
+
+  /**
+   * Večletni pogled in cena odlašanja.
+   *
+   * Metodološka ograda, ne nagovor: obe številki sta gola preračuna letnega
+   * zneska, in prav to morata povedati. "Ob nespremenjenem načinu dela" ni
+   * mašilo — je predpostavka, brez katere trojni znesek ne bi bil pošten.
+   * Oznaki nosita vzorec {value}, ker znesek sestavi izrisovalec.
+   */
+  horizonLabel: 'V treh letih',
+  horizonNote:
+    'Ob nespremenjenem načinu dela in brez rasti. Zmnožek letnega zneska s tremi — brez inflacije in brez diskontiranja, ker bi vsaka od teh predpostavk terjala svojo obrambo.',
+  delayNote: 'To je {daily} vsak delovni dan oziroma {monthly} za vsak mesec brez odločitve.',
+
+  /**
+   * Kaj v znesku NI zajeto.
+   *
+   * Ograde so bile razpršene po opombah kartic, pod grafom in v razdelku o
+   * neizmerjenem — kjer jih bralec sreča šele, ko si je o številki že ustvaril
+   * mnenje. Zbrane povedo eno stvar: izračun meri manj, kot podjetje dejansko
+   * izgublja. Prav to je razlika med konservativno oceno in podcenjeno.
+   */
+  notIncludedTitle: 'Česa ta znesek ne vsebuje',
+  notIncluded: [
+    'Režije na sproščene ure — najemnina, vodenje in amortizacija tečejo naprej, zato jih ne štejemo.',
+    'Rasti podjetja in rasti plač; izračun stoji pri današnjem obsegu in današnjih postavkah.',
+    'Področij, ki jih niste izmerili — ta v znesek ne vstopajo z nobenim evrom.',
+    'Vsega, kar ste označili z "Ne vem": tam smo vzeli najbolj zadržano vrednost.',
+  ],
+  notIncludedClosing: 'Dejanski strošek je torej višji od prikazanega, ne nižji.',
+
+  /**
+   * Tabela povračila. NI ponudba in ne sme je spominjati.
+   *
+   * V tem repozitoriju ni nobene cene in vsebina to izrecno prepoveduje
+   * (content/sales/pantheonFit.ts, content/sales/licences.ts). Stopnje so zato
+   * primerjalne in brez imena izdelka, ograda pod tabelo pa ponovi isto, kar
+   * prodajnemu gradivu nalaga PANTHEON_FIT_CONFIRM.
+   */
+  paybackTitle: 'Pri kateri investiciji se to povrne',
+  paybackNote:
+    'Primerjalne vrednosti, ne ponudba: koliko časa bi trajalo, da se vloženi znesek povrne iz zgoraj ocenjenega letnega potenciala. Točen obseg in ceno potrdi svetovalec po veljavnem ceniku.',
+  paybackInvestmentHeader: 'Primerjalna investicija',
+  paybackDurationHeader: 'Povrne se v',
 } as const;
 
 /**

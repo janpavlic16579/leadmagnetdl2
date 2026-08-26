@@ -118,7 +118,10 @@ export function StepTriage({
       <p className={styles.note}>
         {selected.length === 0
           ? 'Izberite vsaj eno področje za podroben izračun.'
-          : `Podrobno bomo izračunali ${selected.length} od ${modules.length} področij. Priporočamo ${numeral(recommendedCount)}, izberete pa lahko poljubno mnogo — neizmerjena področja ostanejo prazna in nobene številke si ne izmislimo.`}
+          : // Posledica kljukice mora biti napovedana: vsaka spremeni števec korakov
+            // v glavi ("od 9" → "od 10") in brez tega stavka je bil to edini del
+            // vprašalnika, ki se je podaljševal brez pojasnila.
+            `Podrobno bomo izračunali ${selected.length} od ${modules.length} področij — vsako izbrano področje je ena stran vprašanj (približno minuta). Priporočamo ${numeral(recommendedCount)}, izberete pa lahko poljubno mnogo; neizmerjena področja ostanejo prazna in nobene številke si ne izmislimo.`}
       </p>
 
       <div className={shellStyles.stickyFooter}>

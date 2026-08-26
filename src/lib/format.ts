@@ -38,6 +38,22 @@ export function formatEURRange(minEUR: number, maxEUR: number): string {
 }
 
 /**
+ * Pod tem zneskom postavka ne dobi svoje kartice.
+ *
+ * "Sprostljiv obratni kapital: 1 EUR" ali "Nezaslužena letna marža: najmanj 45
+ * EUR" pod polnim naslovom in tremi vrsticami pojasnila ne izgleda kot majhna
+ * številka, ampak kot pokvarjen izračun — in vse druge zneske na strani potegne
+ * s seboj v dvom. Postavka iz vsote ne izpade, le svojega poudarka ne dobi;
+ * v razčlenitvi spodaj ostane vidna.
+ *
+ * Stoji tu in ne v ResultsSummary, ker isto pravilo velja tudi za kartice v
+ * strankinem PDF: dokler je bil prag zapisan samo v komponenti, je PDF risal
+ * kartice že nad 0 EUR in je isti izračun na zaslonu in v dokumentu pokazal
+ * različno število kartic.
+ */
+export const MIN_FIGURE_EUR = 100;
+
+/**
  * Znesek, kot ga vidi obiskovalec: razpon, "najmanj X" ali gola številka.
  *
  * Pravilo je eno samo, prikazovala pa so ga štiri mesta vsako po svoje (zaslon,

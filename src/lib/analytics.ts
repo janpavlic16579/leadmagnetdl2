@@ -33,7 +33,19 @@ export type AnalyticsEvent =
   /** Obrazec oddan. */
   | 'lm10_lead_submitted'
   /** Ponovni prenos poročila — pove, kako pogosto samodejni prenos odpove. */
-  | 'lm10_report_redownload';
+  | 'lm10_report_redownload'
+  /** Zaključena finančna osnova — vir vsake postavke (vneseno/povprečje/razpon/prazno). */
+  | 'lm10_cost_basis_done'
+  /** Validacija je ustavila oddajo — katero polje ustavi največ ljudi. */
+  | 'lm10_form_blocked'
+  /** Lead je prišel do prodaje (webhook uspel). */
+  | 'lm10_delivery_ok'
+  /**
+   * Lead NI prišel do prodaje: webhook padel, vrnil napako ali sploh ni
+   * nastavljen. lm10_lead_submitted se namerno sproži pred dostavo — brez tega
+   * para se konverzije štejejo tudi takrat, ko do prodaje niso prišle.
+   */
+  | 'lm10_delivery_failed';
 
 export function track(event: AnalyticsEvent, props: Record<string, string | number> = {}): void {
   try {

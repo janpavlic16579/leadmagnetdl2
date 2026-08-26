@@ -1,4 +1,5 @@
 import { addressableShareOf, mainCauseField, type CauseOption } from './addressableShare';
+import { UNANSWERED_CHOICE } from './moduleTypes';
 import {
   ASSURANCE_CHOICES,
   MONTHS_PER_YEAR,
@@ -64,7 +65,7 @@ export const projekti: ModuleDefinition = {
       key: 'planningMethod',
       label: 'Kako danes planirate delo ekipe?',
       kind: 'choice',
-      default: 2,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       choices: [
         { value: 0, label: 'Projektno orodje z zasedenostjo' },
@@ -198,7 +199,7 @@ export const obracun: ModuleDefinition = {
       key: 'recordingTiming',
       label: 'Kdaj se opravljene ure evidentirajo?',
       kind: 'choice',
-      default: 2,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       choices: [
         { value: 0, label: 'Sproti ob delu' },
@@ -359,6 +360,12 @@ const ADMINISTRACIJA_CAUSES: CauseOption[] = [
   { label: 'Ponudbe in poročila nastajajo ročno', category: 'data' },
   { label: 'Podatki se ne vnašajo sproti', category: 'data' },
   { label: 'Odgovornosti niso jasne', category: 'planning' },
+  // Peta možnost je nizka namenoma. Brez nje so bile vse štiri 'data' ali
+  // 'planning' in najnižji dosegljivi delež je bil 0,65 — podjetje, katerega
+  // administracija zastaja zaradi razpoložljivosti ljudi, tega ni moglo povedati
+  // in mu je ostal samo molk. Vprašanje, ki edinega poštenega odgovora ne ponuja,
+  // meri, kaj smo ponudili, in ne, kaj podjetje ve.
+  { label: 'Ključni ljudje niso na voljo, ko so potrebni', category: 'people' },
 ];
 
 export const administracija: ModuleDefinition = {
@@ -406,7 +413,7 @@ export const administracija: ModuleDefinition = {
       key: 'toolCount',
       label: 'V koliko ločenih orodjih vodite podatke o projektu?',
       kind: 'choice',
-      default: 2,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       choices: [
         { value: 0, label: 'V enem' },

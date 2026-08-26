@@ -1,6 +1,8 @@
 import type { BusinessProfile, SegmentContext } from '../config/contexts';
 import {
+  isUnansweredChoice,
   isUnknownAnswer,
+  isUnknownChoiceValue,
   type ComputeContext,
   type ModuleDefinition,
   type ModuleOutput,
@@ -47,7 +49,14 @@ export function computeAddressablePotentialEUR(outputs: ModuleOutput[]): number 
   for (const output of outputs) {
     if (!ANNUAL_BUCKETS.includes(output.bucket as (typeof ANNUAL_BUCKETS)[number])) continue;
     if (output.addressableShare === undefined) continue;
-    addressableEUR += (output.valueEUR ?? 0) * output.addressableShare;
+    // Zgornja meja postavke, kjer obstaja fizikalno dno (izmet, prazni kilometri).
+    // min in ne nov množitelj: meja delež omeji, ne zniža — postavka brez meje se
+    // obnaša natanko kot prej.
+    const share =
+      output.addressableCap === undefined
+        ? output.addressableShare
+        : Math.min(output.addressableShare, output.addressableCap);
+    addressableEUR += (output.valueEUR ?? 0) * share;
   }
 
   return addressableEUR;
@@ -196,8 +205,14 @@ export function assessConfidence({
       const value = moduleValues[field.key];
 
       if (field.kind === 'choice') {
-        const choice = field.choices?.find((option) => option.value === value);
-        if (choice?.unknown) unknownAnswers += 1;
+        // Neodgovorjena izbira šteje enako kot izrecni "Ne vem": oba dasta
+        // konservativni delež in nobeden ni podatek. Brez druge veje bi
+        // neodgovorjen glavni vzrok izginil iz števca — vrednost 99 ne ustreza
+        // nobeni možnosti — in oznaka zanesljivosti bi ZRASLA na "visoko" prav
+        // pri obiskovalcu, ki na vprašanje ni odgovoril.
+        if (isUnknownChoiceValue(field, value) || isUnansweredChoice(field, value)) {
+          unknownAnswers += 1;
+        }
         continue;
       }
       if (field.kind === 'checkbox') continue;

@@ -1,4 +1,5 @@
 import type { SegmentId } from '../segmentTypes';
+import { getSizeClass } from '../sizeClasses';
 import { LOGISTIKA_COPY } from './logistika';
 import { MALOPRODAJA_COPY } from './maloprodaja';
 import { PROIZVODNJA_COPY } from './proizvodnja';
@@ -58,6 +59,24 @@ export function getSegmentCopy(id: SegmentId): ResolvedSegmentCopy {
     emailGate: { ...NEUTRAL_COPY.emailGate, ...copy.emailGate },
     pdf: { ...NEUTRAL_COPY.pdf, ...copy.pdf },
   };
+}
+
+/**
+ * Oznaka segmenta z DEJANSKIM velikostnim razredom: "Proizvodnja · 250+ zaposlenih".
+ *
+ * displayName je čisto ime panoge; razred se pripne tu, iz vnesenega števila.
+ * En helper za vsa tri mesta izrisa (pas nad vnosi, nadnaslov rezultatov, glava
+ * strankinega PDF-ja): razpon je bil prej trdo zapisan v treh displayName in se
+ * na vnos ni odzival, tri ročna sestavljanja pa bi se razšla pri prvem prepisu.
+ *
+ * Prodajna priprava helperja NE uporablja: qualification vodi sizeClass kot
+ * ločeno vrstico tik pod imenom vprašalnika (pdfSales, salesReportHtml).
+ *
+ * Pri employeeCount <= 0 vrne samo ime — razred bi bil trditev brez podatka.
+ */
+export function segmentLabelWithSize(displayName: string, employeeCount: number): string {
+  if (employeeCount <= 0) return displayName;
+  return `${displayName} · ${getSizeClass(employeeCount)} zaposlenih`;
 }
 
 export * from './copyTypes';

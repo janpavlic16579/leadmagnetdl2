@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildSalesPlaybook, type PlaybookInput } from './salesPlaybook';
 import { scoreIcp, type IcpSignals } from '../config/icp';
+import { ADDRESSABLE_SHARE } from '../config/modules/addressableShare';
 
 /**
  * Playbook je uporaben natanko toliko, kolikor je SPROŽEN. Splošen seznam vprašanj
@@ -66,7 +67,7 @@ const BASE: PlaybookInput = {
     confidence: 'medium',
     confidenceReason: 'Del vrednosti izhaja iz razponov.',
   },
-  softness: { hourAssumptions: [], unknownAnswers: [], untouchedFields: [], plausibilityWarning: null },
+  softness: { hourAssumptions: [], unknownAnswers: [], unansweredChoices: [], untouchedFields: [], plausibilityWarning: null },
   triage: [],
   measured: [],
   risks: [],
@@ -92,6 +93,7 @@ describe('Iztočnice za pogovor', () => {
       softness: {
         hourAssumptions: [],
         unknownAnswers: [{ moduleTitle: 'Zaloge', question: 'Kaj je glavni vzrok?' }],
+        unansweredChoices: [],
         untouchedFields: [],
         plausibilityWarning: null,
       },
@@ -146,7 +148,7 @@ describe('Iztočnice za pogovor', () => {
       question: `Vprašanje ${index}`,
     }));
     const playbook = play({
-      softness: { hourAssumptions: [], unknownAnswers: many, untouchedFields: many, plausibilityWarning: null },
+      softness: { hourAssumptions: [], unknownAnswers: many, unansweredChoices: [], untouchedFields: many, plausibilityWarning: null },
     });
     expect(playbook.openingQuestions.length).toBeLessThanOrEqual(6);
   });
@@ -178,7 +180,9 @@ describe('Ugovori se sprožijo iz podatkov', () => {
           summary: '',
           totalEUR: 1,
           mainCauseLabel: 'Prevozniki',
-          addressableShare: 0.25,
+          // Simbolično: fixture s trdo 0,25 je ob kalibraciji deleža ostal zelen,
+          // medtem ko je ugovor v prodajni pripravi tiho nehal delovati.
+          addressableShare: ADDRESSABLE_SHARE.external,
           answers: [],
           outputs: [],
           pantheon: [],

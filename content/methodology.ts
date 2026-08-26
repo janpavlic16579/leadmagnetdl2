@@ -130,7 +130,7 @@ export const MODULE_METHODOLOGY: Record<string, ModuleMethodology> = {
   },
   terjatve_trgovina: {
     formula:
-      '(letni prihodki / 365) × dni prekoračitve roka × letni strošek kapitala (vprašan v finančni osnovi, privzeto 6 %); + odpisane terjatve; opominjanje × strošek administrativne ure × 12',
+      '(letni prihodki / 365) × dni prekoračitve roka × letni strošek kapitala (vprašan v finančni osnovi, privzeto 8,5 %); + odpisane terjatve; opominjanje × strošek administrativne ure × 12',
     rationale:
       'Šteje se samo prekoračitev NAD dogovorjenim rokom. Financiranje roka, ki ste ga kupcu sami odobrili, je normalno poslovanje in ne strošek napake — če bi šteli celoten DSO, bi bil znesek videti večji, a bi ga vsak finančnik takoj zavrnil.',
   },
@@ -155,9 +155,9 @@ export const MODULE_METHODOLOGY: Record<string, ModuleMethodology> = {
   },
   razpolozljivostMp: {
     formula:
-      'letni prihodek × delež izgubljene prodaje × prispevna marža × (1 − delež nadomeščenih nakupov); + ekspresne dobave; ure iskanja zaloge × strošek ure v poslovalnici × 12',
+      'letni prihodek × delež povpraševanja ob prazni polici × prispevna marža × (1 − delež nadomeščenih nakupov); + ekspresne dobave; ure iskanja zaloge × strošek ure v poslovalnici × 12',
     rationale:
-      'Izgubljena prodaja se vpiše kot delež prometa in ne kot znesek marže — promet trgovec pozna, maržo pa izpelje kalkulator iz skupne finančne osnove. Kdor kupi nadomestni artikel, ni izgubljen kupec, zato se ta delež odšteje; brez tega bi bila prazna polica ovrednotena kot popolna izguba nakupa. Ekspresne dobave so ločen izid, ker so denar, ki odteče, in ne nezaslužena marža.',
+      'Prvi delež meri povpraševanje, ki zadene ob prazno polico, in ne že izgubljene prodaje — meritve panoge kažejo, da manjka povprečno vsak trinajsti iskani artikel. Koliko od tega je res izgubljeno, odšteje naslednje vprašanje: kdor kupi nadomestni artikel ali se vrne, ni izgubljen kupec. Ta odbitek se zgodi natanko enkrat; prej je bilo vprašanje zastavljeno neto in je formula isto substitucijo odštela še drugič. Promet trgovec pozna, maržo pa izpelje kalkulator iz skupne finančne osnove. Ekspresne dobave so ločen izid, ker so denar, ki odteče, in ne nezaslužena marža.',
   },
   blagajnaMp: {
     formula:

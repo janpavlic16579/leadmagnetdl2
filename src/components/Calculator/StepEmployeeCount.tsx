@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { BasicInfo } from '../../types';
 import { SHARED_COPY } from '../../config/copy';
 import { useStepHeading } from '../../lib/useStepHeading';
@@ -28,6 +29,21 @@ interface StepEmployeeCountProps {
 export function StepEmployeeCount({ value, onChange, stepLabel, onNext, onBack }: StepEmployeeCountProps) {
   const headingRef = useStepHeading();
   const canProceed = value.employeeCount > 0;
+  /**
+   * Gumb ni onemogočen (vzorec iz EmailGate): siv gumb ne pove, KAJ manjka, in
+   * samostojni podjetnik, ki pošteno vpiše 0, je obtičal brez razlage — polje 0
+   * namreč sprejme (min=0), naprej pa ni šlo. Ob kliku brez vnosa se pokaže
+   * sporočilo in fokus vrne v polje.
+   */
+  const [showMissing, setShowMissing] = useState(false);
+  const handleNext = () => {
+    if (!canProceed) {
+      setShowMissing(true);
+      document.getElementById('employeeCount')?.focus();
+      return;
+    }
+    onNext();
+  };
 
   return (
     <div className={styles.wrap}>
@@ -50,11 +66,19 @@ export function StepEmployeeCount({ value, onChange, stepLabel, onNext, onBack }
             inputMode="numeric"
             aria-label="Število zaposlenih"
             value={value.employeeCount || null}
-            onChange={(employeeCount) => onChange({ ...value, employeeCount: employeeCount ?? 0 })}
-            onEnter={canProceed ? onNext : undefined}
+            onChange={(employeeCount) => {
+              if (employeeCount && employeeCount > 0) setShowMissing(false);
+              onChange({ ...value, employeeCount: employeeCount ?? 0 });
+            }}
+            onEnter={handleNext}
           />
           <span className={ownStyles.unit}>zaposlenih</span>
         </div>
+        {showMissing ? (
+          <p role="status" className={ownStyles.missing}>
+            {SHARED_COPY.employeeCountMissing}
+          </p>
+        ) : null}
       </div>
 
       <p className={styles.trustNote}>{SHARED_COPY.employeeCountNote}</p>
@@ -65,7 +89,7 @@ export function StepEmployeeCount({ value, onChange, stepLabel, onNext, onBack }
             <button type="button" className={buttonStyles.secondaryButton} onClick={onBack}>
               Nazaj
             </button>
-            <button type="button" className={buttonStyles.primaryButton} disabled={!canProceed} onClick={onNext}>
+            <button type="button" className={buttonStyles.primaryButton} onClick={handleNext}>
               Naprej
             </button>
           </div>

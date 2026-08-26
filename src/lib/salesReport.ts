@@ -7,6 +7,7 @@ import type {
 import { systemGapFor, isTechnicalRiskModuleVisible } from '../config/contexts';
 import { getSegmentCopy } from '../config/copy';
 import { getIndustryLabel } from '../config/industries';
+import { isUnansweredChoice } from '../config/modules/moduleTypes';
 import type { ModuleDefinition, ModuleOutput } from '../config/modules/moduleTypes';
 import type { SegmentConfig } from '../config/segments';
 import { getSizeClass } from '../config/sizeClasses';
@@ -29,7 +30,8 @@ import { buildSalesPlaybook, type SalesPlaybook } from './salesPlaybook';
 import type { FollowUpSequence } from './followUp';
 import { ANNUAL_BUCKETS, groupByModule, isModuleAnswered, type TriageScores } from './moduleEngine';
 import { assessHoursPlausibility, hoursPlausibilityWarning } from './plausibility';
-import { isRevenueMissing, type ConfidenceLevel, type ResultTotals } from './potential';
+import type { ConfidenceLevel, ResultTotals } from './potential';
+import { collectConfidenceSignals } from './confidenceReason';
 import type { TotalsRange } from './range';
 import { taxNumberState } from './validation';
 import type { LeadConsents, LeadContact } from '../types';
@@ -171,6 +173,17 @@ export interface SalesReportSoftness {
   hourAssumptions: HourAssumptionRow[];
   /** Polja, kjer je stranka izbrala "Ne vem" oziroma "Ne vemo". */
   unknownAnswers: SoftFieldRow[];
+  /**
+   * Izbirna vprašanja, ki so ostala BREZ odgovora — ločeno od "Ne vem".
+   *
+   * Razlika ni odtenek. "Ne vem" je odgovor: nekdo je vprašanje prebral in
+   * priznal, da podatka nima. Neodgovor je molk in za sestanek pomeni drugo
+   * vprašanje ("kdo pri vas to ve?" namesto "kako bi to izmerili?"). Odkar
+   * glavni vzrok nima privzetka, je molk pogost in ga ni več mogoče prikazati
+   * kot priznanje — prodajni priročnik bi sicer trdil, da je stranka nekaj
+   * rekla, česar ni.
+   */
+  unansweredChoices: SoftFieldRow[];
   /** Številska polja, ki so ostala na privzeti vrednosti. */
   untouchedFields: SoftFieldRow[];
   /**
@@ -318,6 +331,7 @@ export function buildSalesReport(params: BuildSalesReportParams): SalesReport {
     softness: {
       hourAssumptions: buildHourAssumptions(context, profile),
       unknownAnswers: collectFields(params.activeModules, values, isUnknownChoice),
+      unansweredChoices: collectFields(params.activeModules, values, isUnansweredChoice),
       untouchedFields: collectFields(params.activeModules, values, isUntouchedNumeric),
       plausibilityWarning: hoursPlausibilityWarning(
         assessHoursPlausibility(params.activeModules, values, params.employeeCount),
@@ -504,31 +518,45 @@ function isUntouchedNumeric(
 /**
  * Ubesedi oznako zanesljivosti.
  *
- * Sama ocena ostane v assessConfidence — tu se iz istih treh signalov sestavi samo
- * razlaga. Podvojen prag bi pomenil dve resnici o istem vprašanju, ki se ob prvi
- * kalibraciji razideta.
+ * Sama ocena ostane v assessConfidence — tu se iz istih signalov sestavi samo
+ * razlaga. Signale šteje lib/confidenceReason.ts, ki napaja tudi zaslon in
+ * strankin PDF: podvojen prag bi pomenil dve resnici o istem vprašanju, ki se
+ * ob prvi kalibraciji razideta.
  */
 function buildConfidenceReason(params: BuildSalesReportParams): string {
-  const soft = buildHourAssumptions(params.context, params.profile).filter((row) => row.estimated);
-  const unknown = collectFields(params.activeModules, params.values, isUnknownChoice);
-  const untouched = collectFields(params.activeModules, params.values, isUntouchedNumeric);
+  const signals = collectConfidenceSignals({
+    context: params.context,
+    profile: params.profile,
+    modules: params.activeModules,
+    values: params.values,
+  });
 
   const parts: string[] = [];
-  if (isRevenueMissing(params.profile, params.activeModules, params.values)) {
+  if (signals.revenueMissing) {
     parts.push('prihodek ni podan, zato so postavke, vezane na prihodek, enake 0');
   }
-  if (soft.length > 0) {
+  if (signals.estimatedRates > 0) {
     parts.push(
-      soft.length === 1
+      signals.estimatedRates === 1
         ? 'ena urna postavka je izbran razpon in ne podatek'
-        : `${soft.length} urne postavke so izbran razpon in ne podatek`,
+        : `${signals.estimatedRates} urne postavke so izbran razpon in ne podatek`,
     );
   }
-  if (unknown.length > 0) {
-    parts.push(`${unknown.length}× je izbran odgovor "Ne vem"`);
+  if (signals.unknownChoices > 0) {
+    parts.push(`${signals.unknownChoices}× je izbran odgovor "Ne vem"`);
   }
-  if (untouched.length > 0) {
-    parts.push(`${untouched.length} številskih polj je ostalo na privzeti vrednosti`);
+  // Ločeno od "Ne vem": molk ni priznanje in pred stranko se ga ne sme tako
+  // predstaviti. Za sestanek je to drugo vprašanje — ne "kako bi to izmerili",
+  // ampak "kdo pri vas to ve".
+  if (signals.unansweredChoices > 0) {
+    parts.push(
+      signals.unansweredChoices === 1
+        ? 'eno izbirno vprašanje je ostalo brez odgovora'
+        : `${signals.unansweredChoices} izbirnih vprašanj je ostalo brez odgovora`,
+    );
+  }
+  if (signals.untouchedNumeric > 0) {
+    parts.push(`${signals.untouchedNumeric} številskih polj je ostalo na privzeti vrednosti`);
   }
 
   if (parts.length === 0) {

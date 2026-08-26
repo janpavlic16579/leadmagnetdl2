@@ -1,9 +1,10 @@
 import { lazy, Suspense } from 'react';
 import { getModules, type ModuleDefinition, type ModuleOutput } from '../../config/modules';
 import type { SegmentConfig } from '../../config/segments';
-import { SHARED_COPY, type ResolvedSegmentCopy } from '../../config/copy';
+import { SHARED_COPY, segmentLabelWithSize, type ResolvedSegmentCopy } from '../../config/copy';
 import { triageScoreLabel } from '../../lib/answerLabels';
-import { formatAmount, formatDecimal } from '../../lib/format';
+import { formatAmount, formatDecimal, formatEUR } from '../../lib/format';
+import { multiYearEUR, perMonthEUR, perWorkingDayEUR } from '../../lib/horizon';
 import { useStepHeading } from '../../lib/useStepHeading';
 import type { TriageScores } from '../../lib/moduleEngine';
 import type { ResultTotals } from '../../lib/potential';
@@ -32,6 +33,8 @@ interface ResultsViewProps {
   segment: SegmentConfig;
   /** Naslovi, opombe in besedila kartic izbrane dejavnosti. */
   copy: ResolvedSegmentCopy;
+  /** Vneseno število zaposlenih (Korak 2) — nadnaslov pripne dejanski velikostni razred. */
+  employeeCount: number;
   outputsByModule: Record<string, ModuleOutput[]>;
   totals: ResultTotals;
   /** Razpon, kadar finančna osnova stoji na izbranih pasovih (lib/range.ts). */
@@ -44,6 +47,8 @@ interface ResultsViewProps {
   /** Razrešeni vnosi po modulu — razčlenitev iz njih pokaže, iz česa znesek nastane. */
   valuesByModule: Record<string, Record<string, number>>;
   stepLabel: string;
+  /** Izračunan razlog nizke zanesljivosti — glej ResultsSummary. */
+  confidenceReason?: string | null;
   onMeasureModule: (id: string) => void;
   onProceedToEmail: () => void;
   onBack: () => void;
@@ -52,6 +57,7 @@ interface ResultsViewProps {
 export function ResultsView({
   segment,
   copy,
+  employeeCount,
   outputsByModule,
   totals,
   totalsRange,
@@ -60,6 +66,7 @@ export function ResultsView({
   triageScores,
   valuesByModule,
   stepLabel,
+  confidenceReason,
   onMeasureModule,
   onProceedToEmail,
   onBack,
@@ -122,7 +129,7 @@ export function ResultsView({
   return (
     <div className={styles.wrap}>
       <p className={styles.stepLabel}>
-        {stepLabel} · {copy.displayName}
+        {stepLabel} · {segmentLabelWithSize(copy.displayName, employeeCount)}
       </p>
       {/*
         Vprašanje segmenta je naslov strani in ne opomba pod njo.
@@ -157,6 +164,40 @@ export function ResultsView({
       */}
       <p className={styles.heroNote}>{copy.results.heroNote}</p>
 
+      {/*
+        Tri leta in cena odlašanja.
+
+        Letni znesek je bil doslej edino sidro, čeprav se ERP projekt odloča na
+        tri- do petletnem obzorju — poročilo je torej merilo krajše obdobje od
+        odločitve, ki jo podpira. Dnevni ekvivalent je zraven zato, ker je edina
+        številka na strani, ki jo bralec preveri na pamet.
+        Enkratni kapital je naveden OB trojnem znesku in nikoli sešteto z njim.
+      */}
+      {heroValueEUR > 0 ? (
+        <div className={styles.horizon}>
+          <p className={styles.horizonTotal}>
+            <span className={styles.horizonLabel}>{SHARED_COPY.horizonLabel}</span>
+            <span className={styles.horizonValue}>
+              {formatAmount(multiYearEUR(heroValueEUR), {
+                range: heroRange
+                  ? {
+                      minEUR: multiYearEUR(heroRange.minEUR),
+                      maxEUR: multiYearEUR(heroRange.maxEUR),
+                    }
+                  : null,
+                lowConfidence: totals.confidence === 'low',
+              })}
+            </span>
+          </p>
+          <p className={styles.horizonNote}>
+            {SHARED_COPY.horizonNote}{' '}
+            {SHARED_COPY.delayNote
+              .replace('{daily}', formatEUR(perWorkingDayEUR(heroValueEUR)))
+              .replace('{monthly}', formatEUR(perMonthEUR(heroValueEUR)))}
+          </p>
+        </div>
+      ) : null}
+
       {isAccounting && accountingCapacity !== undefined && copy.results.capacitySecondary ? (
         <p className={styles.heroSecondary}>
           {copy.results.capacitySecondary.replace('{count}', formatDecimal(accountingCapacity))}
@@ -172,7 +213,33 @@ export function ResultsView({
         </p>
       ) : null}
 
-      <ResultsSummary totals={totals} totalsRange={totalsRange} figures={copy.figures} />
+      {/*
+        Ograde na enem mestu, ne razpršene po opombah kartic.
+
+        Vsaka od njih je obstajala že prej — v opombi kapacitete, pod grafom, v
+        razdelku o neizmerjenem — torej tam, kjer jih bralec sreča šele, ko si je
+        o številki že ustvaril mnenje. Skupaj povedo eno stvar: izračun meri
+        manj, kot podjetje izgublja. To je razlika med konservativno oceno in
+        podcenjeno, in edini razlog, da je znesek mogoče braniti navzgor.
+      */}
+      {heroValueEUR > 0 ? (
+        <div className={styles.notIncluded}>
+          <p className={styles.notIncludedTitle}>{SHARED_COPY.notIncludedTitle}</p>
+          <ul className={styles.notIncludedList}>
+            {SHARED_COPY.notIncluded.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+          <p className={styles.notIncludedClosing}>{SHARED_COPY.notIncludedClosing}</p>
+        </div>
+      ) : null}
+
+      <ResultsSummary
+        totals={totals}
+        totalsRange={totalsRange}
+        figures={copy.figures}
+        confidenceReason={confidenceReason}
+      />
 
       {chartData.length > 0 ? (
         <div className={styles.card}>

@@ -1,4 +1,5 @@
 import { addressableShareOf, mainCauseField, type CauseOption } from './addressableShare';
+import { UNANSWERED_CHOICE } from './moduleTypes';
 import {
   ASSURANCE_CHOICES,
   MONTHS_PER_YEAR,
@@ -73,7 +74,7 @@ export const narocilaTrgovina: ModuleDefinition = {
       key: 'orderChannel',
       label: 'Kako večinoma prejemate naročila kupcev?',
       kind: 'choice',
-      default: 2,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       choices: [
         { value: 0, label: 'Samodejno v ERP (EDI, spletni portal)' },
@@ -208,7 +209,7 @@ export const skladisceTrgovina: ModuleDefinition = {
       key: 'pickingMethod',
       label: 'Kako danes komisionirate?',
       kind: 'choice',
-      default: 2,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       choices: [
         { value: 0, label: 'S terminali in vodenimi lokacijami' },
@@ -371,7 +372,7 @@ export const zalogeTrgovina: ModuleDefinition = {
       key: 'stockVisibility',
       label: 'Kako dober je vaš pregled nad dejansko zalogo po artiklu?',
       kind: 'choice',
-      default: 2,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       choices: [
         { value: 0, label: 'Sproten in po lokacijah' },

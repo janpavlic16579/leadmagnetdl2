@@ -285,10 +285,33 @@ describe('Kje so številke mehke', () => {
     expect(reportFor('proizvodnja').softness.hourAssumptions).toHaveLength(2);
   });
 
-  it('privzeti "Ne vemo" pri glavnem vzroku pristane med mehkimi odgovori', () => {
+  // Vprašanje o glavnem vzroku nima več privzetka, zato neizpolnjen obrazec ne
+  // pomeni več izbranega "Ne vemo", ampak molk. Za prodajnika sta to dve različni
+  // iztočnici — "kako bi to izmerili" proti "kdo pri vas to ve" — in prodajni
+  // priročnik ne sme trditi, da je stranka rekla nekaj, česar ni.
+  it('neodgovorjen glavni vzrok je naveden ločeno od izbranega "Ne vem"', () => {
     const report = reportFor('trgovina');
-    const causes = report.softness.unknownAnswers.filter((row) => row.question === 'Kaj je glavni vzrok?');
-    expect(causes.length).toBeGreaterThan(0);
+    const question = 'Kaj je glavni vzrok?';
+
+    const unanswered = report.softness.unansweredChoices.filter((row) => row.question === question);
+    expect(unanswered.length).toBeGreaterThan(0);
+
+    const claimedUnknown = report.softness.unknownAnswers.filter((row) => row.question === question);
+    expect(claimedUnknown).toHaveLength(0);
+  });
+
+  it('izbrani "Ne vemo" pri glavnem vzroku ostane med izrecnimi odgovori', () => {
+    // Nasprotni primer istega para: kdor "Ne vemo" izbere, je odgovoril.
+    const report = reportFor('trgovina', {
+      selectedIds: ['skladisce_trgovina'],
+      inputs: { skladisce_trgovina: { mainCause: 5 } },
+    });
+    const question = 'Kaj je glavni vzrok?';
+
+    expect(report.softness.unknownAnswers.filter((row) => row.question === question)).toHaveLength(1);
+    expect(report.softness.unansweredChoices.filter((row) => row.question === question)).toHaveLength(
+      0,
+    );
   });
 
   it('nedotaknjeno številsko polje je našteto, vneseno pa ne', () => {
@@ -308,7 +331,7 @@ describe('Kje so številke mehke', () => {
   it('razlaga zanesljivosti našteje razloge, ne le oznake', () => {
     const report = reportFor('trgovina');
     expect(report.summary.confidenceReason).toContain('spodnja meja');
-    expect(report.summary.confidenceReason).toContain('Ne vem');
+    expect(report.summary.confidenceReason).toContain('brez odgovora');
   });
 
   it('izpolnjen obrazec dobi razlago brez očitkov', () => {
@@ -356,7 +379,23 @@ describe('Triaža in izmerjena področja', () => {
 
     expect(contextAnswer).toBeDefined();
     expect(contextAnswer!.contextOnly).toBe(true);
+    // Nedotaknjeno kontekstno vprašanje je NEODGOVORJENO, ne "privzeti odgovor":
+    // vnaprej izbran "Delno ERP, delno Excel ali listek" je v CRM in pripravo
+    // potoval kot podatek o podjetju, ki tega ni nikoli izjavilo.
+    expect(contextAnswer!.answer).toBe('Ni odgovora');
+    expect(contextAnswer!.source).toBe('ni odgovora');
+  });
+
+  it('izbran odgovor kontekstnega vprašanja potuje v pripravo kot vnesen', () => {
+    const report = reportFor('trgovina', {
+      selectedIds: ['skladisce_trgovina'],
+      inputs: { skladisce_trgovina: { pickingMethod: 2 } },
+    });
+    const area = report.measured.find((item) => item.moduleId === 'skladisce_trgovina')!;
+    const contextAnswer = area.answers.find((row) => row.question === 'Kako danes komisionirate?');
+
     expect(contextAnswer!.answer).toBe('Delno ERP, delno Excel ali listek');
+    expect(contextAnswer!.source).toBe('vneseno');
   });
 
   it('odgovor nosi oznako izbire in enoto, ne surove številke', () => {

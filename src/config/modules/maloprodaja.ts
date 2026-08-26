@@ -1,4 +1,5 @@
 import { addressableShareOf, mainCauseField, type CauseOption } from './addressableShare';
+import { UNANSWERED_CHOICE } from './moduleTypes';
 import {
   ASSURANCE_CHOICES,
   MONTHS_PER_YEAR,
@@ -66,9 +67,30 @@ const POLICE_CAUSES: CauseOption[] = [
  *
  * Brez tega vprašanja bi vsak izgubljen obisk štel kot izgubljena marža, kar je
  * najpogostejši način, kako kalkulatorji precenijo stockout: velik del kupcev vzame
- * drug artikel ali se vrne. "Ne vem" pade na sredino razpona iz raziskave (A06).
+ * drug artikel ali se vrne. Vprašanje zato ostane in svoj del odšteje ENKRAT.
+ *
+ * "Ne vem" 0,45 → 0,50: Gruen & Corsten (72.000 kupcev) merijo, da ob prazni polici
+ * 26 % kupcev zamenja znamko, 19 % zamenja artikel znotraj znamke in 15 % nakup
+ * odloži — v trgovini torej ostane 45–60 % nakupov. 0,50 je sredina izmerjenega,
+ * 0,45 je bil njegov spodnji rob. Vir: docs/erp-koristi-benchmarki-2026-08.md, A5.
  */
-const SUBSTITUTION_SHARES = [0.7, 0.5, 0.2, 0.45];
+const SUBSTITUTION_SHARES = [0.7, 0.5, 0.2, 0.5];
+
+/**
+ * Delež povpraševanja, ki zadene ob prazno polico, po izbranem pasu.
+ *
+ * Vprašanje je bilo prej drsnik 0–3 % z besedilom "kolikšen delež prodaje
+ * IZGUBITE" — torej neto formulacija, ki jo je formula nato pomnožila še z
+ * (1 − substitucija) in isti odbitek uporabila drugič. Hkrati je bil strop
+ * dosegljivega neto izida 3 % × 0,55 = 1,65 % prometa, kar je POD izmerjenim
+ * povprečjem panoge (~4 % neto, Gruen & Corsten).
+ *
+ * Odslej meri BRUTO povpraševanje ob prazni polici, substitucija pa ga zniža
+ * enkrat in upravičeno. Sidro panoge je 8,3 % svetovno oziroma 8,6 % v Evropi —
+ * "vsak trinajsti iskani artikel manjka". Indeks 4 je "Ne vem" in ostane 0:
+ * prazen obrazec mora še naprej pokazati 0 EUR.
+ */
+const STOCKOUT_DEMAND_SHARES = [0.015, 0.035, 0.075, 0.08, 0];
 
 const substitutionField: ModuleField = {
   key: 'substitutionShare',
@@ -106,18 +128,23 @@ export const razpolozljivostMp: ModuleDefinition = {
   },
   fields: [
     {
-      key: 'lostSalesSharePercent',
-      label: 'Kolikšen delež letne prodaje po vaši oceni izgubite, ker artikla ni na zalogi?',
-      kind: 'percent',
-      min: 0,
-      max: 0.03,
-      step: 0.0025,
-      default: 0,
-      help: 'Delež prometa, ne marže — maržo izračunamo sami. Če ocene nimate, pustite 0: en mesec beleženih vprašanj "imate to?" da boljši podatek kot ugibanje.',
+      key: 'stockoutDemandShare',
+      label: 'Kolikšen del povpraševanja pri vas zadene ob artikel, ki ga ni na zalogi?',
+      kind: 'choice',
+      default: 4,
+      help: 'Delež iskanj, ne izgubljene prodaje — koliko od tega je res izgubljeno, odšteje naslednje vprašanje.',
       explainer:
-        'Delež PROMETA, ne marže. Primer: 1,5 % pri prometu 2 mio EUR pomeni 30.000 EUR izgubljene ' +
-        'prodaje. Če ocene nimate, pustite 0 — mesec beleženja vprašanj "imate to?" da boljšo številko ' +
-        'kot ugibanje.',
+        'Meritve razpoložljivosti v trgovini na drobno kažejo, da povprečno manjka vsak trinajsti ' +
+        'iskani artikel — 8,3 % svetovno in 8,6 % v Evropi (Gruen & Corsten, 72.000 kupcev). ' +
+        'Če svoje številke nimate, izberite povprečje panoge; koliko od tega je res izgubljena ' +
+        'prodaja, se odšteje pri naslednjem vprašanju.',
+      choices: [
+        { value: 0, label: 'Redko — pod 2 %' },
+        { value: 1, label: '2–5 %' },
+        { value: 2, label: '5–10 %' },
+        { value: 3, label: 'Vzemi povprečje panoge (8 %)' },
+        { value: 4, label: 'Ne vem', unknown: true },
+      ],
     },
     substitutionField,
     {
@@ -145,7 +172,7 @@ export const razpolozljivostMp: ModuleDefinition = {
       key: 'replenishmentMethod',
       label: 'Kako danes določate, kaj in koliko naročiti?',
       kind: 'choice',
-      default: 2,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       choices: [
         { value: 0, label: 'Samodejni predlog naročila iz sistema' },
@@ -162,14 +189,16 @@ export const razpolozljivostMp: ModuleDefinition = {
 
     return [
       {
-        // Formula raziskave (F01): izgubljena prodaja × prispevna marža ×
-        // (1 − nadomeščeni ali odloženi nakup). Prihodek in marža prideta iz
-        // skupne finančne osnove, zato ju to področje ne sprašuje znova.
+        // Formula raziskave (F01): povpraševanje ob prazni polici × prispevna
+        // marža × (1 − nadomeščeni ali odloženi nakup). Prvi člen je BRUTO in ne
+        // neto: prej je vprašanje spraševalo, koliko prodaje trgovec "izgubi", in
+        // je formula od tega odštela substitucijo še enkrat.
+        // Prihodek in marža prideta iz skupne finančne osnove.
         bucket: 'lostMargin',
         label: 'Nezaslužena marža zaradi praznih polic',
         valueEUR:
           context.annualRevenueEUR *
-          input.lostSalesSharePercent *
+          (STOCKOUT_DEMAND_SHARES[input.stockoutDemandShare] ?? 0) *
           context.contributionMarginRate *
           (1 - substitution),
         addressableShare,
@@ -268,7 +297,7 @@ export const zalogeMp: ModuleDefinition = {
       key: 'staleStockShare',
       label: 'Kolikšen del zaloge se v zadnjih šestih mesecih ni prodal?',
       kind: 'choice',
-      default: 3,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       choices: [
         { value: 0, label: 'Skoraj nič' },
@@ -300,10 +329,15 @@ export const zalogeMp: ModuleDefinition = {
         // Letni strošek denarja, ki leži v presežni zalogi (F03). Ločen od
         // sprostljivega kapitala spodaj in ne podvojen z njim: kapital je enkraten
         // denarni učinek, to pa cena, ki se plačuje vsako leto, dokler zaloga leži.
+        //
+        // Brez addressableShare iz istega razloga kot postavka pod njo: obe stojita
+        // na releasableEUR, torej na zalogi, za katero je stranka SAMA ocenila, da
+        // bi je trajno lahko bilo manj. Odpravljivost je s tem že ocenjena; množenje
+        // z deležem glavnega vzroka bi isti problem zmanjšalo dvakrat — natanko
+        // vzorec dvojnega diskonta, ki je bil avgusta 2026 odpravljen pri potencialu.
         bucket: 'directLoss',
         label: 'Strošek financiranja presežne zaloge',
         valueEUR: releasableEUR * context.capitalCostRate,
-        addressableShare,
       },
       {
         // Brez addressableShare: ta znesek JE potencial, ne sedanji strošek.
@@ -406,7 +440,7 @@ export const marzeMp: ModuleDefinition = {
       label:
         'Ali lahko za posamezen artikel, poslovalnico in kanal dokažete najnižjo ceno zadnjih 30 dni?',
       kind: 'choice',
-      default: 2,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       help: 'Zakon o varstvu potrošnikov zahteva, da je ob znižanju navedena najnižja cena zadnjih 30 dni.',
       explainer:
@@ -544,7 +578,7 @@ export const blagajnaMp: ModuleDefinition = {
       key: 'stocktakeMethod',
       label: 'Kako izvajate inventuro?',
       kind: 'choice',
-      default: 2,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       choices: [
         { value: 0, label: 'Sproti po skupinah, s terminali' },
@@ -655,7 +689,7 @@ export const prevzemMp: ModuleDefinition = {
       key: 'receiptMethod',
       label: 'Kako prevzemate blago?',
       kind: 'choice',
-      default: 2,
+      default: UNANSWERED_CHOICE,
       contextOnly: true,
       choices: [
         { value: 0, label: 'Elektronski dokument dobavitelja neposredno v sistem' },

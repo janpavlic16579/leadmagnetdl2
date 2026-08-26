@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SEGMENT_COPY, getSegmentCopy } from './index';
+import { SEGMENT_COPY, getSegmentCopy, segmentLabelWithSize } from './index';
 import { NEUTRAL_COPY, SHARED_COPY } from './copyTypes';
 import { SEGMENT_ORDER, SEGMENTS } from '../segments';
 
@@ -165,5 +165,30 @@ describe('Register besedil po dejavnosti', () => {
     for (const [path, value] of flatten(SHARED_COPY)) {
       expect(value.trim().length, `SHARED_COPY.${path}`).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('Oznaka segmenta z velikostnim razredom', () => {
+  it('ime dejavnosti ne nosi velikostnega razpona', () => {
+    // Regresija: "Storitve in projekti 10–249 zaposlenih" je ostalo na zaslonu
+    // tudi pri vnosu 400 zaposlenih, ker je bil razpon del imena. Razred je
+    // izpeljan podatek in sodi v segmentLabelWithSize, ne v register besedil.
+    for (const [id, copy] of ENTRIES) {
+      expect(copy.displayName, `${id}: razpon sodi v segmentLabelWithSize`).not.toMatch(/\d/);
+    }
+  });
+
+  it('pripne razred, ki ustreza vnesenemu številu', () => {
+    expect(segmentLabelWithSize('Proizvodnja', 9)).toBe('Proizvodnja · 1–9 zaposlenih');
+    expect(segmentLabelWithSize('Proizvodnja', 10)).toBe('Proizvodnja · 10–49 zaposlenih');
+    expect(segmentLabelWithSize('Proizvodnja', 249)).toBe('Proizvodnja · 50–249 zaposlenih');
+    expect(segmentLabelWithSize('Proizvodnja', 250)).toBe('Proizvodnja · 250+ zaposlenih');
+    expect(segmentLabelWithSize('Storitve in projekti', 400)).toBe(
+      'Storitve in projekti · 250+ zaposlenih',
+    );
+  });
+
+  it('brez vnosa ostane samo ime — razred bi bil trditev brez podatka', () => {
+    expect(segmentLabelWithSize('Proizvodnja', 0)).toBe('Proizvodnja');
   });
 });

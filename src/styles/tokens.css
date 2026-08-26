@@ -2,6 +2,13 @@
   --color-bg: #f7f8fa;
   --color-surface: #ffffff;
   --color-border: #dfe3e8;
+  /*
+   * Obroba INTERAKTIVNIH kontrolnikov (vnosna polja, spustni seznam, sekundarni
+   * gumb, gumb "?"). --color-border ima na beli 1,29:1 in je za dekorativne
+   * ločnice, WCAG 1.4.11 pa za meje kontrolnikov zahteva 3:1 — sicer polje
+   * vizualno "ne obstaja". #858e97 da 3,33:1 na kartici in 3,13:1 na ozadju.
+   */
+  --color-border-strong: #858e97;
   --color-text: #444444;
   --color-text-muted: #5b6773;
   --color-primary: #faaf17;
@@ -31,10 +38,15 @@
   --color-chart-margin: #a86a08;
   --color-chart-capacity: #4b5563;
 
-  /* Onemogočen gumb: v svetli temi zbledela rumena, kot je bilo doslej. */
-  --color-button-disabled-bg: var(--color-primary);
-  --color-button-disabled-text: var(--color-on-primary);
-  --button-disabled-opacity: 0.5;
+  /*
+   * Onemogočen gumb: nevtralna ploskev s polno prosojnostjo — enak pristop kot v
+   * temni temi. Prejšnja prosojna rumena (opacity 0.5) je nad belo dala besedilo
+   * s kontrastom 2,34:1 na prvem gumbu, ki ga obiskovalec sploh vidi; #5b6773 na
+   * #e7e9ec da 4,75:1.
+   */
+  --color-button-disabled-bg: #e7e9ec;
+  --color-button-disabled-text: #5b6773;
+  --button-disabled-opacity: 1;
 
   --radius-md: 4px;
   --radius-lg: 8px;
@@ -84,6 +96,8 @@
   --color-bg: #171415;
   --color-surface: #221e1f;
   --color-border: #383233;
+  /* 3,19:1 na kartici in 3,54:1 na ozadju — topel odtenek, ne hladno siva. */
+  --color-border-strong: #746b6d;
   --color-text: #ece8e5;
   --color-text-muted: #a79f9c;
   --color-primary: #faaf17;
@@ -161,7 +175,11 @@ button {
 button:focus-visible,
 select:focus-visible,
 summary:focus-visible,
-a:focus-visible {
+a:focus-visible,
+/* Tudi vnosna polja: fokusiran obiskovalec s tipkovnico mora videti, KJE tipka —
+   obroba polja sama tega ne pove (glej --color-border-strong). */
+input:focus-visible,
+textarea:focus-visible {
   outline: 3px solid var(--color-primary-text);
   outline-offset: 2px;
 }
