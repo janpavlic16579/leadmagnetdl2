@@ -23,6 +23,14 @@ const BASE: SalesReport = {
     utmSource: null,
     taxNumberLooksValid: true,
   },
+  clientView: {
+    heroText: '109.440 EUR',
+    derivativesText: null,
+    payback: null,
+    paybackNote: 'Tabele povračila stranka ni videla.',
+    coverageText: null,
+    accountingCapacityText: null,
+  },
   qualification: {
     industryLabel: 'Trgovina, veleprodaja in distribucija',
     segmentName: 'Veleprodaja in distribucija',
@@ -35,6 +43,8 @@ const BASE: SalesReport = {
     isPantheonCustomer: false,
     systemGap: { min: 0.25, max: 0.4 },
     followUpSequence: 'high-loss-no-risk',
+    deadlines: [],
+    technicalRiskModuleShown: false,
   },
   summary: {
     directLossEUR: 45_000,
@@ -46,7 +56,7 @@ const BASE: SalesReport = {
     confidence: 'low',
     confidenceReason: 'Zneski so spodnja meja.',
   },
-  softness: { hourAssumptions: [], unknownAnswers: [], unansweredChoices: [], untouchedFields: [], plausibilityWarning: null },
+  softness: { assumptions: [], unknownAnswers: [], unansweredChoices: [], untouchedFields: [], plausibilityWarning: null },
   triage: [],
   measured: [],
   risks: [],
@@ -206,13 +216,64 @@ describe('buildSalesReportHtml', () => {
     expect(html).toContain('ni videti veljavna');
   });
 
-  it('pove, da tehnična opozorila niso bila prikazana, kadar stranka ni na PANTHEON-u', () => {
-    // Brez te povedi bi prazen razdelek s tveganji izpadel kot podatek o podjetju.
+  it('loči tri stanja tehničnih rokov, ne dveh', () => {
+    /**
+     * Brez te povedi bi prazen razdelek s tveganji izpadel kot podatek o podjetju.
+     * Stanja so tri in vsako pomeni nekaj drugega: modula ni videla / videla ga je in
+     * ni odkljukala nič (to je ODGOVOR) / odkljukala je. Pogoj je zato vidnost modula
+     * in ne "je uporabnik PANTHEON" — to je bil le približek.
+     */
     expect(buildSalesReportHtml(BASE)).toContain('niso bila prikazana');
-    const pantheon = buildSalesReportHtml({
+
+    const shownNothingChecked = buildSalesReportHtml({
       ...BASE,
-      qualification: { ...BASE.qualification, isPantheonCustomer: true },
+      qualification: { ...BASE.qualification, technicalRiskModuleShown: true },
     });
-    expect(pantheon).not.toContain('niso bila prikazana');
+    expect(shownNothingChecked).not.toContain('niso bila prikazana');
+    expect(shownNothingChecked).toContain('odkljukala ni nobenega');
+
+    const checked = buildSalesReportHtml({
+      ...BASE,
+      qualification: {
+        ...BASE.qualification,
+        technicalRiskModuleShown: true,
+        deadlines: [
+          {
+            key: 'sqlServer2016',
+            label: 'SQL Server 2016',
+            dateISO: '2026-07-14',
+            daysUntil: -22,
+            expired: true,
+            statusText: 'POTEKEL 14. 7. 2026 (pred 22 dnevi)',
+            text: 'POTEKEL 14. 7. 2026 (pred 22 dnevi) — SQL Server 2016',
+          },
+        ],
+      },
+    });
+    expect(checked).not.toContain('odkljukala ni nobenega');
+    expect(checked).toContain('POTEKEL 14. 7. 2026');
+  });
+
+  it('izpiše prošnjo za posvet samo, kadar je stranka zanjo zaprosila', () => {
+    // Edino polje obrazca, ki izraža namero in ne dovoljenja. Doslej ga izrisovalca
+    // nista pokazala nikjer — svetovalec je topel lead klical kot mrzlega.
+    expect(buildSalesReportHtml(BASE)).not.toContain('želim brezplačen posvet');
+    // Vrstica med privolitvami je vedno, ker je revizijski podatek.
+    expect(buildSalesReportHtml(BASE)).toContain('Prošnja za posvet');
+
+    const asked = buildSalesReportHtml({
+      ...BASE,
+      meta: { ...BASE.meta, consentConsulting: true },
+    });
+    expect(asked).toContain('želim brezplačen posvet');
+    expect(asked).toContain('+386 1 234 5678');
+  });
+
+  it('imenuje predvideno nadaljevanje z dejanjem, ne z interno oznako', () => {
+    // Datoteka se v rezervnem načinu prenese na napravo stranke, zato oznaka opisuje
+    // NAŠ korak in ne, kam smo stranko uvrstili.
+    const html = buildSalesReportHtml(BASE);
+    expect(html).toContain('Klic svetovalca');
+    expect(html).not.toContain('high-loss-no-risk');
   });
 });

@@ -129,7 +129,7 @@ function harness(overrides: Partial<DeliverLeadModules>, real: DeliverLeadModule
   };
 }
 
-const isSalesFile = (file: DownloadFile) => file.filename.includes('prodajna-priprava');
+const isSalesFile = (file: DownloadFile) => file.filename.includes('priprava-na-pogovor');
 
 describe('Dostava po oddaji', () => {
   it('brez webhooka: priprava se prenese stranki, da jo posreduje svetovalcu', async () => {
@@ -201,7 +201,7 @@ describe('Dostava po oddaji', () => {
     expect(h.batches).toHaveLength(1);
     expect(h.batches[0]).toHaveLength(2);
     expect(h.batches[0][0].filename).toContain('analiza-skritih-stroskov');
-    expect(h.batches[0][1].filename).toContain('prodajna-priprava');
+    expect(h.batches[0][1].filename).toContain('priprava-na-pogovor');
   });
 
   it('webhook ne stoji pred prenosoma', async () => {

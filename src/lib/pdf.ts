@@ -15,14 +15,14 @@ import { groupByModule } from './moduleEngine';
 import type { ConfidenceLevel, ResultTotals } from './potential';
 import { formatAmount, formatEUR, formatHours, formatNumber, isoDate, MIN_FIGURE_EUR } from './format';
 import {
-  MIN_POTENTIAL_FOR_PAYBACK_EUR,
   monthsLabel,
   multiYearEUR,
-  PAYBACK_TIERS_EUR,
-  paybackMonths,
+  paybackRows,
   perMonthEUR,
   perWorkingDayEUR,
+  type PaybackRow,
 } from './horizon';
+import { heroValueEUR as heroTotal, heroRangeEUR as heroTotalRange } from './heroTotals';
 import { displayRange, type EURRange, type TotalsRange } from './range';
 import { slugify, type DownloadFile } from './download';
 import {
@@ -165,9 +165,11 @@ export async function buildResultsPdfFile(params: GeneratePdfParams): Promise<Do
 
   // Vrstni red pripovedi: koliko stane (hero), iz česa je sestavljeno (kartice),
   // kaj to pomeni za investicijo (povračilo), zakaj je znesek spodnja meja (ograde).
-  const potentialEUR = params.totals.addressablePotentialEUR;
-  if (potentialEUR !== undefined && potentialEUR >= MIN_POTENTIAL_FOR_PAYBACK_EUR) {
-    y = drawPaybackSection(doc, potentialEUR, y);
+  // Vrata so v horizon.paybackRows in ne tu: prodajna priprava mora pokazati natanko
+  // to, kar je videla stranka, in prepisan pogoj bi se ob spremembi praga razšel.
+  const payback = paybackRows(params.totals.addressablePotentialEUR);
+  if (payback) {
+    y = drawPaybackSection(doc, payback, y);
   }
   y = drawNotIncludedSection(doc, y);
 
@@ -339,20 +341,8 @@ function drawHeroSection(
    * naslovna številka mora biti ena in ista v obeh medijih.
    * Enkratni kapital ostane zunaj vsote — enkraten znesek se z letnimi ne sešteva.
    */
-  const heroValueEUR =
-    params.totals.directLossEUR + params.totals.lostMarginEUR + params.totals.capacityEUR;
-  const heroRange = params.totalsRange
-    ? {
-        minEUR:
-          params.totalsRange.directLoss.minEUR +
-          params.totalsRange.lostMargin.minEUR +
-          params.totalsRange.capacity.minEUR,
-        maxEUR:
-          params.totalsRange.directLoss.maxEUR +
-          params.totalsRange.lostMargin.maxEUR +
-          params.totalsRange.capacity.maxEUR,
-      }
-    : undefined;
+  const heroValueEUR = heroTotal(params.totals);
+  const heroRange = heroTotalRange(params.totalsRange);
 
   setFont(doc, 'normal');
   doc.setFontSize(8.5);
@@ -557,11 +547,11 @@ function drawHeroSection(
  * potencialu se tabela ne izriše — dobe povračila v desetletjih bi bile
  * argument proti temu, kar naj tabela pokaže.
  */
-function drawPaybackSection(doc: jsPDF, annualPotentialEUR: number, startY: number): number {
-  const rows = PAYBACK_TIERS_EUR.map((investmentEUR) => {
-    const months = paybackMonths(investmentEUR, annualPotentialEUR);
-    return [formatEUR(investmentEUR), months === null ? '—' : monthsLabel(months)];
-  });
+function drawPaybackSection(doc: jsPDF, payback: PaybackRow[], startY: number): number {
+  const rows = payback.map((row) => [
+    formatEUR(row.investmentEUR),
+    row.months === null ? '—' : monthsLabel(row.months),
+  ]);
 
   let y = ensurePageSpace(doc, startY, 24);
   y = drawSectionTitle(doc, SHARED_COPY.paybackTitle, y);

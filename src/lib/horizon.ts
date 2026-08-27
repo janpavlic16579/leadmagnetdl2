@@ -85,6 +85,30 @@ export function paybackMonths(investmentEUR: number, annualPotentialEUR: number)
   return (investmentEUR / annualPotentialEUR) * MONTHS_PER_YEAR;
 }
 
+export interface PaybackRow {
+  investmentEUR: number;
+  /** `null`, kadar dobe ni mogoče izračunati (glej paybackMonths). */
+  months: number | null;
+}
+
+/**
+ * Vrstice tabele povračila — ali `null`, kadar tabele ni videl nihče.
+ *
+ * Vrata so tu funkcija in ne pogoj pri klicatelju, ker jih odslej potrebujeta dva
+ * dokumenta: strankino poročilo jo izriše, prodajna priprava pa mora vedeti natanko to,
+ * kar je stranka videla — tudi kadar je to nič. Prepisan pogoj bi se ob prvi spremembi
+ * praga razšel in priprava bi trdila, da je stranka videla tabelo, ki je ni.
+ */
+export function paybackRows(annualPotentialEUR: number | undefined): PaybackRow[] | null {
+  if (annualPotentialEUR === undefined || annualPotentialEUR < MIN_POTENTIAL_FOR_PAYBACK_EUR) {
+    return null;
+  }
+  return PAYBACK_TIERS_EUR.map((investmentEUR) => ({
+    investmentEUR,
+    months: paybackMonths(investmentEUR, annualPotentialEUR),
+  }));
+}
+
 /**
  * Slovenska števna oblika z dvojino: 1 mesec, 2 meseca, 3 mesece, 5 mesecev.
  *
@@ -106,8 +130,12 @@ export function yearsLabel(years: number): string {
 /**
  * Izbira med štirimi oblikami: ednina, dvojina, množina 3–4 in rodilnik množine.
  * Vrstni red v `forms` je [1, 2, 3–4, 5+].
+ *
+ * Izvoženo, ker isto sklanjatev potrebujejo tudi dnevi do tehničnega roka v prodajni
+ * pripravi. Drugi zapis istega pravila bi se zmotil prav tam, kjer se je ta že: pri
+ * ostanku nad sto ("101 dan", ne "101 dni").
  */
-function slovenianForm(count: number, forms: [string, string, string, string]): string {
+export function slovenianForm(count: number, forms: [string, string, string, string]): string {
   const remainder = count % 100;
   if (remainder === 1) return forms[0];
   if (remainder === 2) return forms[1];

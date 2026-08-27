@@ -44,6 +44,14 @@ const BASE: PlaybookInput = {
     utmSource: null,
     taxNumberLooksValid: true,
   },
+  clientView: {
+    heroText: '109.440 EUR',
+    derivativesText: null,
+    payback: null,
+    paybackNote: 'Tabele povračila stranka ni videla.',
+    coverageText: null,
+    accountingCapacityText: null,
+  },
   qualification: {
     industryLabel: 'Trgovina, veleprodaja in distribucija',
     segmentName: 'Veleprodaja in distribucija',
@@ -56,6 +64,8 @@ const BASE: PlaybookInput = {
     isPantheonCustomer: false,
     systemGap: { min: 0.25, max: 0.4 },
     followUpSequence: 'high-loss-no-risk',
+    deadlines: [],
+    technicalRiskModuleShown: false,
   },
   summary: {
     directLossEUR: 45_000,
@@ -67,7 +77,7 @@ const BASE: PlaybookInput = {
     confidence: 'medium',
     confidenceReason: 'Del vrednosti izhaja iz razponov.',
   },
-  softness: { hourAssumptions: [], unknownAnswers: [], unansweredChoices: [], untouchedFields: [], plausibilityWarning: null },
+  softness: { assumptions: [], unknownAnswers: [], unansweredChoices: [], untouchedFields: [], plausibilityWarning: null },
   triage: [],
   measured: [],
   risks: [],
@@ -87,11 +97,11 @@ describe('Iztočnice za pogovor', () => {
   it('boleče, a neizmerjeno področje je PRVO — zanj v poročilu ni nobenega zneska', () => {
     const playbook = play({
       triage: [
-        { moduleId: 'a', title: 'Zaloge', score: 1, scoreLabel: 'Občasno', measured: true },
-        { moduleId: 'b', title: 'Terjatve', score: 3, scoreLabel: 'Zamude so pravilo', measured: false },
+        { moduleId: 'a', title: 'Zaloge', score: 1, scoreLabel: 'Občasno', selected: true, answered: true, annualEUR: 0 },
+        { moduleId: 'b', title: 'Terjatve', score: 3, scoreLabel: 'Zamude so pravilo', selected: false, answered: false, annualEUR: null },
       ],
       softness: {
-        hourAssumptions: [],
+        assumptions: [],
         unknownAnswers: [{ moduleTitle: 'Zaloge', question: 'Kaj je glavni vzrok?' }],
         unansweredChoices: [],
         untouchedFields: [],
@@ -106,7 +116,7 @@ describe('Iztočnice za pogovor', () => {
   it('izmerjeno področje z visoko oceno med iztočnice ne pride', () => {
     const playbook = play({
       triage: [
-        { moduleId: 'a', title: 'Zaloge', score: 3, scoreLabel: 'Stalno', measured: true },
+        { moduleId: 'a', title: 'Zaloge', score: 3, scoreLabel: 'Stalno', selected: true, answered: true, annualEUR: 0 },
       ],
     });
     expect(playbook.openingQuestions).toHaveLength(0);
@@ -133,6 +143,7 @@ describe('Iztočnice za pogovor', () => {
           ],
           outputs: [],
           pantheon: [],
+          cappedOutputs: [],
           methodology: null,
         },
       ],
@@ -148,7 +159,7 @@ describe('Iztočnice za pogovor', () => {
       question: `Vprašanje ${index}`,
     }));
     const playbook = play({
-      softness: { hourAssumptions: [], unknownAnswers: many, unansweredChoices: [], untouchedFields: many, plausibilityWarning: null },
+      softness: { assumptions: [], unknownAnswers: many, unansweredChoices: [], untouchedFields: many, plausibilityWarning: null },
     });
     expect(playbook.openingQuestions.length).toBeLessThanOrEqual(6);
   });
@@ -186,6 +197,7 @@ describe('Ugovori se sprožijo iz podatkov', () => {
           answers: [],
           outputs: [],
           pantheon: [],
+          cappedOutputs: [],
           methodology: null,
         },
       ],
@@ -236,6 +248,7 @@ describe('Kaj ponuditi', () => {
           answers: [],
           outputs: [],
           pantheon: ['Napačna alineja'],
+          cappedOutputs: [],
           methodology: null,
         },
         {
@@ -248,6 +261,7 @@ describe('Kaj ponuditi', () => {
           answers: [],
           outputs: [],
           pantheon: ['Prava alineja'],
+          cappedOutputs: [],
           methodology: null,
         },
       ],
@@ -262,9 +276,16 @@ describe('Velikost posla in nujnost', () => {
     expect(play({}, { deadlineDates: [] }).dealSizing.urgency).toBe('nizka');
   });
 
-  it('pri nizki zanesljivosti pove, da je znesek spodnja meja', () => {
+  it('razlog nujnosti govori o roku in ne ponavlja zneska', () => {
+    /**
+     * Znesek stoji v razdelku 1 dve vrstici više, in sicer v obliki, ki jo bere
+     * stranka (razpon oziroma "najmanj X" — glej SalesReportClientView). Gola točka v
+     * tej vrstici je izgledala kot druga številka o isti stvari. Da je znesek spodnja
+     * meja, odslej pove sam zapis zneska in razlaga zanesljivosti.
+     */
     const playbook = play({ summary: { ...BASE.summary, confidence: 'low' } });
-    expect(playbook.dealSizing.urgencyReason).toContain('spodnja meja');
+    expect(playbook.dealSizing.urgencyReason).not.toContain('EUR');
+    expect(playbook.dealSizing.measuredLossEUR).toBeGreaterThan(0);
   });
 
   it('velikost posla izhaja iz števila zaposlenih', () => {

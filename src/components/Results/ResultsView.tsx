@@ -4,6 +4,7 @@ import type { SegmentConfig } from '../../config/segments';
 import { SHARED_COPY, segmentLabelWithSize, type ResolvedSegmentCopy } from '../../config/copy';
 import { triageScoreLabel } from '../../lib/answerLabels';
 import { formatAmount, formatDecimal, formatEUR } from '../../lib/format';
+import { heroValueEUR as heroTotalEUR, heroRangeEUR as heroTotalRange } from '../../lib/heroTotals';
 import { multiYearEUR, perMonthEUR, perWorkingDayEUR } from '../../lib/horizon';
 import { useStepHeading } from '../../lib/useStepHeading';
 import type { TriageScores } from '../../lib/moduleEngine';
@@ -80,15 +81,8 @@ export function ResultsView({
    * (StepInputs.liveTotalEUR). Enkratni kapital namenoma ni zraven: sešteti
    * enkraten učinek z letnimi je prav napaka, ki jo ločeni koši preprečujejo.
    */
-  const heroValueEUR = totals.directLossEUR + totals.lostMarginEUR + totals.capacityEUR;
-  const heroRange = totalsRange
-    ? {
-        minEUR:
-          totalsRange.directLoss.minEUR + totalsRange.lostMargin.minEUR + totalsRange.capacity.minEUR,
-        maxEUR:
-          totalsRange.directLoss.maxEUR + totalsRange.lostMargin.maxEUR + totalsRange.capacity.maxEUR,
-      }
-    : null;
+  const heroValueEUR = heroTotalEUR(totals);
+  const heroRange = heroTotalRange(totalsRange) ?? null;
   const heroTotal = formatAmount(heroValueEUR, {
     range: heroRange,
     lowConfidence: totals.confidence === 'low',

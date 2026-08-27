@@ -1,5 +1,9 @@
 import type {
   AssumptionSource,
+  CostAssumption,
+  CostQuestion,
+  ScaleAssumption,
+  ScaleQuestion,
   SegmentContext,
   BusinessProfile,
   SystemGap,
@@ -17,17 +21,31 @@ import {
   answerSource,
   contextOptionLabel,
   costBandLabel,
+  scaleBandLabel,
   fieldAnswerText,
   isAnswered,
   isPantheonCustomer,
   isUnknownChoice,
   mainCauseLabel,
+  roleDisplay,
   triageScoreLabel,
 } from './answerLabels';
-import { scoreIcp, type IcpScore, type IcpSignals } from '../config/icp';
+import { SHARED_COPY } from '../config/copy';
+import { formatAmount, formatEUR, formatHours, formatPercent } from './format';
+import { heroRangeEUR, heroValueEUR } from './heroTotals';
+import {
+  monthsLabel,
+  multiYearEUR,
+  paybackRows,
+  perMonthEUR,
+  perWorkingDayEUR,
+  slovenianForm,
+} from './horizon';
+import { displayRange } from './range';
+import { daysUntil, scoreIcp, type IcpScore, type IcpSignals } from '../config/icp';
 import { MODULE_E_ITEMS } from '../config/modules/moduleE';
 import { buildSalesPlaybook, type SalesPlaybook } from './salesPlaybook';
-import type { FollowUpSequence } from './followUp';
+import { followUpSequenceLabel, type FollowUpSequence } from './followUp';
 import { ANNUAL_BUCKETS, groupByModule, isModuleAnswered, type TriageScores } from './moduleEngine';
 import { assessHoursPlausibility, hoursPlausibilityWarning } from './plausibility';
 import type { ConfidenceLevel, ResultTotals } from './potential';
@@ -94,6 +112,65 @@ export interface SalesReportQualification {
   isPantheonCustomer: boolean;
   systemGap: SystemGap;
   followUpSequence: FollowUpSequence;
+  /** Odkljukani tehnični roki z datumi; prazno, kadar ni odkljukan noben. */
+  deadlines: DeadlineRow[];
+  /**
+   * Ali je stranka modul s tehničnimi roki sploh videla.
+   *
+   * Brez tega sta neločljiva dva različna primera: modula ni videla (ni uporabnik
+   * PANTHEON) in videla ga je, a ni odkljukala nič. Drugo je odgovor — po njeni izjavi
+   * roki zanjo ne veljajo — in prodajnika obvaruje pred vprašanjem, na katero je
+   * stranka že odgovorila.
+   */
+  technicalRiskModuleShown: boolean;
+}
+
+export interface DeadlineRow {
+  key: string;
+  label: string;
+  dateISO: string;
+  /** Negativno pomeni, da je rok že mimo. */
+  daysUntil: number;
+  expired: boolean;
+  /** Datum in preostanek brez oznake: "POTEKEL 14. 7. 2026 (pred 43 dnevi)". */
+  statusText: string;
+  /**
+   * Isto z oznako, za vrstico v razdelku 1, kjer roka nič drugega ne imenuje.
+   *
+   * Oboje je ubesedeno tu, ker izrisovalec ne sme računati ne datuma ne dni — čas
+   * pride v gradnik kot parameter in mora ostati tam.
+   */
+  text: string;
+}
+
+export interface ClientViewPaybackRow {
+  investmentText: string;
+  durationText: string;
+}
+
+/**
+ * Kaj ima stranka pred sabo v SVOJEM poročilu.
+ *
+ * Prodajna priprava je doslej poznala iste letne zneske, ne pa izpeljank, ki jih
+ * strankino poročilo naredi iz njih — trojni znesek, ceno delovnega dne, ceno meseca
+ * odlašanja in tabelo povračila. Stranka pride na sestanek s temi številkami; svetovalec
+ * jih mora poznati vnaprej, sicer je presenečen nad podatkom iz lastne hiše.
+ *
+ * Vsa polja so že ubesedena in gredo skozi ISTE formatirnike in ISTA vrata kot
+ * lib/pdf.ts — ogledalo, ki bi pokazalo številko, ki je stranka ni videla, bi bilo
+ * slabše od nobenega.
+ */
+export interface SalesReportClientView {
+  /** Naslovna letna številka v strankini obliki: razpon ali "najmanj X" ali "ni izmerjeno". */
+  heroText: string;
+  /** Izpeljanke v eni vrstici; `null`, kadar jih stranka ni videla (hero = 0). */
+  derivativesText: string | null;
+  /** `null` pomeni, da tabela stranki NI bila prikazana. */
+  payback: ClientViewPaybackRow[] | null;
+  /** Zakaj tabele ni, kadar je `payback` null — svetovalec mora vedeti tudi to. */
+  paybackNote: string;
+  coverageText: string | null;
+  accountingCapacityText: string | null;
 }
 
 export interface SalesReportSummary {
@@ -116,9 +193,17 @@ export interface SalesReportSummary {
   confidenceReason: string;
 }
 
-export interface HourAssumptionRow {
+export interface AssumptionRow {
   label: string;
-  valueEUR: number;
+  /**
+   * Vrednost z enoto, že izpisana: "20 EUR/h", "2.000.000 EUR", "23,5 %".
+   *
+   * Izpeljano tu in ne v izrisovalcih, ker enota ni ista za vse predpostavke — urna
+   * postavka je EUR/h, prihodek EUR, marža in strošek kapitala pa odstotek. Dokler je
+   * tabela naštevala samo ure, je enoto lahko pripel izrisovalec; odkar so v njej tudi
+   * prihodek in deleži, bi ista koda prihodek izpisala kot "2000000 EUR/h".
+   */
+  valueText: string;
   estimated: boolean;
   /**
    * Od kod je številka. Štirje primeri, ki jih mora prodajnik ločiti, ker vsak pove
@@ -133,13 +218,21 @@ export interface HourAssumptionRow {
   source: AssumptionSource;
   /** Razpon, v katerem se izračun giblje — pri `entered` in `none` null. */
   bandLabel: string | null;
+  /**
+   * Kaj neodgovor pomeni za izračun, kadar pomeni kaj posebnega.
+   *
+   * Samo prihodek pade na 0 in s tem izniči cele postavke (lib/potential.ts,
+   * `isRevenueMissing`); marža in strošek kapitala imata privzetek dejavnosti, zato
+   * se izračun z njima izvede — le s številko, ki je stranka ni videla.
+   */
+  consequence: string | null;
 }
 
-/** Besedilo, ki ga za urno postavko vidi bralec poročila. */
-export function hourAssumptionSource(row: HourAssumptionRow): string {
+/** Besedilo, ki ga za predpostavko vidi bralec poročila. */
+export function assumptionSource(row: AssumptionRow): string {
   if (row.source === 'entered') return 'vneseno';
   if (row.source === 'industryAverage') {
-    return `povprečje panoge (${row.valueEUR} EUR/h)`;
+    return `povprečje panoge (${row.valueText})`;
   }
   return row.bandLabel ? `izbran razpon ${row.bandLabel}` : 'ni odgovora — privzetek dejavnosti';
 }
@@ -160,6 +253,108 @@ export function taxNumberCell(report: SalesReport): string {
     : `${report.meta.taxNumber} (ni videti veljavna)`;
 }
 
+/**
+ * Vrstice razdelkov 1 in 2, sestavljene enkrat za oba izrisovalca.
+ *
+ * Doslej je isto tabelo ročno nosila vsaka od obeh datotek, varovana samo s komentarjem
+ * "zrcali vrstice v salesReportHtml.ts". Svetovalec bere obe datoteki in razlika med
+ * njima izgleda kot razlika v podatkih — zato vrstice odslej nastanejo tu, izrisovalca
+ * pa ju samo izpišeta. Isti razlog kot pri `AnswerRow.source`.
+ */
+export type ReportRow = [string, string];
+
+export function scoreRows(report: SalesReport): ReportRow[] {
+  const deal = report.playbook.dealSizing;
+  const rows: ReportRow[] = [
+    ['Velikost posla', `${deal.sizeLabel} (${report.qualification.sizeClass} zaposlenih)`],
+    // Ista oblika, kot jo bere stranka: razpon, kadar obstaja, in "najmanj" pri nizki
+    // zanesljivosti. Gola točka je bila številka, ki je stranka ni videla.
+    ['Izmerjena letna bolečina', report.clientView.heroText],
+  ];
+  if (report.clientView.derivativesText) {
+    rows.push(['Kar stranka bere iz tega', report.clientView.derivativesText]);
+  }
+  rows.push(['Nujnost', `${deal.urgency} — ${deal.urgencyReason}`]);
+  const deadline = nearestDeadline(report);
+  if (deadline) rows.push(['Tehnični rok', deadline.text]);
+  rows.push(['Predvideno nadaljevanje', followUpSequenceLabel(report.qualification.followUpSequence)]);
+  rows.push(['Priporočena licenca', report.playbook.recommendedPantheon.licence.name]);
+  return rows;
+}
+
+/**
+ * Kje boli in s čim začeti — dvignjeno na vrh, ne dodano.
+ *
+ * Obe vrstici sta doslej obstajali niže v dokumentu (opomba o neizmerjenih bolečih
+ * področjih v 3b, prvo vprašanje v "Kaj vprašati"), zato si je moral svetovalec odgovor
+ * na "kje je največ denarja" sestaviti sam iz blokov področij.
+ */
+export function headlinePainRows(report: SalesReport): ReportRow[] {
+  const rows: ReportRow[] = [];
+
+  const richest = [...report.measured].sort((a, b) => b.totalEUR - a.totalEUR)[0];
+  if (richest && richest.totalEUR > 0) {
+    rows.push(['Največ denarja', `${richest.title} — ${formatEUR(richest.totalEUR)} letno`]);
+  }
+
+  const painful = report.triage.filter(
+    (row) => !row.answered && row.score !== null && row.score >= 2,
+  );
+  if (painful.length > 0) {
+    rows.push([
+      'Najbolj boleče brez številke',
+      `${painful[0].title} — ocena ${painful[0].score}/3; za to področje v poročilu ni nobenega zneska`,
+    ]);
+  }
+
+  const question = report.playbook.openingQuestions[0];
+  if (question) rows.push(['Prvo vprašanje', question.question]);
+
+  return rows;
+}
+
+/**
+ * Oznaka postavke v tabeli "Letni znesek".
+ *
+ * Enkratni kapital stoji v isti tabeli pod isto glavo, a se z letnimi zneski ne sešteva —
+ * kdor stolpec sešteje, dobi drug rezultat od vrstice "Skupaj" nad njim. Pripis pove,
+ * katera postavka je izjema.
+ */
+export function outputLabel(output: ModuleOutput): string {
+  const hours = output.hoursPerMonth ? ` (${formatHours(output.hoursPerMonth)}/mesec)` : '';
+  const once = output.bucket === 'oneTimeCapital' ? ' — enkratno, se ne sešteva' : '';
+  return `${output.label}${hours}${once}`;
+}
+
+export function qualificationRows(report: SalesReport): ReportRow[] {
+  const q = report.qualification;
+  const band = `${formatPercent(q.systemGap.min)} – ${formatPercent(q.systemGap.max)}`;
+
+  return [
+    // Kontakt gre na vrh: svetovalec najprej potrebuje, koga pokliče.
+    ['Kontaktna oseba', contactPerson(report) || '—'],
+    ['E-naslov', report.meta.email || '—'],
+    ['Telefon', report.meta.phone || '—'],
+    ['Davčna številka', taxNumberCell(report)],
+    ['Dejavnost', q.industryLabel],
+    ['Vprašalnik', q.segmentName],
+    ['Velikost', `${q.sizeClass} zaposlenih (vneseno: ${q.employeeCount})`],
+    ['Vlogo navaja kot', roleDisplay(q.roleLabel, q.roleOther)],
+    ['Pretežno dela', q.businessTypeLabel ?? '—'],
+    ['Sedanji sistem', q.currentSystemLabel ?? '—'],
+    ['Obstoječi uporabnik PANTHEON', q.isPantheonCustomer ? 'Da' : 'Ne'],
+    ['Možnost izboljšave sedanjega sistema', `${band} — v izračun zneskov ne vstopa`],
+    ['Vir obiska', report.meta.utmSource ?? 'neposredno'],
+    // Štiri ločene vrstice in ne ena združena: revizijsko vprašanje je "ali je
+    // privolil v trženje?", na kar skupna celica ne odgovori. Zadnja ni privolitev,
+    // ampak prošnja — stranka je sama zaprosila za klic.
+    ['Privolitev — obdelava osebnih podatkov', report.meta.consentProcessing ? 'Da' : 'Ne'],
+    ['Privolitev — ponudbe PANTHEON', report.meta.consentOffers ? 'Da' : 'Ne'],
+    ['Privolitev — vsebine in dogodki', report.meta.consentContent ? 'Da' : 'Ne'],
+    ['Prošnja za posvet — „kontaktirajte me“', report.meta.consentConsulting ? 'Da' : 'Ne'],
+  ];
+}
+
 export interface SoftFieldRow {
   moduleTitle: string;
   question: string;
@@ -170,7 +365,13 @@ export interface SoftFieldRow {
  * pove, katero številko sme prodajnik na sestanku izpostaviti in katere ne.
  */
 export interface SalesReportSoftness {
-  hourAssumptions: HourAssumptionRow[];
+  /**
+   * Finančna osnova, kot jo je navedla stranka: urne postavke, prihodek, marža in
+   * strošek kapitala. Doslej so bile tu samo ure — prihodek in marža sta bila
+   * najdragocenejša podatka vprašalnika in nista bila prikazana nikjer, čeprav marža
+   * množi cel koš nezaslužene marže, prihodek pa vse odstotkovne postavke.
+   */
+  assumptions: AssumptionRow[];
   /** Polja, kjer je stranka izbrala "Ne vem" oziroma "Ne vemo". */
   unknownAnswers: SoftFieldRow[];
   /**
@@ -207,8 +408,26 @@ export interface TriageRow {
    */
   score: number | null;
   scoreLabel: string | null;
-  /** Področja z visoko oceno, ki NISO izmerjena, so najboljše vprašanje za sestanek. */
-  measured: boolean;
+  /** Obiskovalec je področje v triaži izbral za podroben izračun. */
+  selected: boolean;
+  /**
+   * Je v njem tudi kaj odgovoril.
+   *
+   * Ločeno od `selected`, ker sta to za sestanek dva različna primera. Doslej je
+   * stolpec "Izmerjeno" izpisal "da" za vsako izbrano področje — tudi za tisto, ki ga je
+   * obiskovalec odprl in pustil prazno. Strankino poročilo isto področje šteje med
+   * neizmerjena (moduleEngine.isModuleAnswered), zato sta dokumenta o istem področju
+   * trdila nasprotno. Izbrano in prazno je poleg tega samostojen signal: podjetje je
+   * področje prepoznalo kot svoje, številk pa ni imelo pri roki.
+   */
+  answered: boolean;
+  /**
+   * Letni znesek področja; `null` pri neizmerjenih.
+   *
+   * Ni 0 — iz istega razloga kot pri `score`: nič bi pomenilo izmerjeno brez učinka,
+   * neizmerjeno pa je odsotnost podatka.
+   */
+  annualEUR: number | null;
 }
 
 export interface AnswerRow {
@@ -236,6 +455,8 @@ export interface MeasuredArea {
   totalEUR: number;
   mainCauseLabel: string | null;
   addressableShare: number | null;
+  /** Postavke, kjer je v izračunu obveljala nižja kapica od deleža področja. */
+  cappedOutputs: { label: string; cap: number }[];
   answers: AnswerRow[];
   outputs: ModuleOutput[];
   pantheon: string[];
@@ -246,6 +467,8 @@ export interface SalesReport {
   meta: SalesReportMeta;
   qualification: SalesReportQualification;
   summary: SalesReportSummary;
+  /** Iste številke, kot jih bere stranka v svojem poročilu. */
+  clientView: SalesReportClientView;
   softness: SalesReportSoftness;
   triage: TriageRow[];
   measured: MeasuredArea[];
@@ -281,6 +504,10 @@ export interface BuildSalesReportParams {
   totalsRange?: TotalsRange | null;
   highestModule: string | null;
   followUpSequence: FollowUpSequence;
+  /** "+N strank brez nove zaposlitve" — pri računovodskih servisih strankina naslovna številka. */
+  accountingCapacity?: number;
+  /** Pokritost, kot jo vidi stranka: hero meri samo izbrana področja. */
+  coverage?: { measuredCount: number; offeredCount: number };
 }
 
 export function buildSalesReport(params: BuildSalesReportParams): SalesReport {
@@ -314,7 +541,11 @@ export function buildSalesReport(params: BuildSalesReportParams): SalesReport {
       isPantheonCustomer: isPantheonCustomer(context, profile.currentSystem),
       systemGap: systemGapFor(context, profile.currentSystem),
       followUpSequence: params.followUpSequence,
+      deadlines: buildDeadlines(params),
+      technicalRiskModuleShown: wasTechnicalRiskModuleShown(segment, profile),
     },
+
+    clientView: buildClientView(params),
 
     summary: {
       directLossEUR: params.totals.directLossEUR,
@@ -329,7 +560,7 @@ export function buildSalesReport(params: BuildSalesReportParams): SalesReport {
     },
 
     softness: {
-      hourAssumptions: buildHourAssumptions(context, profile),
+      assumptions: buildAssumptions(context, profile),
       unknownAnswers: collectFields(params.activeModules, values, isUnknownChoice),
       unansweredChoices: collectFields(params.activeModules, values, isUnansweredChoice),
       untouchedFields: collectFields(params.activeModules, values, isUntouchedNumeric),
@@ -338,18 +569,26 @@ export function buildSalesReport(params: BuildSalesReportParams): SalesReport {
       ),
     },
 
-    triage: params.segmentModules
-      .filter((definition) => definition.triage !== undefined)
-      .map((definition) => ({
-        moduleId: definition.id,
-        title: definition.title,
-        score: params.triageScores[definition.id] ?? null,
-        scoreLabel:
-          definition.id in params.triageScores
-            ? triageScoreLabel(definition, params.triageScores[definition.id])
-            : null,
-        measured: activeIds.has(definition.id),
-      })),
+    triage: sortTriage(
+      params.segmentModules
+        .filter((definition) => definition.triage !== undefined)
+        .map((definition) => {
+          const answered =
+            activeIds.has(definition.id) && isModuleAnswered(definition, values[definition.id]);
+          return {
+            moduleId: definition.id,
+            title: definition.title,
+            score: params.triageScores[definition.id] ?? null,
+            scoreLabel:
+              definition.id in params.triageScores
+                ? triageScoreLabel(definition, params.triageScores[definition.id])
+                : null,
+            selected: activeIds.has(definition.id),
+            answered,
+            annualEUR: answered ? annualTotalEUR(outputsByModule[definition.id] ?? []) : null,
+          };
+        }),
+    ),
 
     measured: params.activeModules
       // Modul E ni področje, ampak seznam rokov — njegovi izidi so med tveganji.
@@ -388,14 +627,11 @@ function buildIcpSignals(
     systemGapMax: base.qualification.systemGap.max,
     isPantheonCustomer: base.qualification.isPantheonCustomer,
     roleId: params.profile.role,
-    measuredLossEUR:
-      base.summary.directLossEUR + base.summary.lostMarginEUR + base.summary.capacityEUR,
+    measuredLossEUR: heroValueEUR(base.summary),
     highLossThresholdEUR: params.segment.highLossThresholdEUR,
-    // Roki iz modula E: odkljukana polja preslikamo v datume, ki jih nosi vsebina.
-    // `warningDate` doslej ni bil uporabljen nikjer — prikazovalo se je le besedilo.
-    deadlineDates: MODULE_E_ITEMS.filter(
-      (item) => (params.values.E?.[item.key] ?? 0) === 1,
-    ).map((item) => item.warningDate),
+    // Isti seznam, kot ga izpiše razdelek 1 — ne drugi filter čez iste kljukice.
+    // Dvoje štetje rokov bi pomenilo, da dokument o istem roku trdi dvoje.
+    deadlineDates: base.qualification.deadlines.map((row) => row.dateISO),
     confidence: base.summary.confidence,
     measuredAreaCount: triageable.filter(
       (definition) =>
@@ -424,14 +660,24 @@ function buildMeasuredArea(
     moduleId: definition.id,
     title: definition.title,
     summary: definition.summary,
-    // Vsi letni koši — tudi lostMargin, sicer je izpisan "Skupaj" manjši od vsote
-    // postavk, naštetih tik pod njim (maloprodajno največjo postavko je izpuščal).
-    totalEUR: outputs
-      .filter((output) => (ANNUAL_BUCKETS as readonly string[]).includes(output.bucket))
-      .reduce((sum, output) => sum + (output.valueEUR ?? 0), 0),
+    totalEUR: annualTotalEUR(outputs),
     mainCauseLabel: mainCauseLabel(definition, moduleValues.mainCause),
     // Vsi izidi enega področja delijo isti delež, zato zadošča prvi, ki ga ima.
     addressableShare: outputs.find((output) => output.addressableShare !== undefined)?.addressableShare ?? null,
+    // Postavke z lastno kapico (izmet materiala, prazni kilometri) so v izračunu
+    // omejene niže od deleža, ki ga področje razglasi. Brez tega pripisa svetovalec
+    // znesek pomnoži s prikazanim deležem in dobi drugo številko od kartice potenciala.
+    cappedOutputs: outputs
+      .filter(
+        (output) =>
+          // Le postavke, ki so v tabeli tudi vidne (isti prag kot pri izrisu) — pripis
+          // k postavki, ki je v poročilu ni, bi svetovalca pošiljal iskat ničlo.
+          (output.valueEUR ?? 0) > 0 &&
+          output.addressableCap !== undefined &&
+          output.addressableShare !== undefined &&
+          output.addressableCap < output.addressableShare,
+      )
+      .map((output) => ({ label: output.label, cap: output.addressableCap as number })),
     answers: definition.fields.map((field) => ({
       question: field.label,
       answer: fieldAnswerText(field, moduleValues[field.key] ?? field.default),
@@ -445,39 +691,219 @@ function buildMeasuredArea(
   };
 }
 
-function buildHourAssumptions(
+/**
+ * Letna vsota področja.
+ *
+ * Vsi letni koši — tudi lostMargin, sicer je izpisan "Skupaj" manjši od vsote postavk,
+ * naštetih tik pod njim (maloprodajno največjo postavko je izpuščal). Ista vsota stoji
+ * v bloku področja in v triažni tabeli, zato je tu in ne dvakrat.
+ */
+function annualTotalEUR(outputs: ModuleOutput[]): number {
+  return outputs
+    .filter((output) => (ANNUAL_BUCKETS as readonly string[]).includes(output.bucket))
+    .reduce((sum, output) => sum + (output.valueEUR ?? 0), 0);
+}
+
+/**
+ * Vrstni red triaže: najprej tam, kjer najbolj boli.
+ *
+ * Doslej je bila tabela v vrstnem redu registra, kar pomeni, da je področje z oceno 3/3
+ * lahko stalo pod tremi z oceno 0. Znotraj iste ocene gredo neizpolnjena pred
+ * izpolnjena — boleče področje brez številke je najboljše vprašanje za sestanek —, nato
+ * večji znesek pred manjšim. Neocenjena padejo na dno: to ni ocena 0, ampak odsotnost
+ * odgovora. Razvrsti se enkrat, tu, da izrisovalca ne moreta pokazati različnega
+ * vrstnega reda.
+ */
+function sortTriage(rows: TriageRow[]): TriageRow[] {
+  return rows.map((row, index) => ({ row, index })).sort((a, b) => {
+      const scoreA = a.row.score ?? -1;
+      const scoreB = b.row.score ?? -1;
+      if (scoreA !== scoreB) return scoreB - scoreA;
+      if (a.row.answered !== b.row.answered) return a.row.answered ? 1 : -1;
+      const eurA = a.row.annualEUR ?? 0;
+      const eurB = b.row.annualEUR ?? 0;
+      if (eurA !== eurB) return eurB - eurA;
+      return a.index - b.index;
+    })
+    .map((entry) => entry.row);
+}
+
+/**
+ * Datum po slovensko iz ISO zapisa, brez `Date`.
+ *
+ * `new Date('2026-07-14')` je polnoč po UTC in `Intl` jo v našem pasu izpiše kot
+ * 14. julij samo do konca oktobra — pozimi bi bil 13. Datum roka je koledarski podatek
+ * brez ure, zato ga sestavimo iz delov niza. Isti razlog kot pri `isoDate` v format.ts.
+ */
+function slovenianDate(dateISO: string): string {
+  const [year, month, day] = dateISO.split('-');
+  return `${Number(day)}. ${Number(month)}. ${year}`;
+}
+
+/**
+ * "pred 1 dnem" / "pred 2 dnevoma" / "čez 2 dneva" / "čez 139 dni".
+ *
+ * Pretekli rok stoji v orodniku ("pred dvema dnevoma"), prihodnji v tožilniku ("čez dva
+ * dneva") — dve različni preglednici oblik. Izbiro oblike opravi skupna slovenianForm,
+ * ki edina pozna pravilo o ostanku nad sto.
+ */
+function dayCountLabel(days: number): string {
+  const absolute = Math.abs(days);
+  return days < 0
+    ? `pred ${absolute} ${slovenianForm(absolute, ['dnem', 'dnevoma', 'dnevi', 'dnevi'])}`
+    : `čez ${absolute} ${slovenianForm(absolute, ['dan', 'dneva', 'dni', 'dni'])}`;
+}
+
+function buildDeadlines(params: BuildSalesReportParams): DeadlineRow[] {
+  const checked = params.values.E ?? {};
+  return MODULE_E_ITEMS.filter((item) => checked[item.key] === 1)
+    .map((item) => {
+      const days = daysUntil(item.warningDate, params.generatedAtISO);
+      const expired = days < 0;
+      const date = slovenianDate(item.warningDate);
+      const statusText = expired
+        ? `POTEKEL ${date} (${dayCountLabel(days)})`
+        : days === 0
+          ? `${date} — poteče danes`
+          : `${date} (${dayCountLabel(days)})`;
+      return {
+        key: item.key,
+        label: item.label,
+        dateISO: item.warningDate,
+        daysUntil: days,
+        expired,
+        statusText,
+        text: `${statusText} — ${item.label}`,
+      };
+    })
+    .sort((a, b) => a.daysUntil - b.daysUntil);
+}
+
+/** Najbližji oziroma najdlje pretečeni rok — vrstica na vrhu pokaže enega. */
+export function nearestDeadline(report: SalesReport): DeadlineRow | null {
+  const [first, ...rest] = report.qualification.deadlines;
+  if (!first) return null;
+  if (rest.length === 0) return first;
+  return { ...first, text: `${first.text} … in še ${rest.length} med tveganji` };
+}
+
+function buildClientView(params: BuildSalesReportParams): SalesReportClientView {
+  const heroEUR = heroValueEUR(params.totals);
+  const heroRange = heroRangeEUR(params.totalsRange);
+  const lowConfidence = params.totals.confidence === 'low';
+  const heroText = formatAmount(heroEUR, { range: displayRange(heroRange), lowConfidence });
+
+  // Vrata so ista kot v strankinem PDF: pri ničelnem znesku izpeljank ne izriše.
+  // Asimetrija spodaj ni spregled — trojni znesek gre skozi formatAmount (dobi razpon
+  // in "najmanj"), dnevni in mesečni pa sta pri stranki VEDNO goli točki.
+  const derivativesText =
+    heroEUR > 0
+      ? `${SHARED_COPY.horizonLabel.toLowerCase()} ${formatAmount(multiYearEUR(heroEUR), {
+          range: heroRange
+            ? displayRange({
+                minEUR: multiYearEUR(heroRange.minEUR),
+                maxEUR: multiYearEUR(heroRange.maxEUR),
+              })
+            : null,
+          lowConfidence,
+        })} · vsak delovni dan ${formatEUR(perWorkingDayEUR(heroEUR))} · vsak mesec odlašanja ${formatEUR(
+          perMonthEUR(heroEUR),
+        )}`
+      : null;
+
+  const rows = paybackRows(params.totals.addressablePotentialEUR);
+
+  return {
+    heroText,
+    derivativesText,
+    payback: rows
+      ? rows.map((row) => ({
+          investmentText: formatEUR(row.investmentEUR),
+          durationText: row.months === null ? '—' : monthsLabel(row.months),
+        }))
+      : null,
+    // Dva različna razloga za odsotnost tabele: potenciala ni izračunanega (dejavnost
+    // brez konteksta) ali je pod pragom. Ena sama poved bi v prvem primeru trdila
+    // nekaj, kar ni res. Praga ne imenujemo — je notranja kalibracija, ki je stranka
+    // ni videla, dokument pa lahko pristane pri njej.
+    paybackNote: rows
+      ? SHARED_COPY.paybackNote
+      : params.totals.addressablePotentialEUR === undefined
+        ? 'Tabele povračila stranka ni videla — za to dejavnost naslovljiv potencial ni izračunan.'
+        : 'Tabele povračila stranka ni videla — izmerjen potencial je za tak prikaz prenizek.',
+    coverageText:
+      params.coverage && params.coverage.measuredCount < params.coverage.offeredCount
+        ? `Izmerjeno ${params.coverage.measuredCount} od ${params.coverage.offeredCount} področij — neizmerjena v zneske ne vstopajo.`
+        : null,
+    accountingCapacityText:
+      params.accountingCapacity === undefined
+        ? null
+        : `+${params.accountingCapacity.toFixed(1)} strank brez nove zaposlitve`,
+  };
+}
+
+function costRow(question: CostQuestion, assumption: CostAssumption): AssumptionRow {
+  return {
+    label: question.label,
+    valueText: `${assumption.valueEUR} EUR/h`,
+    estimated: assumption.estimated,
+    source: assumption.source,
+    bandLabel: costBandLabel(question, assumption),
+    consequence: null,
+  };
+}
+
+function scaleRow(
+  question: ScaleQuestion,
+  assumption: ScaleAssumption,
+  consequence: string | null = null,
+): AssumptionRow {
+  return {
+    label: question.label,
+    // Odstotke stranka vidi kot odstotke (StepCostBasis pretvarja ob vsakem prikazu),
+    // zato jih tako tudi navedemo — ulomek 0,235 v poročilu ni njen odgovor.
+    valueText: question.asPercent ? formatPercent(assumption.value) : formatEUR(assumption.value),
+    estimated: assumption.estimated,
+    source: assumption.source,
+    bandLabel: scaleBandLabel(question, assumption),
+    consequence: assumption.source === 'none' ? consequence : null,
+  };
+}
+
+function buildAssumptions(
   context: SegmentContext | undefined,
   profile: BusinessProfile,
-): HourAssumptionRow[] {
-  const rows: HourAssumptionRow[] = [];
+): AssumptionRow[] {
+  const rows: AssumptionRow[] = [];
+  if (!context) return rows;
 
-  if (context) {
-    rows.push({
-      label: context.operationalHour.label,
-      valueEUR: profile.operationalHour.valueEUR,
-      estimated: profile.operationalHour.estimated,
-      source: profile.operationalHour.source,
-      bandLabel: costBandLabel(context.operationalHour, profile.operationalHour),
-    });
-    rows.push({
-      label: context.adminHour.label,
-      valueEUR: profile.adminHour.valueEUR,
-      estimated: profile.adminHour.estimated,
-      source: profile.adminHour.source,
-      bandLabel: costBandLabel(context.adminHour, profile.adminHour),
-    });
-    // Zaračunano postavko vpraša samo dejavnost, ki prodaja ure. Drugod je v profilu
-    // prisotna kot varovalo pred NaN, a je stranka ni videla — navesti jo kot njen
-    // odgovor bi bilo neresnično.
-    if (context.chargeOutRate) {
-      rows.push({
-        label: context.chargeOutRate.label,
-        valueEUR: profile.chargeOutRate.valueEUR,
-        estimated: profile.chargeOutRate.estimated,
-        source: profile.chargeOutRate.source,
-        bandLabel: costBandLabel(context.chargeOutRate, profile.chargeOutRate),
-      });
-    }
+  rows.push(costRow(context.operationalHour, profile.operationalHour));
+  rows.push(costRow(context.adminHour, profile.adminHour));
+  // Zaračunano postavko vpraša samo dejavnost, ki prodaja ure. Drugod je v profilu
+  // prisotna kot varovalo pred NaN, a je stranka ni videla — navesti jo kot njen
+  // odgovor bi bilo neresnično. Isto velja za strošek kapitala spodaj.
+  if (context.chargeOutRate) {
+    rows.push(costRow(context.chargeOutRate, profile.chargeOutRate));
+  }
+  if (context.annualRevenue) {
+    // Ista posledica, kot jo prebere stranka (lib/confidenceReason.ts) — dve
+    // ubeseditvi istega dejstva bi izgledali kot dva različna podatka.
+    rows.push(
+      scaleRow(
+        context.annualRevenue,
+        profile.annualRevenue,
+        'brez njega postavke, vezane na prihodek, štejejo 0',
+      ),
+    );
+  }
+  // Marža in strošek kapitala ob neodgovoru dobita privzetek dejavnosti — to že pove
+  // sam vir ("ni odgovora — privzetek dejavnosti"), zato posledice ne pripisujemo.
+  // Prihodek je izjema, ker ne dobi privzetka, ampak ničlo.
+  if (context.contributionMargin) {
+    rows.push(scaleRow(context.contributionMargin, profile.contributionMargin));
+  }
+  if (context.capitalCostRate) {
+    rows.push(scaleRow(context.capitalCostRate, profile.capitalCostRate));
   }
 
   return rows;

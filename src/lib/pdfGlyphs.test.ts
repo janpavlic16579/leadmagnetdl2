@@ -101,7 +101,19 @@ const SOURCES = {
     eager: true,
     import: 'default',
   }),
-  ...import.meta.glob('./salesPlaybook.ts', { query: '?raw', eager: true, import: 'default' }),
+  // Prodajna pot piše svoja besedila v src/lib/ in doslej ni bila pregledana: znak,
+  // ki ga pisava nima in ga sanitizePdfText ne nadomesti, bi iz PDF tiho izginil.
+  ...import.meta.glob(
+    [
+      './salesPlaybook.ts',
+      './salesReport.ts',
+      './salesReportHtml.ts',
+      './pdfSales.ts',
+      // Oznake nadaljevanja gredo prek scoreRows naravnost v tabelo razdelka 1.
+      './followUp.ts',
+    ],
+    { query: '?raw', eager: true, import: 'default' },
+  ),
 } as Record<string, string>;
 
 describe('Vdelana pisava', () => {

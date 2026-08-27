@@ -4,7 +4,7 @@ import type { SegmentId } from '../config/segmentTypes';
 import { getPantheonFit, PANTHEON_FIT_CONFIRM, type PantheonFit } from '../../content/sales/pantheonFit';
 import { OBJECTIONS, type ObjectionEntry, type ObjectionId } from '../../content/sales/objections';
 import { getSegmentLicence, type LicenceFit } from '../../content/sales/licences';
-import { formatEUR } from './format';
+import { heroValueEUR } from './heroTotals';
 import type { SalesReport } from './salesReport';
 
 /**
@@ -83,8 +83,12 @@ function buildOpeningQuestions(report: PlaybookInput): OpeningQuestion[] {
 
   // `score !== null` in ne `?? 0`: neocenjeno področje ni iztočnica za sestanek —
   // svetovalec ne more reči "ocenili ste", če obiskovalec ni ocenil.
+  //
+  // `!answered` in ne `!selected`: področje, ki ga je obiskovalec izbral in pustil
+  // prazno, je prav tako brez zneska. Doslej je štelo za izmerjeno in je iz iztočnic
+  // izpadlo, čeprav je bilo ocenjeno kot boleče.
   for (const row of report.triage.filter(
-    (item) => !item.measured && item.score !== null && item.score >= 2,
+    (item) => !item.answered && item.score !== null && item.score >= 2,
   )) {
     questions.push({
       question: `${row.title}: ocenili ste "${row.scoreLabel ?? row.score}" — koliko vas to dejansko stane?`,
@@ -185,12 +189,11 @@ function buildObjections(report: PlaybookInput): SalesPlaybook['objections'] {
 
   if (report.qualification.isPantheonCustomer) triggered.push('alreadyHavePantheon');
 
-  if (report.triage.some((row) => !row.measured && row.score !== null && row.score >= 2)) {
+  if (report.triage.some((row) => !row.answered && row.score !== null && row.score >= 2)) {
     triggered.push('unmeasuredAreas');
   }
 
-  const painEUR =
-    report.summary.directLossEUR + report.summary.lostMarginEUR + report.summary.capacityEUR;
+  const painEUR = heroValueEUR(report.summary);
   if (painEUR > 0 && report.qualification.systemGap.max >= 0.25) {
     triggered.push('noTimeToImplement');
   }
@@ -207,8 +210,7 @@ function buildObjections(report: PlaybookInput): SalesPlaybook['objections'] {
 // --- Velikost posla in nujnost ----------------------------------------------
 
 function buildDealSizing(report: PlaybookInput, icp: IcpScore): DealSizing {
-  const measuredLossEUR =
-    report.summary.directLossEUR + report.summary.lostMarginEUR + report.summary.capacityEUR;
+  const measuredLossEUR = heroValueEUR(report.summary);
   const urgencyValue = icp.dimensions.find((dimension) => dimension.key === 'urgency');
 
   const urgency: DealSizing['urgency'] =
@@ -218,15 +220,13 @@ function buildDealSizing(report: PlaybookInput, icp: IcpScore): DealSizing {
         ? 'srednja'
         : 'nizka';
 
-  const lossNote =
-    report.summary.confidence === 'low'
-      ? `Izmerjeno ${formatEUR(measuredLossEUR)} letno, a je to spodnja meja.`
-      : `Izmerjeno ${formatEUR(measuredLossEUR)} letno.`;
-
+  // Razlog nujnosti pove SAMO, kaj nujnost poganja (rok), in ne ponovi zneska.
+  // Znesek stoji dve vrstici više v obliki, ki jo bere stranka — razpon oziroma
+  // "najmanj X"; gola točka tik pod njim je izgledala kot druga številka.
   return {
     sizeLabel: dealSizeLabel(report.qualification.employeeCount),
     urgency,
-    urgencyReason: `${urgencyValue?.note ?? 'Rokov ni.'} ${lossNote}`,
+    urgencyReason: urgencyValue?.note ?? 'Rokov ni.',
     measuredLossEUR,
   };
 }
