@@ -735,6 +735,11 @@ export function CalculatorFlow({
         selected={selectedIds}
         onSelectedChange={setTriageSelection}
         recommendedCount={recommendedCount}
+        // null pomeni "obiskovalec se kljukic še ni dotaknil" — takrat predlog
+        // živo sledi ocenam. Korak to stanje izpiše, da zamrznitev ob prvem
+        // dotiku ne izgleda kot okvara.
+        selectionIsManual={triageSelection !== null}
+        onResetSelection={() => setTriageSelection(null)}
         stepLabel={stepLabel('triage')}
         onNext={() => {
           track('lm10_triage_done', { segment: segment.id, selectedAreas: selectedIds.length });

@@ -24,6 +24,17 @@ interface StepTriageProps {
    * polje ob meji onemogočilo, obiskovalec pa ni izvedel, zakaj je sivo.
    */
   recommendedCount: number;
+  /**
+   * Ali je izbira ročna (obiskovalec se je kljukic dotaknil) ali še sledi ocenam.
+   *
+   * Zamrznitev ob prvem dotiku je namerna — ocene ne smejo povoziti ročne izbire —
+   * a je bila doslej NEVIDNA: obiskovalec je področje ocenil z najvišjo oceno,
+   * kljukica pa se ni več premaknila in videti je bilo kot okvara. Stanje mora
+   * biti izpisano, pot nazaj pa mogoča.
+   */
+  selectionIsManual: boolean;
+  /** Zavrže ročno izbiro — kljukice spet sledijo ocenam. */
+  onResetSelection: () => void;
   stepLabel: string;
   onNext: () => void;
   onBack: () => void;
@@ -45,6 +56,8 @@ export function StepTriage({
   selected,
   onSelectedChange,
   recommendedCount,
+  selectionIsManual,
+  onResetSelection,
   stepLabel,
   onNext,
   onBack,
@@ -70,6 +83,24 @@ export function StepTriage({
           je isti zaslon služil vsem, uvod pa je zato govoril o "vašem podjetju"
           tudi tam, kjer smo že vedeli, da gre za proizvodnjo ali servis. */}
       <p className={styles.intro}>{copy.intro}</p>
+
+      {/*
+        Stanje predloga, izpisano — ne ugibano. role="status", ker se stavek
+        zamenja natanko enkrat, ob prvem ročnem dotiku kljukice: prav takrat se
+        vedenje zaslona spremeni in bralnik zaslona mora to slišati.
+      */}
+      <p className={styles.selectionStatus} role="status">
+        {selectionIsManual ? (
+          <>
+            Izbiro področij ste prilagodili ročno, zato ocenam ne sledi več.{' '}
+            <button type="button" className={styles.resetSelection} onClick={onResetSelection}>
+              Vrni samodejni predlog
+            </button>
+          </>
+        ) : (
+          'Kljukice "Izračunaj podrobno" sledijo vašim ocenam — najvišje ocenjena področja se označijo sama, izbiro pa lahko kadarkoli popravite.'
+        )}
+      </p>
 
       <div className={shellStyles.card}>
         {modules.map((definition) => {
