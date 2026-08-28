@@ -279,6 +279,34 @@ export const SHARED_COPY = {
   delayNote: 'To je {daily} vsak delovni dan oziroma {monthly} za vsak mesec brez odločitve.',
 
   /**
+   * Časovne leče ob naslovnem znesku.
+   *
+   * Isti letni znesek, izražen v treh obdobjih. Dnevni ekvivalent je edina
+   * številka na strani, ki jo bralec preveri na pamet, in zato tista, ki letnemu
+   * znesku podeli verodostojnost — doslej je bil zakopan v opombo pod večletnim
+   * pogledom. Tretja leča je večletni pogled sam (horizonLabel zgoraj).
+   */
+  lensDayLabel: 'Na delovni dan',
+  lensMonthLabel: 'Na mesec',
+
+  /**
+   * Naslovi grafičnih razdelkov. Metodološke oznake in ne nagovor: povedati
+   * morajo, kaj slika prikazuje, in to enako v vseh dejavnostih.
+   */
+  compositionTitle: 'Iz česa je znesek sestavljen',
+  compositionNote:
+    'Tri vrste denarja v enem znesku. Naložena vrstica pokaže, koliko prispeva vsaka — odtekli stroški, nezaslužena marža in vrednost izgubljenih ur.',
+  projectionTitle: 'Kako znesek raste z odlašanjem',
+  coverageTitle: 'Koliko področij je izmerjenih',
+
+  /** Nadomestna besedila slik za bralnike zaslona — iste številke so v besedilu ob njih. */
+  compositionChartAlt:
+    'Sestava letnega zneska po treh vrstah denarja v obliki naložene vrstice. Iste številke so navedene ob njej.',
+  coverageChartAlt: 'Delež izmerjenih področij v obliki vrstice. Isti podatek je zapisan pod njo.',
+  projectionChartAlt:
+    'Kumulativni znesek po letih v obliki stolpcev. Iste številke so navedene ob stolpcih.',
+
+  /**
    * Kaj v znesku NI zajeto.
    *
    * Ograde so bile razpršene po opombah kartic, pod grafom in v razdelku o

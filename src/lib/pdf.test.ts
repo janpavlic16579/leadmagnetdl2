@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import pdfSource from './pdf.ts?raw';
 import pdfSalesSource from './pdfSales.ts?raw';
+import deadlinesSource from './deadlines.ts?raw';
+import reportVisualsSource from './reportVisuals.ts?raw';
 
 /**
  * Meja med strankinim in prodajnim dokumentom.
@@ -21,6 +23,22 @@ describe('Strankin PDF je ločen od prodajnega', () => {
   it('ne uvaža ničesar iz prodajne poti', () => {
     for (const forbidden of ['./salesReport', './salesPlaybook', '../config/icp', './pdfSales']) {
       expect(pdfSource, forbidden).not.toContain(`from '${forbidden}'`);
+    }
+  });
+
+  /**
+   * Test zgoraj bere samo pdf.ts in posrednega uvoza ne vidi. Modula, ki sta
+   * nastala za grafične prikaze poročila, sta prvi datoteki, ki ju uvažata OBA
+   * dokumenta — prav tam bi prodajna vsebina prišla v strankino poročilo, ne da
+   * bi kdo opazil.
+   */
+  it('tudi moduli, ki jih uvaža, ostanejo zunaj prodajne poti', () => {
+    const shared = { 'deadlines.ts': deadlinesSource, 'reportVisuals.ts': reportVisualsSource };
+
+    for (const [name, source] of Object.entries(shared)) {
+      for (const forbidden of ['./salesReport', './salesPlaybook', '../config/icp', './pdfSales']) {
+        expect(source, `${name} → ${forbidden}`).not.toContain(`from '${forbidden}'`);
+      }
     }
   });
 

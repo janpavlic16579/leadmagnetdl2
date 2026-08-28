@@ -111,6 +111,9 @@ const SOURCES = {
       './pdfSales.ts',
       // Oznake nadaljevanja gredo prek scoreRows naravnost v tabelo razdelka 1.
       './followUp.ts',
+      // Žetoni z roki in oznake grafičnih prikazov — nizi obeh gredo v izris PDF.
+      './deadlines.ts',
+      './reportVisuals.ts',
     ],
     { query: '?raw', eager: true, import: 'default' },
   ),

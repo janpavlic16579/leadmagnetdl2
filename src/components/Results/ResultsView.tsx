@@ -1,17 +1,19 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { getModules, type ModuleDefinition, type ModuleOutput } from '../../config/modules';
 import type { SegmentConfig } from '../../config/segments';
-import { SHARED_COPY, segmentLabelWithSize, type ResolvedSegmentCopy } from '../../config/copy';
+import { SHARED_COPY, type ResolvedSegmentCopy } from '../../config/copy';
 import { triageScoreLabel } from '../../lib/answerLabels';
-import { formatAmount, formatDecimal, formatEUR } from '../../lib/format';
 import { heroValueEUR as heroTotalEUR, heroRangeEUR as heroTotalRange } from '../../lib/heroTotals';
-import { multiYearEUR, perMonthEUR, perWorkingDayEUR } from '../../lib/horizon';
-import { useStepHeading } from '../../lib/useStepHeading';
+import { breakdownChartHeightPx, breakdownRows, coverageSegments } from '../../lib/reportVisuals';
+import { useReveal } from '../../lib/useReveal';
 import type { TriageScores } from '../../lib/moduleEngine';
 import type { ResultTotals } from '../../lib/potential';
 import type { TotalsRange } from '../../lib/range';
 import { Breakdown } from './Breakdown';
-import type { BreakdownChartDatum } from './BreakdownChart';
+import { CompositionBar } from './CompositionBar';
+import { ConfidenceMeter } from './ConfidenceMeter';
+import { HeroBand } from './HeroBand';
+import { ProjectionBars } from './ProjectionBars';
 import { ResultsSummary } from './ResultsSummary';
 import { RiskCard } from './RiskCard';
 import buttonStyles from '../../styles/buttons.module.css';
@@ -48,7 +50,7 @@ interface ResultsViewProps {
   /** Razrešeni vnosi po modulu — razčlenitev iz njih pokaže, iz česa znesek nastane. */
   valuesByModule: Record<string, Record<string, number>>;
   stepLabel: string;
-  /** Izračunan razlog nizke zanesljivosti — glej ResultsSummary. */
+  /** Izračunan razlog nizke zanesljivosti — glej ConfidenceMeter. */
   confidenceReason?: string | null;
   onMeasureModule: (id: string) => void;
   onProceedToEmail: () => void;
@@ -72,7 +74,6 @@ export function ResultsView({
   onProceedToEmail,
   onBack,
 }: ResultsViewProps) {
-  const headingRef = useStepHeading();
   const isAccounting = segment.id === 'racunovodstvo';
   const modules = getModules(segment.moduleIds);
 
@@ -83,10 +84,7 @@ export function ResultsView({
    */
   const heroValueEUR = heroTotalEUR(totals);
   const heroRange = heroTotalRange(totalsRange) ?? null;
-  const heroTotal = formatAmount(heroValueEUR, {
-    range: heroRange,
-    lowConfidence: totals.confidence === 'low',
-  });
+  const lowConfidence = totals.confidence === 'low';
 
   /**
    * Pokritost izračuna: hero številka meri samo izbrana in izpolnjena področja,
@@ -100,115 +98,43 @@ export function ResultsView({
     (definition) => (triageScores[definition.id] ?? 0) >= 2,
   );
 
-  // Ena skupina stolpcev na modul, ne na posamezno postavko — sicer je osi X
-  // osem dolgih oznak. Enkratni kapital v graf namenoma ne pride: mešanje
-  // enkratnega zneska med letne je prav napaka, ki jo ločeni koši preprečujejo.
-  const chartData: BreakdownChartDatum[] = modules
-    .map((definition) => {
-      const moduleOutputs = outputsByModule[definition.id] ?? [];
-      const sumBucket = (bucket: string) =>
-        moduleOutputs
-          .filter((output) => output.bucket === bucket)
-          .reduce((sum, output) => sum + (output.valueEUR ?? 0), 0);
+  // Ena vrstica na modul, ne na posamezno postavko — sicer je oznak osem in so
+  // dolge. Enkratni kapital v graf namenoma ne pride: mešanje enkratnega zneska
+  // med letne je prav napaka, ki jo ločeni koši preprečujejo. Razvrstitev po
+  // velikosti opravi breakdownRows, ki je ista za zaslon in PDF.
+  const chartData = breakdownRows(
+    modules
+      .map((definition) => {
+        const moduleOutputs = outputsByModule[definition.id] ?? [];
+        const sumBucket = (bucket: string) =>
+          moduleOutputs
+            .filter((output) => output.bucket === bucket)
+            .reduce((sum, output) => sum + (output.valueEUR ?? 0), 0);
 
-      return {
-        name: definition.title,
-        directLossEUR: sumBucket('directLoss'),
-        lostMarginEUR: sumBucket('lostMargin'),
-        capacityEUR: sumBucket('capacity'),
-      };
-    })
-    .filter((datum) => datum.directLossEUR > 0 || datum.lostMarginEUR > 0 || datum.capacityEUR > 0);
+        return {
+          name: definition.title,
+          directLossEUR: sumBucket('directLoss'),
+          lostMarginEUR: sumBucket('lostMargin'),
+          capacityEUR: sumBucket('capacity'),
+        };
+      })
+      .filter((datum) => datum.directLossEUR > 0 || datum.lostMarginEUR > 0 || datum.capacityEUR > 0),
+  );
 
   return (
     <div className={styles.wrap}>
-      <p className={styles.stepLabel}>
-        {stepLabel} · {segmentLabelWithSize(copy.displayName, employeeCount)}
-      </p>
-      {/*
-        Vprašanje segmenta je naslov strani in ne opomba pod njo.
-        Doslej je bilo drobno sivo besedilo, h1 pa je imel samo računovodski
-        segment — stran, ki naj odgovori na eno vprašanje, se je torej začela
-        brez tega vprašanja, hierarhija naslovov pa pri h2 kartic.
-      */}
-      <h1 className={styles.headline} tabIndex={-1} ref={headingRef}>
-        {copy.results.headline}
-      </h1>
+      <HeroBand
+        copy={copy}
+        employeeCount={employeeCount}
+        stepLabel={stepLabel}
+        heroValueEUR={heroValueEUR}
+        heroRange={heroRange}
+        confidence={totals.confidence}
+        accountingCapacity={isAccounting ? accountingCapacity : undefined}
+      />
 
       {/*
-        Ena številka pred štirimi.
-
-        Med vnašanjem je obiskovalec ves čas gledal "Trenutni letni strošek
-        izbranih področij", ki je rasel z vsakim odgovorom — na rezultatih pa je
-        ta številka izginila in namesto nje so ga pričakale štiri enakovredne
-        kartice z dolgimi pojasnili. Vsota je ista kot v pasu med vnosi
-        (neposredno + marža + kapaciteta); enkratni kapital ostane zunaj, ker se
-        z letnimi zneski ne sešteva.
-      */}
-      <p className={styles.heroTotal}>
-        <span className={styles.heroLabel}>{copy.results.heroLabel}</span>
-        <span className={styles.heroValue}>{heroTotal}</span>
-      </p>
-      {/*
-        Iz česa je vsota sestavljena, tik ob njej.
-        Doslej je bila razlaga razpršena po opombah štirih kartic pod njo — kdor
-        je prebral samo veliko številko, je odnesel vtis enega samega zneska,
-        čeprav so v njem tri različne vrste denarja. Prav ta vtis je tisto, kar
-        izračunu vzame verodostojnost, ko ga nekdo začne preverjati.
-      */}
-      <p className={styles.heroNote}>{copy.results.heroNote}</p>
-
-      {/*
-        Tri leta in cena odlašanja.
-
-        Letni znesek je bil doslej edino sidro, čeprav se ERP projekt odloča na
-        tri- do petletnem obzorju — poročilo je torej merilo krajše obdobje od
-        odločitve, ki jo podpira. Dnevni ekvivalent je zraven zato, ker je edina
-        številka na strani, ki jo bralec preveri na pamet.
-        Enkratni kapital je naveden OB trojnem znesku in nikoli sešteto z njim.
-      */}
-      {heroValueEUR > 0 ? (
-        <div className={styles.horizon}>
-          <p className={styles.horizonTotal}>
-            <span className={styles.horizonLabel}>{SHARED_COPY.horizonLabel}</span>
-            <span className={styles.horizonValue}>
-              {formatAmount(multiYearEUR(heroValueEUR), {
-                range: heroRange
-                  ? {
-                      minEUR: multiYearEUR(heroRange.minEUR),
-                      maxEUR: multiYearEUR(heroRange.maxEUR),
-                    }
-                  : null,
-                lowConfidence: totals.confidence === 'low',
-              })}
-            </span>
-          </p>
-          <p className={styles.horizonNote}>
-            {SHARED_COPY.horizonNote}{' '}
-            {SHARED_COPY.delayNote
-              .replace('{daily}', formatEUR(perWorkingDayEUR(heroValueEUR)))
-              .replace('{monthly}', formatEUR(perMonthEUR(heroValueEUR)))}
-          </p>
-        </div>
-      ) : null}
-
-      {isAccounting && accountingCapacity !== undefined && copy.results.capacitySecondary ? (
-        <p className={styles.heroSecondary}>
-          {copy.results.capacitySecondary.replace('{count}', formatDecimal(accountingCapacity))}
-        </p>
-      ) : null}
-
-      {triageableCount > 0 && measuredCount < triageableCount ? (
-        <p className={styles.coverageNote}>
-          Izmerjeno {measuredCount} od {triageableCount} področij
-          {painfulUnmeasured.length > 0
-            ? ` — ${painfulNote(painfulUnmeasured.length)}`
-            : '. Neizmerjena področja v zgornje zneske ne vstopajo z nobenim zneskom.'}
-        </p>
-      ) : null}
-
-      {/*
-        Ograde na enem mestu, ne razpršene po opombah kartic.
+        Ograde takoj pod zneskom in ne na dnu strani.
 
         Vsaka od njih je obstajala že prej — v opombi kapacitete, pod grafom, v
         razdelku o neizmerjenem — torej tam, kjer jih bralec sreča šele, ko si je
@@ -216,6 +142,19 @@ export function ResultsView({
         manj, kot podjetje izgublja. To je razlika med konservativno oceno in
         podcenjeno, in edini razlog, da je znesek mogoče braniti navzgor.
       */}
+      {triageableCount > 0 && measuredCount < triageableCount ? (
+        <div className={styles.coverage}>
+          <p className={styles.coverageLabel}>{SHARED_COPY.coverageTitle}</p>
+          <CoverageBar measuredCount={measuredCount} triageableCount={triageableCount} />
+          <p className={styles.coverageNote}>
+            Izmerjeno {measuredCount} od {triageableCount} področij
+            {painfulUnmeasured.length > 0
+              ? ` — ${painfulNote(painfulUnmeasured.length)}`
+              : '. Neizmerjena področja v zgornje zneske ne vstopajo z nobenim zneskom.'}
+          </p>
+        </div>
+      ) : null}
+
       {heroValueEUR > 0 ? (
         <div className={styles.notIncluded}>
           <p className={styles.notIncludedTitle}>{SHARED_COPY.notIncludedTitle}</p>
@@ -228,17 +167,37 @@ export function ResultsView({
         </div>
       ) : null}
 
-      <ResultsSummary
-        totals={totals}
-        totalsRange={totalsRange}
-        figures={copy.figures}
-        confidenceReason={confidenceReason}
-      />
+      {/* Sestava vsote in zanesljivost ocene: kaj je v znesku in kako trdno stoji. */}
+      {heroValueEUR > 0 ? (
+        <Reveal className={styles.card}>
+          <h2 className={styles.sectionTitle}>{SHARED_COPY.compositionTitle}</h2>
+          <p className={styles.cardNote}>{SHARED_COPY.compositionNote}</p>
+          <div className={styles.cardBody}>
+            <CompositionBar totals={totals} figures={copy.figures} />
+          </div>
+          {totals.confidence ? (
+            <ConfidenceMeter level={totals.confidence} reason={confidenceReason} />
+          ) : null}
+        </Reveal>
+      ) : null}
+
+      <ResultsSummary totals={totals} totalsRange={totalsRange} figures={copy.figures} />
 
       {chartData.length > 0 ? (
-        <div className={styles.card}>
+        <Reveal className={styles.card}>
           <h2 className={styles.sectionTitle}>{copy.results.breakdownTitle}</h2>
-          <Suspense fallback={<div className={styles.chartPlaceholder} aria-hidden="true" />}>
+          {/* Rezervat je enake višine kot graf sam (breakdownChartHeightPx) —
+              fiksnih 260 px je na ozkem zaslonu pomenilo, da vsebina pod grafom
+              ob njegovem prihodu poskoči, kar naj bi rezervat prav preprečil. */}
+          <Suspense
+            fallback={
+              <div
+                className={styles.chartPlaceholder}
+                style={{ height: breakdownChartHeightPx(chartData.length) }}
+                aria-hidden="true"
+              />
+            }
+          >
             <BreakdownChart data={chartData} />
           </Suspense>
           {/* Oba letna denarna koša v istem seznamu: postavke so poimenovane tako,
@@ -250,11 +209,11 @@ export function ResultsView({
             buckets={['directLoss', 'lostMargin']}
             valuesByModule={valuesByModule}
           />
-        </div>
+        </Reveal>
       ) : null}
 
       {totals.capacityEUR > 0 ? (
-        <div className={styles.card}>
+        <Reveal className={styles.card}>
           <h2 className={styles.sectionTitle}>{copy.results.capacityTitle}</h2>
           <Breakdown
             modules={modules}
@@ -262,51 +221,62 @@ export function ResultsView({
             buckets={['capacity']}
             valuesByModule={valuesByModule}
           />
-        </div>
+        </Reveal>
+      ) : null}
+
+      {heroValueEUR > 0 ? (
+        <Reveal className={styles.card}>
+          <h2 className={styles.sectionTitle}>{SHARED_COPY.projectionTitle}</h2>
+          <ProjectionBars annualEUR={heroValueEUR} heroRange={heroRange} lowConfidence={lowConfidence} />
+        </Reveal>
       ) : null}
 
       {totals.risks.length > 0 ? (
-        <div className={styles.card}>
+        <Reveal className={styles.card}>
           <h2 className={styles.sectionTitle}>{copy.results.risksTitle}</h2>
           <p className={styles.cardNote}>
             Ta ocena namenoma nima zneska. Kjer ni kalkulacije ali sledljivosti, natančnega zneska ni mogoče
             izračunati — navidezno natančna številka bi prav to težavo skrila.
           </p>
-          <RiskCard risks={totals.risks} />
-        </div>
+          <div className={styles.cardBody}>
+            <RiskCard risks={totals.risks} now={new Date()} />
+          </div>
+        </Reveal>
       ) : null}
 
       {unmeasuredModules.length > 0 ? (
-        <div className={styles.card}>
+        <Reveal className={styles.card}>
           <h2 className={styles.sectionTitle}>{copy.results.unmeasuredTitle}</h2>
           <p className={styles.cardNote}>
             Za ta področja nimamo vaših številk — bodisi jih niste izbrali, bodisi ste jih pustili prazna.
             V zgornji izračun zato ne vstopajo z nobenim zneskom. Nobene številke si nismo izmislili.
           </p>
           <ul className={styles.unmeasuredList}>
-            {unmeasuredModules.map((definition) => (
-              <li key={definition.id}>
-                <div>
-                  <span className={styles.unmeasuredTitle}>{definition.title}</span>
-                  {/* Lastna triažna ocena ob področju: pove, da 0 EUR ni "ni problema". */}
-                  {(triageScores[definition.id] ?? 0) > 0 ? (
-                    <span className={styles.unmeasuredScore}>
-                      vaša ocena: {triageScoreLabel(definition, triageScores[definition.id] ?? 0)}
-                    </span>
-                  ) : null}
-                  <p className={styles.unmeasuredSummary}>{definition.summary}</p>
-                </div>
-                <button
-                  type="button"
-                  className={buttonStyles.secondaryButton}
-                  onClick={() => onMeasureModule(definition.id)}
-                >
-                  Izračunaj še to
-                </button>
-              </li>
-            ))}
+            {unmeasuredModules.map((definition) => {
+              const score = triageScores[definition.id] ?? 0;
+
+              return (
+                <li key={definition.id}>
+                  <div>
+                    <span className={styles.unmeasuredTitle}>{definition.title}</span>
+                    {/* Lastna triažna ocena ob področju: pove, da 0 EUR ni "ni problema". */}
+                    {score > 0 ? (
+                      <PainDots score={score} label={triageScoreLabel(definition, score)} />
+                    ) : null}
+                    <p className={styles.unmeasuredSummary}>{definition.summary}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className={buttonStyles.secondaryButton}
+                    onClick={() => onMeasureModule(definition.id)}
+                  >
+                    Izračunaj še to
+                  </button>
+                </li>
+              );
+            })}
           </ul>
-        </div>
+        </Reveal>
       ) : null}
 
       <div className={styles.stickyFooter}>
@@ -324,6 +294,78 @@ export function ResultsView({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Razdelek, ki se ob prihodu v vidno polje mehko razkrije.
+ *
+ * Ovojnica in ne razred na vsaki kartici, ker vsak razdelek potrebuje svoj
+ * opazovalec. Privzeto stanje je vidno — glej lib/useReveal.ts za razlog.
+ */
+function Reveal({ className, children }: { className: string; children: ReactNode }) {
+  const { ref, revealed } = useReveal<HTMLElement>();
+
+  return (
+    <section
+      ref={ref}
+      className={revealed ? `${className} ${styles.revealed}` : `${className} ${styles.revealPending}`}
+    >
+      {children}
+    </section>
+  );
+}
+
+/**
+ * Pokritost izračuna kot vrstica segmentov.
+ *
+ * Stavek "Izmerjeno 3 od 11 področij" je resničen, a ga bralec prebere kot
+ * opombo. Enajst kvadratkov, od katerih so trije polni, pove isto kot slika in
+ * postavi naslovni znesek tja, kamor spada: to je spodnja meja, ne meritev celote.
+ */
+function CoverageBar({ measuredCount, triageableCount }: { measuredCount: number; triageableCount: number }) {
+  const segments = coverageSegments(measuredCount, triageableCount);
+  if (segments.length === 0) return null;
+
+  return (
+    <div className={styles.coverageBar} role="img" aria-label={SHARED_COPY.coverageChartAlt}>
+      {segments.map((segment) => (
+        <span
+          key={segment.index}
+          className={
+            segment.measured
+              ? `${styles.coverageSegment} ${styles.coverageMeasured}`
+              : styles.coverageSegment
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Lastna ocena bolečine 0–3 ob neizmerjenem področju.
+ *
+ * Pike in ne besedilo: seznam neizmerjenih področij ima do osem vrstic in
+ * besedna ocena v vsaki ("vaša ocena: nas resno ovira") je stena besedila, v
+ * kateri se izgubi prav tisto, kar naj razdelek pokaže — katero od teh področij
+ * po lastni presoji najbolj boli. Bralnik zaslona dobi isto oceno z besedo.
+ */
+function PainDots({ score, label }: { score: number; label: string | null }) {
+  // Področje brez triažnih možnosti oznake nima; pike takrat povedo samo stopnjo.
+  const text = label ? `vaša ocena: ${label}` : `vaša ocena: ${score} od 3`;
+
+  return (
+    <span className={styles.painDots} title={text}>
+      <span className={styles.srOnly}>{text}</span>
+      {[1, 2, 3].map((step) => (
+        <span
+          key={step}
+          aria-hidden="true"
+          className={step <= score ? `${styles.dot} ${styles.dotFilled}` : styles.dot}
+        />
+      ))}
+    </span>
   );
 }
 

@@ -1,0 +1,174 @@
+/*
+ * Naslovni pas rezultata — temna ploskev v OBEH temah.
+ *
+ * Barve pridejo iz --color-hero-* (styles/tokens.css) in se s temo ne
+ * spreminjajo: pas je znamčna ploskev, enaka glavi strankinega PDF, in ne
+ * površina, ki bi se prilagajala. Kontrasti so tam preverjeni in zapisani.
+ *
+ * Ploskev je zaobljena kartica znotraj 720 px kolone in ne pas čez celo širino
+ * okna: polna širina bi terjala negativne margine prek 50vw, kar na sistemih z
+ * vidnim drsnikom povzroči vodoravni drsnik čez celo aplikacijo.
+ */
+.band {
+  background: var(--color-hero-bg);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-4) var(--space-4);
+  margin-bottom: var(--space-4);
+  /* Rumena črta na dnu ponovi ločnico pod glavo PDF (pdf.ts, drawHeader). */
+  border-bottom: 3px solid var(--color-primary);
+}
+
+/*
+ * Fokusni obroč znotraj pasu.
+ *
+ * Globalno pravilo (index.css) uporablja --color-primary-text, kar je v svetli
+ * temi #8a600d — na temni ploskvi 1,86:1, torej praktično neviden. Znotraj pasu
+ * zato polna znamčna rumena, ki ima na #231f20 8,52:1.
+ */
+.band :focus-visible {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.stepLabel {
+  font-size: var(--font-size-sm);
+  color: var(--color-hero-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 var(--space-1);
+}
+
+.headline {
+  font-size: var(--font-size-xl);
+  color: var(--color-hero-text);
+  margin: 0 0 var(--space-4);
+  line-height: 1.2;
+}
+
+.label {
+  font-size: var(--font-size-sm);
+  color: var(--color-hero-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 var(--space-1);
+}
+
+/*
+ * Naslovni znesek. Edino mesto v aplikaciji, kjer rumena nastopa kot besedilo —
+ * na temni podlagi ima 8,52:1, na beli pa 1,84:1 (zato drugod --color-primary-text).
+ *
+ * `tabular-nums`: med odštevanjem se števke menjajo in pri sorazmerni širini bi
+ * se znesek ob vsakem okvirju premaknil za nekaj pikslov.
+ */
+.value {
+  font-size: var(--font-size-display);
+  font-weight: 700;
+  color: var(--color-primary);
+  line-height: 1.05;
+  margin: 0 0 var(--space-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Vidno samo bralnikom zaslona — končna vrednost ob animiranem izpisu. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * Značka zanesljivosti. Na temni ploskvi ne moreta veljati svetla opozorilna
+ * tokena (#fff4e5 z besedilom #7a4a00 bi bila svetla lisa sredi temnega pasu),
+ * zato obrobljena različica: prosojna ploskev, barvna obroba in besedilo.
+ */
+.badge {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  margin: 0 0 var(--space-3);
+}
+
+/* Visoka: krem besedilo na temnem — 12,4:1, mirna in brez opozorilnega tona. */
+.high {
+  color: var(--color-accent);
+  border-color: var(--color-hero-border);
+  background: rgba(241, 237, 226, 0.08);
+}
+
+/* Srednja in nizka: rumena obroba, ker sta pridržek — nizka še s krepko pisavo. */
+.medium,
+.low {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  background: rgba(250, 175, 23, 0.1);
+}
+
+.low {
+  font-weight: 700;
+}
+
+.note {
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-hero-muted);
+  max-width: 44rem;
+}
+
+/*
+ * Tri leče: isti letni znesek na delovni dan, na mesec in v treh letih.
+ * auto-fit z minmax, da na ozkem zaslonu padejo v stolpec brez medijske poizvedbe.
+ */
+.lenses {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-2);
+}
+
+.lens {
+  background: var(--color-hero-surface);
+  border: 1px solid var(--color-hero-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Trojni znesek je sidro odločitve o ERP — dobi rumeni rob, ne večje pisave:
+   druga velika številka bi tekmovala z naslovnim zneskom. */
+.lensEmphasis {
+  border-left: 3px solid var(--color-primary);
+}
+
+.lensLabel {
+  font-size: var(--font-size-xs);
+  color: var(--color-hero-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lensValue {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  color: var(--color-hero-text);
+  line-height: 1.2;
+}
+
+.secondary {
+  margin: var(--space-3) 0 0;
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-primary);
+}

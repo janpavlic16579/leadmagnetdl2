@@ -88,6 +88,9 @@ describe('Strankin PDF se sestavi', () => {
         customerCommsHoursPerMonth: 16,
         mainCause: 2,
       },
+      // Modul E odklene žetone z roki (lib/deadlines.ts) — brez njega ta veja
+      // izrisa ni pokrita in bi izjema v njej prišla šele do obiskovalca.
+      E: { sqlServer2016: 1, windowsServer2016: 1, eInvoiceZierded: 1 },
     });
 
     expect(scenario.totals.addressablePotentialEUR).toBeGreaterThan(

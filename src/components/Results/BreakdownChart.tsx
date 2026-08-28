@@ -1,18 +1,14 @@
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { formatEUR, formatNumber } from '../../lib/format';
+import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { formatEUR, formatNumber, formatPercent } from '../../lib/format';
+import { breakdownChartHeightPx, type BreakdownRow } from '../../lib/reportVisuals';
 import { useMediaQuery } from '../../lib/useMediaQuery';
 import styles from './BreakdownChart.module.css';
 
-export interface BreakdownChartDatum {
-  /** Naslov modula — ena skupina stolpcev na modul, ne na posamezno postavko. */
-  name: string;
-  directLossEUR: number;
-  lostMarginEUR: number;
-  capacityEUR: number;
-}
+export type { BreakdownDatum as BreakdownChartDatum } from '../../lib/reportVisuals';
 
 interface BreakdownChartProps {
-  data: BreakdownChartDatum[];
+  /** Vrstice, urejene po velikosti — glej breakdownRows v lib/reportVisuals. */
+  data: BreakdownRow[];
 }
 
 /**
@@ -28,17 +24,12 @@ const LOST_MARGIN_COLOR = 'var(--color-chart-margin)';
 const CAPACITY_COLOR = 'var(--color-chart-capacity)';
 
 /**
- * Pod to širino gredo stolpci v vodoravno postavitev.
+ * Pod to širino se skrči prostor za imena področij.
  *
- * Imena področij so dolga ("Zaloge in razpoložljivost materiala"), na osi X pod
- * 520 px pa ostane vsakemu ≈50–70 px. Recharts oznak ne prelamlja in jih z
- * `interval={0}` izpiše vse — na telefonu so se zato prekrivale v nečitljivo
- * kašo. Vodoravni stolpci dajo imenu celo vrstico.
+ * Imena so dolga ("Zaloge in razpoložljivost materiala") in na telefonu bi jim
+ * polna širina osi vzela večino zaslona, tako da bi od stolpcev ostal ogrizek.
  */
 const NARROW_QUERY = '(max-width: 520px)';
-
-/** Višina ene vrstice v vodoravni postavitvi — ime + stolpci + zrak. */
-const ROW_HEIGHT = 64;
 
 export function BreakdownChart({ data }: BreakdownChartProps) {
   const isNarrow = useMediaQuery(NARROW_QUERY);
@@ -48,13 +39,34 @@ export function BreakdownChart({ data }: BreakdownChartProps) {
 
   const hasCapacity = data.some((datum) => datum.capacityEUR > 0);
   const hasLostMargin = data.some((datum) => datum.lostMarginEUR > 0);
+  const top = data[0];
+
+  // Koši v vrstnem redu sklada; odsotni izpadejo, da prazna serija ne zasede
+  // mesta v legendi in ne prevzame oznake deleža na koncu stolpca.
+  const buckets = [
+    { key: 'directLossEUR', name: 'Neposredna izguba', color: DIRECT_LOSS_COLOR, present: true },
+    { key: 'lostMarginEUR', name: 'Nezaslužena marža', color: LOST_MARGIN_COLOR, present: hasLostMargin },
+    { key: 'capacityEUR', name: 'Sproščena kapaciteta', color: CAPACITY_COLOR, present: hasCapacity },
+  ].filter((bucket) => bucket.present);
 
   const axisTick = { fontSize: 11, fill: 'var(--color-text-muted)' };
-  const truncate = (value: string) => (value.length > 22 ? `${value.slice(0, 21)}…` : value);
-  const height = isNarrow ? Math.max(200, data.length * ROW_HEIGHT) : 260;
+  const nameWidth = isNarrow ? 118 : 190;
+  const truncate = (value: string) => {
+    const limit = isNarrow ? 18 : 30;
+    return value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
+  };
+  const height = breakdownChartHeightPx(data.length);
 
   return (
     <div>
+      {/* Katero področje je največje, pove stavek in ne le dolžina stolpca:
+          prvo vprašanje ob razčlenitvi je "kje izgubljam največ", odgovor nanj
+          pa ne sme terjati primerjanja dolžin. */}
+      <p className={styles.caption}>
+        Največ stane <strong>{top.name}</strong> — {formatEUR(top.totalEUR)}, kar je{' '}
+        {formatPercent(top.share)} izmerjenega zneska.
+      </p>
+
       {/* Legendo rišemo sami, ker mora barvo brati iz tokenov teme — Recharts
           Legend v tej različici ne sprejme lastnega payloada. */}
       <div className={styles.legend}>
@@ -81,57 +93,47 @@ export function BreakdownChart({ data }: BreakdownChartProps) {
       <div
         style={{ width: '100%', height }}
         role="img"
-        aria-label="Razčlenitev po področjih v obliki grafa. Iste številke so v seznamu pod grafom."
+        aria-label="Razčlenitev po področjih v obliki grafa, urejena po velikosti. Iste številke so v seznamu pod grafom."
       >
         <ResponsiveContainer>
-          {/* Stolpca sta namenoma vzporedna, ne naložena: neposredna izguba in
-              sproščena kapaciteta se ne seštevata, naložen stolpec pa bi prav to
-              nakazoval. */}
+          {/*
+            Stolpci so NALOŽENI in vodoravni.
+
+            Doslej so bili vzporedni z utemeljitvijo, da se koši ne seštevajo — kar
+            je držalo, dokler je naslovna številka bila samo neposredna izguba.
+            Odkar hero nosi vsoto vseh treh (lib/heroTotals.ts), je naložen stolpec
+            natanko to, kar velika številka trdi: iz česa je sestavljena. Ločenost
+            košev nosi barva in ne razmik.
+
+            Vodoravno v obeh širinah: imena področij so dolga, na osi X pa jih
+            Recharts ne prelomi — na 520 px so se prekrivala v nečitljivo kašo,
+            na širokem zaslonu pa so terjala nagib. Vodoravna vrstica da imenu
+            celo vrstico in hkrati omogoči razvrstitev po velikosti od zgoraj
+            navzdol, ki je za branje naravna.
+          */}
           <BarChart
             data={data}
-            layout={isNarrow ? 'vertical' : 'horizontal'}
-            margin={{ top: 8, right: 8, left: 8, bottom: 8 }}
-            barGap={2}
+            layout="vertical"
+            margin={{ top: 8, right: isNarrow ? 8 : 56, left: 8, bottom: 8 }}
           >
             {/* Recharts privzeto riše osi in namig v fiksni temni barvi, ki v temnem
                 načinu izgine — zato so vezani na tokene teme. */}
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-            {isNarrow ? (
-              <>
-                <XAxis
-                  type="number"
-                  tick={axisTick}
-                  stroke="var(--color-border)"
-                  tickFormatter={(value) => formatNumber(Number(value))}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  tick={axisTick}
-                  stroke="var(--color-border)"
-                  width={132}
-                  interval={0}
-                  tickFormatter={truncate}
-                />
-              </>
-            ) : (
-              <>
-                <XAxis
-                  dataKey="name"
-                  tick={axisTick}
-                  stroke="var(--color-border)"
-                  interval={0}
-                  height={52}
-                  tickFormatter={truncate}
-                />
-                <YAxis
-                  tick={{ fontSize: 12, fill: 'var(--color-text-muted)' }}
-                  stroke="var(--color-border)"
-                  width={64}
-                  tickFormatter={(value) => formatNumber(Number(value))}
-                />
-              </>
-            )}
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" horizontal={false} />
+            <XAxis
+              type="number"
+              tick={axisTick}
+              stroke="var(--color-border)"
+              tickFormatter={(value) => formatNumber(Number(value))}
+            />
+            <YAxis
+              type="category"
+              dataKey="name"
+              tick={axisTick}
+              stroke="var(--color-border)"
+              width={nameWidth}
+              interval={0}
+              tickFormatter={truncate}
+            />
             <Tooltip
               formatter={(value) => formatEUR(Number(value))}
               cursor={{ fill: 'var(--color-accent)' }}
@@ -144,31 +146,34 @@ export function BreakdownChart({ data }: BreakdownChartProps) {
               labelStyle={{ color: 'var(--color-text)' }}
               itemStyle={{ color: 'var(--color-text)' }}
             />
-            <Bar
-              dataKey="directLossEUR"
-              name="Neposredna izguba"
-              fill={DIRECT_LOSS_COLOR}
-              radius={[2, 2, 0, 0]}
-              isAnimationActive={!reducedMotion}
-            />
-            {hasLostMargin ? (
+            {/*
+              Delež stoji ob koncu zadnjega naloženega stolpca in ga zato nosi
+              zadnja PRISOTNA serija — katera to je, se med segmenti razlikuje.
+              Nevidna serija kot nosilec oznake ni prišla v poštev: Recharts ji
+              mora dati `dataKey`, izračunan ključ pa podre razporeditev sklada
+              in stolpci se izrišejo kot tanke črtice.
+              Na ozkem zaslonu oznake ni, ker zanjo ni prostora.
+            */}
+            {buckets.map((bucket, index) => (
               <Bar
-                dataKey="lostMarginEUR"
-                name="Nezaslužena marža"
-                fill={LOST_MARGIN_COLOR}
-                radius={[2, 2, 0, 0]}
+                key={bucket.key}
+                dataKey={bucket.key}
+                name={bucket.name}
+                stackId="skupaj"
+                fill={bucket.color}
                 isAnimationActive={!reducedMotion}
-              />
-            ) : null}
-            {hasCapacity ? (
-              <Bar
-                dataKey="capacityEUR"
-                name="Sproščena kapaciteta"
-                fill={CAPACITY_COLOR}
-                radius={[2, 2, 0, 0]}
-                isAnimationActive={!reducedMotion}
-              />
-            ) : null}
+              >
+                {!isNarrow && index === buckets.length - 1 ? (
+                  <LabelList
+                    dataKey="share"
+                    position="right"
+                    offset={8}
+                    formatter={(value: unknown) => formatPercent(Number(value))}
+                    style={{ fill: 'var(--color-text-muted)', fontSize: 11 }}
+                  />
+                ) : null}
+              </Bar>
+            ))}
           </BarChart>
         </ResponsiveContainer>
       </div>

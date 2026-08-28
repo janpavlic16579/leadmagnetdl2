@@ -1,4 +1,4 @@
-import { SHARED_COPY, type ResolvedSegmentCopy } from '../../config/copy';
+import type { ResolvedSegmentCopy } from '../../config/copy';
 import {
   formatAmount,
   formatEUR,
@@ -20,13 +20,6 @@ interface ResultsSummaryProps {
    * pri sebi — in isto besedilo je v drugačni različici živelo še v pdf.ts.
    */
   figures: ResolvedSegmentCopy['figures'];
-  /**
-   * Izračunan razlog nizke zanesljivosti (lib/confidenceReason.ts). Splošno
-   * besedilo iz registra pravi "večina ključnih podatkov manjka" — kar je
-   * napačno pri obiskovalcu, ki je vnesel vsa polja in le urni postavki prevzel
-   * kot panožno oceno; ta je bila do zdaj najpogostejša pot do nizke ocene.
-   */
-  confidenceReason?: string | null;
 }
 
 /**
@@ -38,25 +31,18 @@ interface ResultsSummaryProps {
  *
  * Kartica se izriše samo, kadar ima vrednost — segmenti brez potenciala tako
  * ostanejo pri treh ali manj, brez praznih ničel.
+ *
+ * Zanesljivost je odslej svoja komponenta (ConfidenceMeter): značka brez
+ * lestvice je bila ocena brez merila, tu pa je stala nad karticami kot njihov
+ * nadnaslov, čeprav govori o celotnem izračunu in ne o teh petih zneskih.
  */
-export function ResultsSummary({ totals, totalsRange, figures, confidenceReason }: ResultsSummaryProps) {
+export function ResultsSummary({ totals, totalsRange, figures }: ResultsSummaryProps) {
   const confidence = totals.confidence;
   const amount = (value: number, range?: EURRange) =>
     formatAmount(value, { range: displayRange(range), lowConfidence: confidence === 'low' });
 
   return (
     <>
-      {confidence ? (
-        <div className={styles.confidenceRow}>
-          <span className={`${styles.badge} ${styles[confidence]}`}>{SHARED_COPY.confidenceLabel[confidence]}</span>
-          <span className={styles.confidenceNote}>
-            {confidence === 'low' && confidenceReason
-              ? confidenceReason
-              : SHARED_COPY.confidenceNote[confidence]}
-          </span>
-        </div>
-      ) : null}
-
       <div className={styles.grid}>
         <Figure
           title={figures.directLoss.title}

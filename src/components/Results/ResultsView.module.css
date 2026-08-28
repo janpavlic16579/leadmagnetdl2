@@ -9,98 +9,52 @@
   padding: var(--space-5) var(--space-3) 160px;
 }
 
-.stepLabel {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin: 0 0 var(--space-1);
-}
-
-/* Vprašanje segmenta je naslov strani (glej ResultsView) — ne več sivi pripis. */
-.headline {
-  font-size: var(--font-size-xl);
-  margin: 0 0 var(--space-3);
-}
-
-/* Odgovor na vprašanje v naslovu: ena številka, preden se razdeli na štiri. */
-.heroTotal {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  margin: 0 0 var(--space-2);
-}
-
-.heroLabel {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.heroValue {
-  font-size: var(--font-size-xxl);
-  font-weight: 700;
-  color: var(--color-primary-text);
-  line-height: 1.1;
-}
+/*
+ * Nadnaslov, naslov, znesek, opomba in večletni pogled so se preselili v temni
+ * naslovni pas (HeroBand.module.css). Vrh strani je bil dotlej zaporedje
+ * odstavkov na beli podlagi — vse na isti ravni, brez mesta, kamor bi bralec
+ * najprej pogledal, čeprav ima poročilo en sam odgovor.
+ */
 
 /*
- * Sestava vsote, tik pod njo. Manjša od hero številke in večja od opomb kartic:
- * bere se kot njen podnapis, ne kot nova trditev.
+ * Pokritost izračuna — takoj pod naslovnim pasom in ne šele na dnu strani.
+ * Skupaj z okvirjem "Česa ta znesek ne vsebuje" pove, da je znesek spodnja meja.
  */
-.heroNote {
-  margin: 0 0 var(--space-3);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  max-width: 44rem;
+.coverage {
+  margin: 0 0 var(--space-4);
 }
 
-.heroSecondary {
-  font-size: var(--font-size-md);
+.coverageLabel {
+  font-size: var(--font-size-sm);
   font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   margin: 0 0 var(--space-2);
 }
 
 /*
- * Večletni pogled: drugotno sidro, ne druga hero številka.
- *
- * Levi rob namesto polnega okvirja in znesek za stopnjo manjši od hero — trojni
- * znesek je izpeljanka letnega in mora biti videti kot izpeljanka, sicer stran
- * ponuja dve enakovredni "glavni" številki in bralec ne ve, katera je meritev.
+ * Vrstica segmentov: en segment na ponujeno področje. Mreža z auto-fit bi
+ * segmente raztegnila v različne širine glede na njihovo število; enakomerni
+ * deleži so tu bistvo, zato flex z enakim faktorjem rasti.
  */
-.horizon {
-  border-left: 3px solid var(--color-accent);
-  padding: var(--space-1) 0 var(--space-1) var(--space-3);
-  margin: 0 0 var(--space-3);
-  max-width: 44rem;
-}
-
-.horizonTotal {
+.coverageBar {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  margin: 0 0 var(--space-1);
+  gap: 3px;
+  margin-bottom: var(--space-2);
 }
 
-.horizonLabel {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+.coverageSegment {
+  flex: 1 1 0;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--color-accent);
+  border: 1px solid var(--color-border);
 }
 
-.horizonValue {
-  font-size: var(--font-size-xl);
-  font-weight: 700;
-  color: var(--color-primary-text);
-  line-height: 1.15;
-}
-
-.horizonNote {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
+.coverageMeasured {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
 }
 
 /*
@@ -194,6 +148,11 @@
   margin: var(--space-2) 0 0;
 }
 
+/* Odmik med uvodno opombo kartice in sliko oziroma seznamom pod njo. */
+.cardBody {
+  margin-top: var(--space-3);
+}
+
 /* Neizmerjena področja so navedena poimensko: lead magnet, ki zamolči, česa ni
    meril, ne zdrži pogovora s finančnikom. */
 .unmeasuredList {
@@ -224,21 +183,49 @@
   font-weight: 600;
 }
 
-/* Lastna triažna ocena ob neizmerjenem področju — 0 EUR ne pomeni "ni problema". */
-.unmeasuredScore {
-  display: inline-block;
+/*
+ * Lastna triažna ocena ob neizmerjenem področju — 0 EUR ne pomeni "ni problema".
+ * Pike namesto besedne ocene: pri osmih vrsticah je bilo osem stavkov "vaša
+ * ocena: nas resno ovira" stena besedila, v kateri se je izgubilo prav to, kar
+ * naj razdelek pokaže — katero področje po lastni presoji najbolj boli.
+ */
+.painDots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   margin-left: var(--space-2);
-  padding: 1px var(--space-2);
-  border-radius: var(--radius-md);
-  background: var(--color-warning-bg);
-  border: 1px solid var(--color-warning-border);
-  color: var(--color-warning-text);
-  font-size: var(--font-size-xs);
+  vertical-align: middle;
 }
 
-/* Pokritost izračuna — pripis takoj pod povzetkom, ne šele na dnu strani. */
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  border: 1px solid var(--color-border-strong);
+}
+
+/* Polna pika nosi opozorilno barvo: gre za bolečino, ki je izračun ni izmeril. */
+.dotFilled {
+  background: var(--color-warning-border);
+  border-color: var(--color-warning-border);
+}
+
+/* Vidno samo bralnikom zaslona — ocena z besedo ob pikah. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .coverageNote {
-  margin: 0 0 var(--space-3);
+  margin: 0;
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
 }
@@ -249,7 +236,34 @@
   color: var(--color-text-muted);
 }
 
-/* Prostor za graf, dokler se Recharts nalaga — brez njega vsebina pod njim poskoči. */
+/*
+ * Prostor za graf, dokler se Recharts nalaga. Višino postavi izrisovalec iz
+ * breakdownChartHeightPx (ista funkcija kot graf sam) — fiksnih 260 px je na
+ * ozkem zaslonu pomenilo, da vsebina pod grafom ob njegovem prihodu poskoči,
+ * kar naj bi rezervat prav preprečil.
+ */
 .chartPlaceholder {
-  height: 260px;
+  width: 100%;
+}
+
+/*
+ * Mehko razkritje razdelkov ob prihodu v vidno polje (lib/useReveal.ts).
+ *
+ * Privzeto stanje je RAZKRITO: razred .revealPending dobi razdelek šele, ko so
+ * izpolnjeni vsi pogoji (gibanje dovoljeno, opazovalec obstaja, razdelek je pod
+ * pregibom). Obratna izbira bi pomenila, da brez JavaScripta ali ob zmanjšanem
+ * gibanju vsebina ostane nevidna — globalno stikalo v tokens.css skrajša samo
+ * prehod, skritja pa ne prepreči.
+ */
+.revealed {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 400ms ease,
+    transform 400ms ease;
+}
+
+.revealPending {
+  opacity: 0;
+  transform: translateY(8px);
 }
