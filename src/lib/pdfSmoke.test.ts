@@ -88,6 +88,9 @@ describe('Strankin PDF se sestavi', () => {
         customerCommsHoursPerMonth: 16,
         mainCause: 2,
       },
+      // Modul E odklene žetone z roki (lib/deadlines.ts) — brez njega ta veja
+      // izrisa ni pokrita in bi izjema v njej prišla šele do obiskovalca.
+      E: { sqlServer2016: 1, windowsServer2016: 1, eInvoiceZierded: 1 },
     });
 
     expect(scenario.totals.addressablePotentialEUR).toBeGreaterThan(
@@ -166,6 +169,73 @@ describe('Prodajni PDF se sestavi', () => {
     });
 
     const file = await buildSalesPdfFile(report);
+    expect(file.blob.size).toBeGreaterThan(1000);
+  });
+
+  it('z vnosi, prošnjo za posvet in odkljukanim rokom', async () => {
+    /**
+     * Scenarij brez vnosov ne doseže vej, ki nastanejo šele pri neničelnih zneskih:
+     * ogledalo strankinih izpeljank, tabela povračila, rumeni pas s prošnjo za posvet,
+     * roki z datumi in blok največjih bolečin. Brez tega testa bi te veje prvič tekle
+     * šele pri stranki.
+     */
+    const scenario = scenarioFor('proizvodnja', {
+      zamude: {
+        lateOrdersPerMonth: 12,
+        expediteCostEUR: 18_000,
+        penaltyCostEUR: 9_000,
+        lostMarginEUR: 26_000,
+        customerCommsHoursPerMonth: 40,
+        mainCause: 1,
+      },
+      E: { sqlServer2016: 1 },
+    });
+
+    // Vrata tabele povračila so pri potencialu; brez tega ta veja ne bi tekla.
+    expect(scenario.totals.addressablePotentialEUR).toBeGreaterThan(MIN_POTENTIAL_FOR_PAYBACK_EUR);
+
+    const report = buildSalesReport({
+      generatedAtISO: '2026-08-26T09:00:00.000Z',
+      contact: {
+        firstName: 'Ana',
+        lastName: 'Novak',
+        companyName: 'Kovinar d.o.o.',
+        email: 'ana@example.com',
+        phone: '+386 41 123 456',
+        taxNumber: '12345679',
+      },
+      consents: {
+        consentProcessing: true,
+        consentOffers: true,
+        consentContent: false,
+        consentConsulting: true,
+      },
+      utmSource: 'linkedin',
+      industry: 'proizvodnja',
+      employeeCount: 38,
+      segment: scenario.segment,
+      context: scenario.context,
+      profile: scenario.profile,
+      segmentModules: scenario.modules,
+      activeModules: scenario.modules,
+      values: scenario.resolved,
+      triageScores: { planiranje: 3, zamude: 2 },
+      outputs: scenario.outputs,
+      totals: scenario.totals,
+      totalsRange: null,
+      highestModule: scenario.highestModule,
+      followUpSequence: 'high-loss-with-risk',
+      accountingCapacity: undefined,
+      coverage: { measuredCount: 3, offeredCount: 10 },
+    });
+
+    // Ogledalo mora nastati in pokazati isto, kar vidi stranka.
+    expect(report.clientView.derivativesText).not.toBeNull();
+    expect(report.clientView.payback).not.toBeNull();
+    expect(report.clientView.coverageText).toContain('3 od 10');
+
+    const file = await buildSalesPdfFile(report);
+    expect(file.filename).toContain('priprava-na-pogovor');
     expect(file.blob.size).toBeGreaterThan(1000);
   });
 });

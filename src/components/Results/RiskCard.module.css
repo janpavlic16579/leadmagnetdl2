@@ -23,6 +23,43 @@
   font-weight: 600;
 }
 
+/* Žeton z rokom in stopnja tveganja se držita skupaj na desnem robu vrstice. */
+.badges {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/*
+ * Rok tehničnega tveganja. Polkrožen in nevtralen, dokler je v prihodnosti —
+ * tako se loči od značke stopnje ob njem in ne tekmuje z njo za pozornost.
+ */
+.deadline {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  background: var(--color-accent);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+}
+
+/*
+ * Pretekli rok. --color-danger je edina barva v sistemu, ki pomeni "narobe", in
+ * doslej je bila rezervirana za napake obrazcev — potekla podpora SQL Serverju je
+ * edino stanje v poročilu, ki je resnično že nastopilo, in zato zasluži isto težo.
+ * Besedilo na ploskvi ostane privzeto (nevtralna podlaga), obarvana sta obroba in
+ * napis, ker bi polna rdeča ploskev v temni temi izgubila kontrast.
+ */
+.deadlineExpired {
+  background: var(--color-warning-bg);
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+  font-weight: 700;
+}
+
 .badge {
   font-size: var(--font-size-sm);
   font-weight: 600;

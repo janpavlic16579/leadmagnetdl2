@@ -37,6 +37,8 @@ export const PALETTE = {
   warningBg: [255, 244, 229] as RGB, // --color-warning-bg #fff4e5
   warningBorder: [240, 180, 41] as RGB, // --color-warning-border #f0b429
   warningText: [122, 74, 0] as RGB, // --color-warning-text #7a4a00
+  // Edino stanje, ki v poročilu pomeni "narobe": rok, ki je že potekel.
+  danger: [192, 57, 43] as RGB, // --color-danger #c0392b
 };
 
 /**

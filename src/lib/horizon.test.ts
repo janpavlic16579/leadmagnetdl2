@@ -6,6 +6,7 @@ import {
   multiYearEUR,
   PAYBACK_TIERS_EUR,
   paybackMonths,
+  paybackRows,
   perMonthEUR,
   perWorkingDayEUR,
   WORKING_DAYS_PER_YEAR,
@@ -57,6 +58,21 @@ describe('doba povračila', () => {
     const ascending = [...PAYBACK_TIERS_EUR].sort((a, b) => a - b);
     expect(PAYBACK_TIERS_EUR).toEqual(ascending);
     expect(MIN_POTENTIAL_FOR_PAYBACK_EUR).toBeGreaterThan(0);
+  });
+
+  it('pod pragom tabele ni — in to je podatek, ne odsotnost podatka', () => {
+    /**
+     * Vrata so funkcija in ne pogoj pri klicatelju, ker jih potrebujeta dva dokumenta:
+     * strankino poročilo tabelo izriše, prodajna priprava pa mora vedeti natanko to,
+     * kar je stranka videla — tudi kadar je to nič.
+     */
+    expect(paybackRows(undefined)).toBeNull();
+    expect(paybackRows(MIN_POTENTIAL_FOR_PAYBACK_EUR - 1)).toBeNull();
+
+    const rows = paybackRows(MIN_POTENTIAL_FOR_PAYBACK_EUR);
+    expect(rows).not.toBeNull();
+    expect(rows!.map((row) => row.investmentEUR)).toEqual(PAYBACK_TIERS_EUR);
+    for (const row of rows!) expect(row.months).not.toBeNull();
   });
 
   it('pri najnižjem smiselnem potencialu nobena stopnja ne pade v desetletja', () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSalesReport, hourAssumptionSource, type BuildSalesReportParams } from './salesReport';
+import { buildSalesReport, assumptionSource, type BuildSalesReportParams } from './salesReport';
 import { computeModules, resolveActiveModules, resolveInputs } from './moduleEngine';
 import { aggregateResults, assessConfidence, buildComputeContext } from './potential';
 import {
@@ -217,7 +217,7 @@ describe('Poročilo se sestavi za vsako dejavnost', () => {
     });
 
     expect(report.qualification.currentSystemLabel).toBeNull();
-    expect(report.softness.hourAssumptions).toHaveLength(0);
+    expect(report.softness.assumptions).toHaveLength(0);
     expect(report.measured).toHaveLength(0);
   });
 });
@@ -229,22 +229,22 @@ describe('Kje so številke mehke', () => {
     // Prodajnik mora to ločiti — sicer bere izračun, kot da mu je stranka dala
     // številke, ki jih ni.
     const untouched = reportFor('trgovina');
-    for (const row of untouched.softness.hourAssumptions) {
+    for (const row of untouched.softness.assumptions) {
       expect(row.estimated, row.label).toBe(true);
       expect(row.source, row.label).toBe('none');
       expect(row.bandLabel, row.label).toBeNull();
-      expect(hourAssumptionSource(row)).toBe('ni odgovora — privzetek dejavnosti');
+      expect(assumptionSource(row)).toBe('ni odgovora — privzetek dejavnosti');
     }
 
     const chosenBand = reportFor('trgovina');
     const band = getSegmentContext('trgovina')!.adminHour.bands[1];
-    chosenBand.softness.hourAssumptions[1] = {
-      ...chosenBand.softness.hourAssumptions[1],
-      valueEUR: band.midpointEUR,
+    chosenBand.softness.assumptions[1] = {
+      ...chosenBand.softness.assumptions[1],
+      valueText: `${band.midpointEUR} EUR/h`,
       source: 'band',
       bandLabel: band.label,
     };
-    expect(hourAssumptionSource(chosenBand.softness.hourAssumptions[1])).toBe(
+    expect(assumptionSource(chosenBand.softness.assumptions[1])).toBe(
       `izbran razpon ${band.label}`,
     );
   });
@@ -258,12 +258,12 @@ describe('Kje so številke mehke', () => {
      */
     const context = getSegmentContext('trgovina')!;
     const report = reportFor('trgovina', { industryAverageHours: true });
-    const operational = report.softness.hourAssumptions[0];
+    const operational = report.softness.assumptions[0];
 
     expect(operational.source).toBe('industryAverage');
     expect(operational.estimated).toBe(true);
-    expect(operational.valueEUR).toBe(context.operationalHour.fallbackEUR);
-    expect(hourAssumptionSource(operational)).toBe(
+    expect(operational.valueText).toBe(`${context.operationalHour.fallbackEUR} EUR/h`);
+    expect(assumptionSource(operational)).toBe(
       `povprečje panoge (${context.operationalHour.fallbackEUR} EUR/h)`,
     );
     // Razpon je pas, v katerem povprečje leži — izračun ni točka.
@@ -271,18 +271,55 @@ describe('Kje so številke mehke', () => {
   });
 
   it('vnesena urna postavka nima oznake razpona', () => {
+    const context = getSegmentContext('trgovina')!;
+    const hourLabels = [context.operationalHour.label, context.adminHour.label];
     const report = reportFor('trgovina', { exactHours: true });
-    for (const row of report.softness.hourAssumptions) {
-      expect(row.estimated).toBe(false);
-      expect(row.bandLabel).toBeNull();
+
+    for (const row of report.softness.assumptions.filter((item) =>
+      hourLabels.includes(item.label),
+    )) {
+      expect(row.estimated, row.label).toBe(false);
+      expect(row.bandLabel, row.label).toBeNull();
     }
   });
 
-  it('zaračunana postavka se navede samo tam, kjer je vprašana', () => {
-    // V profilu je prisotna povsod kot varovalo pred NaN. Navesti jo kot odgovor
-    // proizvajalca, ki je nikoli ni videl, bi bilo neresnično.
-    expect(reportFor('storitve').softness.hourAssumptions).toHaveLength(3);
-    expect(reportFor('proizvodnja').softness.hourAssumptions).toHaveLength(2);
+  it('predpostavka se navede samo tam, kjer je vprašana', () => {
+    // V profilu so vse prisotne povsod kot varovalo pred NaN. Navesti jih kot odgovor
+    // podjetja, ki jih nikoli ni videlo, bi bilo neresnično.
+    const labelsFor = (segment: 'storitve' | 'proizvodnja' | 'trgovina') =>
+      reportFor(segment).softness.assumptions.map((row) => row.label);
+
+    const chargeOut = getSegmentContext('storitve')!.chargeOutRate!.label;
+    expect(labelsFor('storitve')).toContain(chargeOut);
+    expect(labelsFor('proizvodnja')).not.toContain(chargeOut);
+
+    // Strošek financiranja vprašajo samo maloprodaja, trgovina in splošno.
+    const capital = getSegmentContext('trgovina')!.capitalCostRate!.label;
+    expect(labelsFor('trgovina')).toContain(capital);
+    expect(labelsFor('proizvodnja')).not.toContain(capital);
+  });
+
+  it('prihodek in marža sta navedena, ker sta najdragocenejši podatek vprašalnika', () => {
+    // Marža množi cel koš nezaslužene marže, prihodek pa vse odstotkovne postavke.
+    // Doslej ju poročilo ni prikazalo nikjer, čeprav ju stranka izrecno razkrije.
+    const context = getSegmentContext('proizvodnja')!;
+    const revenueLabel = context.annualRevenue!.label;
+    const marginLabel = context.contributionMargin!.label;
+    const rows = reportFor('proizvodnja').softness.assumptions;
+    const labels = rows.map((row) => row.label);
+
+    expect(labels).toContain(revenueLabel);
+    expect(labels).toContain(marginLabel);
+
+    // Neodgovorjen prihodek ne pomeni privzetka, ampak ničlo — in to izniči cele
+    // postavke. Posledica mora biti zapisana ob vrstici, ne šele v razlagi.
+    const revenue = rows.find((row) => row.label === revenueLabel)!;
+    expect(revenue.source).toBe('none');
+    expect(revenue.consequence).toContain('štejejo 0');
+
+    // Marža je delež in se izpiše kot odstotek — tako jo je videla tudi stranka.
+    const margin = rows.find((row) => row.label === marginLabel)!;
+    expect(margin.valueText).toContain('%');
   });
 
   // Vprašanje o glavnem vzroku nima več privzetka, zato neizpolnjen obrazec ne
@@ -361,10 +398,45 @@ describe('Triaža in izmerjena področja', () => {
 
     const boleceNeizmerjeno = report.triage.find((row) => row.moduleId === 'terjatve_trgovina');
     expect(boleceNeizmerjeno?.score).toBe(3);
-    expect(boleceNeizmerjeno?.measured).toBe(false);
+    expect(boleceNeizmerjeno?.selected).toBe(false);
+    expect(boleceNeizmerjeno?.answered).toBe(false);
+    expect(boleceNeizmerjeno?.annualEUR).toBeNull();
     expect(boleceNeizmerjeno?.scoreLabel).toBe('Zamude so pravilo');
 
-    expect(report.triage.find((row) => row.moduleId === 'zaloge_trgovina')?.measured).toBe(true);
+    expect(report.triage.find((row) => row.moduleId === 'zaloge_trgovina')?.selected).toBe(true);
+  });
+
+  it('izbrano, a prazno področje ni izmerjeno — strankino poročilo ga šteje enako', () => {
+    /**
+     * Doslej je stolpec izpisal "izmerjeno: da" za vsako IZBRANO področje, tudi za
+     * tisto, ki ga je obiskovalec odprl in pustil prazno. Strankino poročilo isto
+     * področje šteje med neizmerjena, zato sta dokumenta o istem področju trdila
+     * nasprotno — razlika, ki se pokaže šele na sestanku.
+     */
+    const report = reportFor('trgovina', { selectedIds: ['zaloge_trgovina'] });
+    const row = report.triage.find((item) => item.moduleId === 'zaloge_trgovina');
+
+    expect(row?.selected).toBe(true);
+    expect(row?.answered).toBe(false);
+    // Ne 0: nič bi pomenilo izmerjeno brez učinka, tu pa podatka sploh ni.
+    expect(row?.annualEUR).toBeNull();
+  });
+
+  it('vrstni red pove, kje najbolj boli — ne vrstni red registra', () => {
+    const report = reportFor('trgovina', {
+      selectedIds: ['zaloge_trgovina'],
+      triageScores: { zaloge_trgovina: 1, terjatve_trgovina: 3, odprema_trgovina: 3 },
+      inputs: { zaloge_trgovina: { inventoryValueEUR: 900_000, annualWriteOffEUR: 30_000 } },
+    });
+    const order = report.triage.map((row) => row.moduleId);
+
+    // Ocena 3 pred oceno 1 …
+    expect(order.indexOf('terjatve_trgovina')).toBeLessThan(order.indexOf('zaloge_trgovina'));
+    // … in neocenjena na dno, ker to ni ocena 0, ampak odsotnost odgovora.
+    const unscored = report.triage.filter((row) => row.score === null);
+    for (const row of unscored) {
+      expect(order.indexOf(row.moduleId)).toBeGreaterThan(order.indexOf('zaloge_trgovina'));
+    }
   });
 
   it('diagnostika ni v triaži in se zato med področji ne pojavi', () => {

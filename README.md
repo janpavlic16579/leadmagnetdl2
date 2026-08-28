@@ -605,14 +605,37 @@ kako se poročilo dostavi. Prehod na webhook je zato zamenjava zadnjega koraka, 
 razdelkov** z logiko sodba → dejstva → ukrep → utemeljitev sodbe:
 
 ```
-1. Ocena — kvalifikacija stranke        (ICP pas A/B/C, velikost posla, nujnost, licenca)
-2. Osnovni podatki                      (kontakt, dejavnost, sedanji sistem, privolitve)
+1. Ocena — kvalifikacija stranke        (pas za posvet, ICP, hero v strankini obliki +
+                                         izpeljanke, tehnični rok, nadaljevanje, licenca,
+                                         kje boli in prvo vprašanje)
+2. Osnovni podatki                      (kontakt, dejavnost, sedanji sistem, 4 privolitve)
 3. Rezultati vprašalnika
-     3a. Njihove info                   (zneski, urne postavke, VSI odgovori s stolpcem "vir")
-     3b. Njihovi največji painpointi    (triaža, tveganja, kaj vprašati, kaj boste slišali)
+     3a. Njihove info                   (zneski, ogledalo strankinega poročila, finančna
+                                         osnova z virom, VSI odgovori s stolpcem "vir")
+     3b. Njihovi največji painpointi    (sortirana triaža z zneski, tveganja, roki z datumi,
+                                         kaj vprašati, kaj boste slišali)
 4. Priporočilo licenc glede na kriterije
 5. Kvalifikacija stranke — podrobnejša razlaga
 ```
+
+Razdelek 1 je **priprava na klic** in ne le ocena: bere se od zgoraj navzdol kot komu telefoniraš,
+koliko ga stane (v obliki, ki jo bere stranka), kaj mudi, kje boli in s čim začeti.
+
+**Prošnja za posvet** (`consentConsulting`) je edino polje obrazca, ki izraža namero in ne dovoljenja:
+prikaže se kot pas s citatom strankine lastne kljukice — brez obljube roka, ker ga tudi obrazec ne
+obljublja. Med privolitvami stoji kot četrta vrstica, ker je revizijski podatek.
+
+**Ogledalo strankinega poročila** (`SalesReportClientView`) izpiše iste izpeljanke, kot jih bere
+stranka: trojni znesek, ceno delovnega dne, ceno meseca odlašanja in tabelo povračila. Vse gre skozi
+iste formatirnike in ista vrata kot `lib/pdf.ts` — vrata so funkcije (`heroTotals.ts`,
+`horizon.paybackRows`) in ne prepisani pogoji, ker bi se prepis ob prvi spremembi razšel. Kadar
+stranka tabele povračila ni videla, poročilo to izrecno pove; svetovalec mora vedeti tudi, česa ni
+videla.
+
+**Vrstice razdelkov 1 in 2 nastanejo enkrat**, v `scoreRows()` in `qualificationRows()`
+(`salesReport.ts`). Prej ju je vsak izrisovalec nosil sam, varovan samo s komentarjem; svetovalec bere
+obe datoteki in razlika med njima izgleda kot razlika v podatkih. To zdaj varuje
+`salesReportParity.test.ts`.
 
 Poročilo je prej naraščalo s prištevanjem in doseglo dvanajst naslovov. Vse ostalo je zdaj podnaslov
 znotraj teh petih — **nič vsebine ni izpadlo**. Zgradbo v obeh oblikah varuje test: prodajni HTML mora
@@ -625,7 +648,13 @@ Dve posledici te zgradbe:
   `vir`: `vneseno` · `privzeto` · `„Ne vem"`. Izpeljan je enkrat (`answerSource` v `answerLabels.ts`),
   da PDF in HTML ne moreta razhajati.
 - **Ocena je na vrhu in na dnu.** Zgoraj sodba (prodajnik mora v treh sekundah vedeti, ali je A ali C),
-  spodaj razčlenitev po sedmih dimenzijah kot utemeljitev.
+  spodaj razčlenitev po sedmih dimenzijah kot utemeljitev. Skupna ocena se spodaj **ne ponovi** —
+  razdelek 5 je utemeljitev sodbe in ne sodba drugič; v HTML je razčlenitev zložena v `<details>`.
+- **Triaža je prioritizacijska tabela.** Urejena je po jakosti bolečine (ocena padajoče, znotraj iste
+  ocene neizpolnjena pred izpolnjenimi, nato večji znesek) in ima stolpec z letnim zneskom. Stanje ima
+  **tri vrednosti**, ne dveh: `izmerjeno` · `izbrano, a prazno` · `ni izbrano`. Prej je bilo vsako
+  izbrano področje označeno kot izmerjeno — tudi tisto, ki ga je stranka odprla in pustila prazno,
+  medtem ko ga njeno poročilo šteje med neizmerjena. Dokumenta sta o istem področju trdila nasprotno.
 
 Navodilne dele sestavi `src/lib/salesPlaybook.ts`, vse iz podatkov, ki jih vprašalnik že zbere —
 nobenega novega vprašanja:

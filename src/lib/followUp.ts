@@ -6,6 +6,27 @@ export type FollowUpSequence =
   | 'low-loss-newsletter'
   | 'accounting-lm07-bridge';
 
+/**
+ * Kaj se s stranko zgodi po oddaji, povedano kot NAŠE dejanje.
+ *
+ * Ključi so interna triaža ("low-loss-newsletter" pomeni, da je izmerjena izguba pod
+ * pragom), dokument pa se v rezervnem načinu prenese na napravo stranke — dobesedni
+ * prevod bi ji torej sporočil, kam smo jo uvrstili. Oznaka zato opisuje korak, ki ga
+ * naredimo mi, in ne lastnosti podjetja.
+ *
+ * `Record` čez celotno unijo je namerna: nov ključ brez oznake ne prevede.
+ */
+export const FOLLOW_UP_SEQUENCE_LABEL: Record<FollowUpSequence, string> = {
+  'high-loss-with-risk': 'Klic svetovalca, prednostno zaradi tehničnega roka',
+  'high-loss-no-risk': 'Klic svetovalca',
+  'low-loss-newsletter': 'E-vsebine in vabila na dogodke',
+  'accounting-lm07-bridge': 'Ponudba za računovodske servise',
+};
+
+export function followUpSequenceLabel(sequence: FollowUpSequence): string {
+  return FOLLOW_UP_SEQUENCE_LABEL[sequence];
+}
+
 export interface SelectFollowUpParams {
   segment: SegmentId;
   /**

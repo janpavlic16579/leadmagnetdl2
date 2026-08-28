@@ -13,16 +13,33 @@ import type { SegmentConfig } from '../config/segments';
 import { getActionPlan } from '../../content/actions/actions';
 import { groupByModule } from './moduleEngine';
 import type { ConfidenceLevel, ResultTotals } from './potential';
-import { formatAmount, formatEUR, formatHours, formatNumber, isoDate, MIN_FIGURE_EUR } from './format';
 import {
-  MIN_POTENTIAL_FOR_PAYBACK_EUR,
+  formatAmount,
+  formatDecimal,
+  formatEUR,
+  formatHours,
+  formatPercent,
+  isoDate,
+  MIN_FIGURE_EUR,
+} from './format';
+import {
   monthsLabel,
   multiYearEUR,
-  PAYBACK_TIERS_EUR,
-  paybackMonths,
+  paybackRows,
   perMonthEUR,
   perWorkingDayEUR,
+  yearsLabel,
+  type PaybackRow,
 } from './horizon';
+import { heroValueEUR as heroTotal, heroRangeEUR as heroTotalRange } from './heroTotals';
+import {
+  breakdownRows,
+  compositionSegments,
+  confidenceMeterSegments,
+  projectionSeries,
+  type BreakdownRow,
+} from './reportVisuals';
+import { deadlineChipText, riskDeadline } from './deadlines';
 import { displayRange, type EURRange, type TotalsRange } from './range';
 import { slugify, type DownloadFile } from './download';
 import {
@@ -102,38 +119,27 @@ function rowsForBucket(outputs: ModuleOutput[], bucket: ModuleOutput['bucket']):
     ]);
 }
 
-interface ChartDatum {
-  name: string;
-  directLossEUR: number;
-  lostMarginEUR: number;
-  capacityEUR: number;
-}
-
-/** Ena skupina stolpcev na modul (ne na posamezno postavko) — enako kot BreakdownChart na zaslonu. */
-function buildChartData(segment: SegmentConfig, outputs: ModuleOutput[]): ChartDatum[] {
+/**
+ * Ena vrstica na modul (ne na posamezno postavko) — enako kot BreakdownChart na
+ * zaslonu, vključno z razvrstitvijo po velikosti, ki jo opravi breakdownRows.
+ */
+function buildChartData(segment: SegmentConfig, outputs: ModuleOutput[]): BreakdownRow[] {
   const outputsByModule = groupByModule(outputs);
-  return getModules(segment.moduleIds)
-    .map((definition) => {
-      const moduleOutputs = outputsByModule[definition.id] ?? [];
-      const sumBucket = (bucket: string) =>
-        moduleOutputs.filter((output) => output.bucket === bucket).reduce((sum, output) => sum + (output.valueEUR ?? 0), 0);
-      return {
-        name: definition.title,
-        directLossEUR: sumBucket('directLoss'),
-        lostMarginEUR: sumBucket('lostMargin'),
-        capacityEUR: sumBucket('capacity'),
-      };
-    })
-    .filter((datum) => datum.directLossEUR > 0 || datum.lostMarginEUR > 0 || datum.capacityEUR > 0);
-}
-
-/** Najbližje "lepo" zaokroženo zgornje število za osne oznake grafa (1/2/2,5/5/10 × 10^n). */
-function niceCeiling(value: number): number {
-  if (value <= 0) return 1;
-  const magnitude = 10 ** Math.floor(Math.log10(value));
-  const steps = [1, 2, 2.5, 5, 10];
-  const step = steps.find((candidate) => candidate * magnitude >= value) ?? 10;
-  return step * magnitude;
+  return breakdownRows(
+    getModules(segment.moduleIds)
+      .map((definition) => {
+        const moduleOutputs = outputsByModule[definition.id] ?? [];
+        const sumBucket = (bucket: string) =>
+          moduleOutputs.filter((output) => output.bucket === bucket).reduce((sum, output) => sum + (output.valueEUR ?? 0), 0);
+        return {
+          name: definition.title,
+          directLossEUR: sumBucket('directLoss'),
+          lostMarginEUR: sumBucket('lostMargin'),
+          capacityEUR: sumBucket('capacity'),
+        };
+      })
+      .filter((datum) => datum.directLossEUR > 0 || datum.lostMarginEUR > 0 || datum.capacityEUR > 0),
+  );
 }
 
 /**
@@ -155,7 +161,11 @@ export async function buildResultsPdfFile(params: GeneratePdfParams): Promise<Do
    * proizvajalca še vedno navajalo "prazna polica, napačna cena".
    */
   const copy = getSegmentCopy(params.segment.id);
-  const dateStr = new Intl.DateTimeFormat('sl-SI').format(new Date());
+  // En sam trenutek za cel dokument: glava in roki tveganj morata govoriti o
+  // istem dnevu, sicer bi lahko žeton trdil "poteklo" na dokumentu z datumom
+  // pred rokom (izris ob polnoči).
+  const now = new Date();
+  const dateStr = new Intl.DateTimeFormat('sl-SI').format(now);
   // Poti do public/ morajo iti prek BASE_URL — aplikacija se strežе izpod
   // /leadmagnetdl/ (glej vite.config.ts), zato bi trdo kodiran koren 404-iral.
   const logo = await loadImage(`${import.meta.env.BASE_URL}logo-datalab.png`);
@@ -165,9 +175,11 @@ export async function buildResultsPdfFile(params: GeneratePdfParams): Promise<Do
 
   // Vrstni red pripovedi: koliko stane (hero), iz česa je sestavljeno (kartice),
   // kaj to pomeni za investicijo (povračilo), zakaj je znesek spodnja meja (ograde).
-  const potentialEUR = params.totals.addressablePotentialEUR;
-  if (potentialEUR !== undefined && potentialEUR >= MIN_POTENTIAL_FOR_PAYBACK_EUR) {
-    y = drawPaybackSection(doc, potentialEUR, y);
+  // Vrata so v horizon.paybackRows in ne tu: prodajna priprava mora pokazati natanko
+  // to, kar je videla stranka, in prepisan pogoj bi se ob spremembi praga razšel.
+  const payback = paybackRows(params.totals.addressablePotentialEUR);
+  if (payback) {
+    y = drawPaybackSection(doc, payback, y);
   }
   y = drawNotIncludedSection(doc, y);
 
@@ -183,7 +195,9 @@ export async function buildResultsPdfFile(params: GeneratePdfParams): Promise<Do
     y = ensurePageSpace(doc, y, 24);
     y = drawSectionTitle(doc, copy.results.breakdownTitle, y);
     if (chartData.length > 0) {
-      y = ensurePageSpace(doc, y, CHART_TOTAL_HEIGHT);
+      // Višina je odslej odvisna od števila vrstic — pri fiksni konstanti bi graf
+      // s sedmimi področji ušel čez rob strani.
+      y = ensurePageSpace(doc, y, chartHeightMm(chartData.length));
       y = drawBreakdownChart(doc, chartData, y);
     }
     if (directLossRows.length > 0) {
@@ -203,7 +217,9 @@ export async function buildResultsPdfFile(params: GeneratePdfParams): Promise<Do
   y = drawMethodologySection(doc, params, y);
 
   if (params.totals.risks.length > 0) {
-    y = drawRisksSection(doc, params.totals.risks, copy.results.risksTitle, y);
+    // Isti datum kot glava dokumenta — rok, ki bi bil izračunan iz drugega
+    // trenutka, bi lahko trdil "poteklo" na dokumentu z včerajšnjim datumom.
+    y = drawRisksSection(doc, params.totals.risks, copy.results.risksTitle, y, now);
   }
 
   if (params.coverage && params.coverage.unmeasured.length > 0) {
@@ -304,6 +320,83 @@ function drawConfidenceBadge(doc: jsPDF, level: ConfidenceLevel, x: number, y: n
   }
   doc.setTextColor(...colors.text);
   doc.text(label, x - badgeWidth / 2, y + badgeHeight / 2 + 1.4, { align: 'center' });
+
+  /**
+   * Merilnik levo od značke — enako kot ConfidenceMeter na zaslonu.
+   *
+   * Značka pove stopnjo, ne pa tudi, ali je nad njo še kaj: "Srednja
+   * zanesljivost" brez lestvice je ocena brez merila.
+   */
+  const { filled, total } = confidenceMeterSegments(level);
+  const segmentWidth = 5;
+  const segmentGap = 1;
+  const meterWidth = total * segmentWidth + (total - 1) * segmentGap;
+  const meterX = x - badgeWidth - 3 - meterWidth;
+
+  for (let index = 0; index < total; index += 1) {
+    const segmentX = meterX + index * (segmentWidth + segmentGap);
+    if (index < filled) {
+      doc.setFillColor(...PALETTE.brandYellow);
+      doc.rect(segmentX, y + 2, segmentWidth, 2, 'F');
+    } else {
+      doc.setFillColor(...PALETTE.border);
+      doc.rect(segmentX, y + 2, segmentWidth, 2, 'F');
+    }
+  }
+}
+
+/**
+ * Naložena vrstica sestave naslovne vsote — zrcalo CompositionBar z zaslona.
+ *
+ * Opomba pod zneskom z besedami našteje tri vrste denarja in bralec jih mora
+ * sešteti v glavi. Vrstica isto pove s širinami: vidi se, kateri koš nosi
+ * večino, in da so koši trije.
+ */
+function drawCompositionBar(
+  doc: jsPDF,
+  totals: ResultTotals,
+  copy: ResolvedSegmentCopy,
+  x: number,
+  y: number,
+  width: number,
+): number {
+  const segments = compositionSegments(totals);
+  if (segments.length === 0) return y;
+
+  const color = {
+    directLoss: PALETTE.brandYellow,
+    lostMargin: PALETTE.amber,
+    capacity: PALETTE.brandDark,
+  } as const;
+  const title = {
+    directLoss: copy.figures.directLoss.title,
+    lostMargin: copy.figures.lostMargin.title,
+    capacity: copy.figures.capacity.title,
+  } as const;
+
+  const barHeight = 3.4;
+  let segmentX = x;
+  for (const segment of segments) {
+    doc.setFillColor(...color[segment.key]);
+    doc.rect(segmentX, y, segment.share * width, barHeight, 'F');
+    segmentX += segment.share * width;
+  }
+
+  // Legenda v eni vrstici pod trakom: barva, ime in delež. Znesek tu ne, ker ga
+  // nosijo sekundarne kartice tik pod hero blokom.
+  let legendX = x;
+  setFont(doc, 'normal');
+  doc.setFontSize(6.5);
+  for (const segment of segments) {
+    doc.setFillColor(...color[segment.key]);
+    doc.rect(legendX, y + barHeight + 2.4, 2.4, 2.4, 'F');
+    doc.setTextColor(...PALETTE.textMuted);
+    const label = `${title[segment.key]} ${formatPercent(segment.share)}`;
+    doc.text(label, legendX + 3.6, y + barHeight + 4.5);
+    legendX += 3.6 + doc.getTextWidth(label) + 6;
+  }
+
+  return y + barHeight + 7;
 }
 
 function drawHeroSection(
@@ -322,9 +415,15 @@ function drawHeroSection(
     doc.setTextColor(...PALETTE.brandDark);
     setFont(doc, 'bold');
     doc.setFontSize(15);
-    doc.text(`+${params.accountingCapacity.toFixed(1)} strank brez nove zaposlitve`, PAGE_WIDTH / 2, y + 10.5, {
-      align: 'center',
-    });
+    // formatDecimal in ne toFixed: pika je v tem dokumentu ločilo tisočic
+    // ("12.400 EUR"), zato je "3.4 stranke" mogoče brati kot tri tisoč štiristo.
+    // Zaslon je isto številko že pisal po slovensko (ResultsView, formatDecimal).
+    doc.text(
+      `+${formatDecimal(params.accountingCapacity)} strank brez nove zaposlitve`,
+      PAGE_WIDTH / 2,
+      y + 10.5,
+      { align: 'center' },
+    );
     y += 22;
   }
 
@@ -339,27 +438,18 @@ function drawHeroSection(
    * naslovna številka mora biti ena in ista v obeh medijih.
    * Enkratni kapital ostane zunaj vsote — enkraten znesek se z letnimi ne sešteva.
    */
-  const heroValueEUR =
-    params.totals.directLossEUR + params.totals.lostMarginEUR + params.totals.capacityEUR;
-  const heroRange = params.totalsRange
-    ? {
-        minEUR:
-          params.totalsRange.directLoss.minEUR +
-          params.totalsRange.lostMargin.minEUR +
-          params.totalsRange.capacity.minEUR,
-        maxEUR:
-          params.totalsRange.directLoss.maxEUR +
-          params.totalsRange.lostMargin.maxEUR +
-          params.totalsRange.capacity.maxEUR,
-      }
-    : undefined;
+  const heroValueEUR = heroTotal(params.totals);
+  const heroRange = heroTotalRange(params.totalsRange);
 
   setFont(doc, 'normal');
   doc.setFontSize(8.5);
   const heroNoteLines: string[] = doc.splitTextToSize(copy.results.heroNote, CONTENT_WIDTH - 16);
+  const hasComposition = compositionSegments(params.totals).length > 0;
   // Kartica se prilagodi besedilu: opomba o sestavi vsote je daljša od prejšnje
-  // enovrstične in bi ob fiksni višini ušla čez rob.
-  const heroHeight = 26 + heroNoteLines.length * 4.2 + 4;
+  // enovrstične in bi ob fiksni višini ušla čez rob. Traku sestave in vrstici
+  // časovnih leč se prišteje njuna izmerjena višina.
+  const heroHeight =
+    26 + heroNoteLines.length * 4.2 + 4 + (hasComposition ? 13 : 0) + (heroValueEUR > 0 ? 16 : 0);
 
   doc.setFillColor(...PALETTE.cream);
   doc.roundedRect(MARGIN, y, CONTENT_WIDTH, heroHeight, 3, 3, 'F');
@@ -386,6 +476,68 @@ function drawHeroSection(
   doc.setFontSize(8.5);
   doc.setTextColor(...PALETTE.textMuted);
   doc.text(heroNoteLines, MARGIN + 8, y + 30);
+
+  let innerY = y + 30 + heroNoteLines.length * 4.2 + 1;
+
+  if (hasComposition) {
+    innerY = drawCompositionBar(doc, params.totals, copy, MARGIN + 8, innerY, CONTENT_WIDTH - 16);
+  }
+
+  /**
+   * Tri časovne leče: isti letni znesek na delovni dan, na mesec in v treh letih.
+   *
+   * Dnevni ekvivalent je bil doslej zakopan v opombo pod večletnim pogledom,
+   * čeprav je edina številka na strani, ki jo bralec preveri na pamet — in prav
+   * zato tista, ki letnemu znesku podeli verodostojnost.
+   */
+  if (heroValueEUR > 0) {
+    const lenses = [
+      { label: SHARED_COPY.lensDayLabel, value: formatEUR(perWorkingDayEUR(heroValueEUR)) },
+      { label: SHARED_COPY.lensMonthLabel, value: formatEUR(perMonthEUR(heroValueEUR)) },
+      {
+        label: SHARED_COPY.horizonLabel,
+        value: amountLabelOf(
+          multiYearEUR(heroValueEUR),
+          heroRange
+            ? { minEUR: multiYearEUR(heroRange.minEUR), maxEUR: multiYearEUR(heroRange.maxEUR) }
+            : undefined,
+          params.totals.confidence === 'low',
+        ),
+      },
+    ];
+
+    const lensGap = 3;
+    const lensWidth = (CONTENT_WIDTH - 16 - lensGap * 2) / 3;
+    lenses.forEach((lens, index) => {
+      const lensX = MARGIN + 8 + index * (lensWidth + lensGap);
+      doc.setFillColor(...PALETTE.white);
+      doc.rect(lensX, innerY, lensWidth, 13, 'F');
+      // Trojni znesek je sidro odločitve o ERP — rumen rob, ne večja pisava:
+      // druga velika številka bi tekmovala z naslovnim zneskom.
+      if (index === 2) {
+        doc.setFillColor(...PALETTE.brandYellow);
+        doc.rect(lensX, innerY, 1, 13, 'F');
+      }
+
+      setFont(doc, 'semibold');
+      doc.setFontSize(6.2);
+      doc.setTextColor(...PALETTE.textMuted);
+      doc.text(lens.label.toUpperCase(), lensX + 3, innerY + 4.5);
+
+      setFont(doc, 'bold');
+      doc.setTextColor(...PALETTE.brandDark);
+      // Znesek se skrči, dokler ne gre v ploščico: razpon "336.360 EUR –
+      // 360.984 EUR" je pri fiksni velikosti ušel čez rob, jsPDF pa besedila
+      // sam ne skrajša in ne prelomi.
+      let lensFontSize = 9.5;
+      doc.setFontSize(lensFontSize);
+      while (lensFontSize > 5.5 && doc.getTextWidth(lens.value) > lensWidth - 6) {
+        lensFontSize -= 0.5;
+        doc.setFontSize(lensFontSize);
+      }
+      doc.text(lens.value, lensX + 3, innerY + 10);
+    });
+  }
 
   y += heroHeight + 6;
 
@@ -414,38 +566,63 @@ function drawHeroSection(
     y += 6;
   }
 
-  // Tri leta in cena odlašanja — ista izpeljanka kot na zaslonu (ResultsView).
-  if (heroValueEUR > 0) {
-    const horizonValue = amountLabelOf(
-      multiYearEUR(heroValueEUR),
-      heroRange
-        ? { minEUR: multiYearEUR(heroRange.minEUR), maxEUR: multiYearEUR(heroRange.maxEUR) }
-        : undefined,
-      params.totals.confidence === 'low',
-    );
-
-    // Rumen navpičen rob namesto okvirja: trojni znesek je izpeljanka letnega in
-    // mora biti videti kot izpeljanka, ne kot druga enakovredna glavna številka.
-    doc.setFillColor(...PALETTE.brandYellow);
-    doc.rect(MARGIN, y - 3, 1.2, 13, 'F');
-
+  /**
+   * Kumulativa po letih — zrcalo ProjectionBars z zaslona.
+   *
+   * Trojni znesek stoji tudi med lečami v hero kartici, in to namenoma: tam je
+   * SIDRO (ena številka, s katero se odločitev primerja), tu pa POT do njega.
+   * Naraščajoči stolpci povedo tisto, česar ena številka ne more — da znesek ne
+   * čaka na odločitev, ampak med njo nastaja.
+   */
+  const projection = projectionSeries(heroValueEUR);
+  if (projection.length > 0) {
     setFont(doc, 'semibold');
     doc.setFontSize(8);
     doc.setTextColor(...PALETTE.textMuted);
-    doc.text(SHARED_COPY.horizonLabel.toUpperCase(), MARGIN + 5, y);
+    doc.text(SHARED_COPY.projectionTitle.toUpperCase(), MARGIN, y);
+    y += 4;
 
-    setFont(doc, 'bold');
-    doc.setFontSize(14);
-    doc.setTextColor(...PALETTE.brandDark);
-    doc.text(horizonValue, MARGIN + 5, y + 7);
-    y += 12;
+    const trackX = MARGIN + 16;
+    const trackWidth = CONTENT_WIDTH - 16 - 46;
+    projection.forEach((point) => {
+      setFont(doc, 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(...PALETTE.textMuted);
+      doc.text(yearsLabel(point.year), MARGIN, y + 3.4);
+
+      doc.setFillColor(...PALETTE.cream);
+      doc.rect(trackX, y, trackWidth, 4, 'F');
+      // Zadnje leto je trojni znesek — isti rumeni poudarek kot leča v hero kartici.
+      doc.setFillColor(...(point.fraction === 1 ? PALETTE.brandYellow : PALETTE.amber));
+      doc.rect(trackX, y, point.fraction * trackWidth, 4, 'F');
+
+      setFont(doc, 'semibold');
+      doc.setFontSize(7);
+      doc.setTextColor(...PALETTE.text);
+      doc.text(
+        amountLabelOf(
+          point.cumulativeEUR,
+          heroRange
+            ? {
+                minEUR: multiYearEUR(heroRange.minEUR, point.year),
+                maxEUR: multiYearEUR(heroRange.maxEUR, point.year),
+              }
+            : undefined,
+          params.totals.confidence === 'low',
+        ),
+        MARGIN + CONTENT_WIDTH,
+        y + 3.4,
+        { align: 'right' },
+      );
+      y += 6;
+    });
 
     y = drawMutedParagraph(
       doc,
       `${SHARED_COPY.horizonNote} ${SHARED_COPY.delayNote
         .replace('{daily}', formatEUR(perWorkingDayEUR(heroValueEUR)))
         .replace('{monthly}', formatEUR(perMonthEUR(heroValueEUR)))}`,
-      y,
+      y + 4,
       8,
     );
     y += 2;
@@ -557,22 +734,50 @@ function drawHeroSection(
  * potencialu se tabela ne izriše — dobe povračila v desetletjih bi bile
  * argument proti temu, kar naj tabela pokaže.
  */
-function drawPaybackSection(doc: jsPDF, annualPotentialEUR: number, startY: number): number {
-  const rows = PAYBACK_TIERS_EUR.map((investmentEUR) => {
-    const months = paybackMonths(investmentEUR, annualPotentialEUR);
-    return [formatEUR(investmentEUR), months === null ? '—' : monthsLabel(months)];
-  });
-
-  let y = ensurePageSpace(doc, startY, 24);
+function drawPaybackSection(doc: jsPDF, payback: PaybackRow[], startY: number): number {
+  let y = ensurePageSpace(doc, startY, 24 + payback.length * 8);
   y = drawSectionTitle(doc, SHARED_COPY.paybackTitle, y);
-  y = drawTable(doc, {
-    head: [SHARED_COPY.paybackInvestmentHeader, SHARED_COPY.paybackDurationHeader],
-    rows,
-    startY: y,
-    trailingNotes: [SHARED_COPY.paybackNote],
-    columnWidths: [60],
+
+  /**
+   * Vrstice namesto tabele: doba povračila je količina in ne besedilo v celici.
+   * Tabela je bralca pustila primerjati "12 mesecev" s "24 meseci" po branju,
+   * dolžine vrstic pa razliko pokažejo, preden začne brati.
+   */
+  const maxMonths = Math.max(...payback.map((row) => row.months ?? 0), 1);
+  const trackX = MARGIN + 34;
+  const trackWidth = CONTENT_WIDTH - 34 - 34;
+
+  setFont(doc, 'semibold');
+  doc.setFontSize(7);
+  doc.setTextColor(...PALETTE.textMuted);
+  doc.text(SHARED_COPY.paybackInvestmentHeader.toUpperCase(), MARGIN, y);
+  doc.text(SHARED_COPY.paybackDurationHeader.toUpperCase(), MARGIN + CONTENT_WIDTH, y, {
+    align: 'right',
   });
-  return y;
+  y += 4;
+
+  for (const row of payback) {
+    setFont(doc, 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...PALETTE.text);
+    doc.text(formatEUR(row.investmentEUR), MARGIN, y + 3.4);
+
+    doc.setFillColor(...PALETTE.cream);
+    doc.rect(trackX, y, trackWidth, 4, 'F');
+    if (row.months !== null) {
+      doc.setFillColor(...PALETTE.brandYellow);
+      doc.rect(trackX, y, (row.months / maxMonths) * trackWidth, 4, 'F');
+    }
+
+    setFont(doc, 'semibold');
+    doc.setTextColor(...PALETTE.brandDark);
+    doc.text(row.months === null ? '—' : monthsLabel(row.months), MARGIN + CONTENT_WIDTH, y + 3.4, {
+      align: 'right',
+    });
+    y += 7;
+  }
+
+  return drawMutedParagraph(doc, SHARED_COPY.paybackNote, y + 1, 7.5) + 2;
 }
 
 // --- Česa znesek ne vsebuje --------------------------------------------------
@@ -625,21 +830,38 @@ function drawNotIncludedSection(doc: jsPDF, startY: number): number {
 // --- Graf razčlenitve --------------------------------------------------------
 
 const CHART_LEGEND_HEIGHT = 8;
-const CHART_PLOT_HEIGHT = 42;
-const CHART_LABEL_HEIGHT = 10;
-const CHART_TOTAL_HEIGHT = CHART_LEGEND_HEIGHT + CHART_PLOT_HEIGHT + CHART_LABEL_HEIGHT + 6;
+/** Višina ene vrstice: ime področja, naložen stolpec, znesek in delež. */
+const CHART_ROW_HEIGHT = 9;
+const CHART_BAR_HEIGHT = 5;
+/** Širina stolpca z imenom področja — imena so dolga in dobijo celo vrstico. */
+const CHART_LABEL_WIDTH = 56;
+/** Prostor za znesek in delež na desni. */
+const CHART_VALUE_WIDTH = 34;
+
+function chartHeightMm(rowCount: number): number {
+  return CHART_LEGEND_HEIGHT + rowCount * CHART_ROW_HEIGHT + 4;
+}
 
 /**
- * Ročno narisan stolpčni graf (jsPDF ne zna izrisati React/SVG grafov) — vizualno
- * zrcali BreakdownChart s spletne strani: ena skupina stolpcev na področje,
- * rumena za neposredno izgubo, temna za sproščeno kapaciteto. Enkratni kapital
- * namenoma ni del tega grafa — mešanje enkratnega zneska med letne bi bila prav
- * napaka, ki jo ločeni koši rezultatov preprečujejo.
+ * Ročno narisan graf (jsPDF ne zna izrisati React/SVG grafov) — vizualno zrcali
+ * BreakdownChart s spletne strani: ena NALOŽENA vodoravna vrstica na področje,
+ * urejeno po velikosti, z zneskom in deležem ob koncu.
+ *
+ * Naložen in ne vzporeden: dokler je bila naslovna številka samo neposredna
+ * izguba, sta bila koša ločena tudi vizualno, ker se nista seštevala. Odkar hero
+ * nosi vsoto vseh treh (lib/heroTotals.ts), je naložen stolpec natanko to, kar
+ * naslovna številka trdi — iz česa je sestavljena. Ločenost košev nosi barva.
+ *
+ * Vrstni red določi breakdownRows (lib/reportVisuals.ts) — ista funkcija kot na
+ * zaslonu, da dokument in zaslon področij ne razvrstita različno.
+ *
+ * Enkratni kapital namenoma ni del grafa: mešanje enkratnega zneska med letne bi
+ * bila prav napaka, ki jo ločeni koši rezultatov preprečujejo.
  */
-function drawBreakdownChart(doc: jsPDF, data: ChartDatum[], startY: number): number {
+function drawBreakdownChart(doc: jsPDF, rows: BreakdownRow[], startY: number): number {
   let y = startY;
-  const hasLostMargin = data.some((datum) => datum.lostMarginEUR > 0);
-  const hasCapacity = data.some((datum) => datum.capacityEUR > 0);
+  const hasLostMargin = rows.some((row) => row.lostMarginEUR > 0);
+  const hasCapacity = rows.some((row) => row.capacityEUR > 0);
 
   setFont(doc, 'normal');
   doc.setFontSize(8);
@@ -661,72 +883,54 @@ function drawBreakdownChart(doc: jsPDF, data: ChartDatum[], startY: number): num
   }
   y += CHART_LEGEND_HEIGHT;
 
-  const plotBottom = y + CHART_PLOT_HEIGHT;
-  const maxValue = Math.max(
-    ...data.flatMap((datum) => [datum.directLossEUR, datum.lostMarginEUR, datum.capacityEUR]),
-  );
-  const niceMax = niceCeiling(maxValue);
+  const trackX = MARGIN + CHART_LABEL_WIDTH;
+  const trackWidth = CONTENT_WIDTH - CHART_LABEL_WIDTH - CHART_VALUE_WIDTH;
+  // Merilo postavi največja vrstica: ta zasede ves tir, ostale so v razmerju z
+  // njo. Lepo zaokrožena os tu ni potrebna, ker so vrednosti izpisane ob vrstici.
+  const maxTotal = Math.max(...rows.map((row) => row.totalEUR), 1);
 
-  const steps = 4;
-  setFont(doc, 'normal');
-  doc.setFontSize(6.5);
-  doc.setDrawColor(...PALETTE.border);
-  doc.setLineWidth(0.1);
-  for (let step = 0; step <= steps; step += 1) {
-    const value = (niceMax / steps) * step;
-    const gridY = plotBottom - (value / niceMax) * CHART_PLOT_HEIGHT;
-    doc.line(MARGIN, gridY, MARGIN + CONTENT_WIDTH, gridY);
-    doc.setTextColor(...PALETTE.textMuted);
-    doc.text(formatNumber(value), MARGIN - 2, gridY + 1.2, { align: 'right' });
-  }
+  rows.forEach((row, index) => {
+    const rowY = y + index * CHART_ROW_HEIGHT;
+    const barY = rowY + (CHART_ROW_HEIGHT - CHART_BAR_HEIGHT) / 2;
 
-  // Serije so prisotne le, kadar imajo denar — enako kot na zaslonu, kjer stolpec
-  // brez vrednosti ne zaseda širine skupine.
-  const series: { color: typeof PALETTE.brandYellow; value: (datum: ChartDatum) => number }[] = [
-    { color: PALETTE.brandYellow, value: (datum) => datum.directLossEUR },
-    ...(hasLostMargin ? [{ color: PALETTE.amber, value: (datum: ChartDatum) => datum.lostMarginEUR }] : []),
-    ...(hasCapacity ? [{ color: PALETTE.brandDark, value: (datum: ChartDatum) => datum.capacityEUR }] : []),
-  ];
+    // Največja postavka je krepka: prvo vprašanje ob razčlenitvi je "kje
+    // izgubljam največ" in odgovor nanj ne sme terjati primerjanja dolžin.
+    setFont(doc, row.isTop ? 'semibold' : 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(...(row.isTop ? PALETTE.text : PALETTE.textMuted));
+    doc.text(truncateToWidth(doc, row.name, CHART_LABEL_WIDTH - 3), MARGIN, barY + 3.6);
 
-  const slotWidth = CONTENT_WIDTH / data.length;
-  const barGap = Math.min(2, slotWidth * 0.08);
-  // Zgornja meja širine stolpca: pri enem samem izmerjenem področju je slot cela
-  // vsebinska širina in stolpec brez meje postane ploskev čez pol strani —
-  // izgleda kot napaka izrisa, ne kot graf. 18 mm ustreza stolpcu pri treh
-  // področjih, torej najpogostejšem primeru.
-  const barWidth = Math.min(
-    18,
-    (slotWidth - barGap * (series.length + 1)) / series.length,
-  );
-  // Stolpci so v slotu centrirani — brez tega bi ob omejeni širini lepeli na levi rob.
-  const groupWidth = barWidth * series.length + barGap * (series.length - 1);
+    // Podlaga tira: brez nje krajše vrstice lebdijo in razmerja ni videti.
+    doc.setFillColor(...PALETTE.cream);
+    doc.rect(trackX, barY, trackWidth, CHART_BAR_HEIGHT, 'F');
 
-  data.forEach((datum, index) => {
-    const slotX = MARGIN + index * slotWidth;
-    const groupX = slotX + (slotWidth - groupWidth) / 2;
+    const segments: { color: typeof PALETTE.brandYellow; valueEUR: number }[] = [
+      { color: PALETTE.brandYellow, valueEUR: row.directLossEUR },
+      { color: PALETTE.amber, valueEUR: row.lostMarginEUR },
+      { color: PALETTE.brandDark, valueEUR: row.capacityEUR },
+    ];
 
-    series.forEach((entry, seriesIndex) => {
-      const height = (entry.value(datum) / niceMax) * CHART_PLOT_HEIGHT;
-      if (height > 0) {
-        doc.setFillColor(...entry.color);
-        doc.rect(
-          groupX + (barWidth + barGap) * seriesIndex,
-          plotBottom - height,
-          barWidth,
-          height,
-          'F',
-        );
-      }
-    });
+    let segmentX = trackX;
+    for (const segment of segments) {
+      if (segment.valueEUR <= 0) continue;
+      const width = (segment.valueEUR / maxTotal) * trackWidth;
+      doc.setFillColor(...segment.color);
+      doc.rect(segmentX, barY, width, CHART_BAR_HEIGHT, 'F');
+      segmentX += width;
+    }
+
+    setFont(doc, row.isTop ? 'semibold' : 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(...PALETTE.text);
+    doc.text(formatEUR(row.totalEUR), MARGIN + CONTENT_WIDTH, barY + 2, { align: 'right' });
 
     setFont(doc, 'normal');
     doc.setFontSize(6.3);
     doc.setTextColor(...PALETTE.textMuted);
-    const label = truncateToWidth(doc, datum.name, slotWidth - 1);
-    doc.text(label, slotX + slotWidth / 2, plotBottom + 5, { align: 'center' });
+    doc.text(formatPercent(row.share), MARGIN + CONTENT_WIDTH, barY + 5.6, { align: 'right' });
   });
 
-  return plotBottom + CHART_LABEL_HEIGHT;
+  return y + rows.length * CHART_ROW_HEIGHT + 4;
 }
 
 /** Denarna tabela strankinega poročila — povsod ista trojica stolpcev. */
@@ -747,7 +951,13 @@ function drawResultsTable(
 
 // --- Tveganja ------------------------------------------------------------
 
-function drawRisksSection(doc: jsPDF, risks: ModuleOutput[], title: string, startY: number): number {
+function drawRisksSection(
+  doc: jsPDF,
+  risks: ModuleOutput[],
+  title: string,
+  startY: number,
+  now: Date,
+): number {
   let y = ensurePageSpace(doc, startY, 24);
   y = drawSectionTitle(doc, title, y);
 
@@ -785,6 +995,31 @@ function drawRisksSection(doc: jsPDF, risks: ModuleOutput[], title: string, star
     doc.setFontSize(8);
     doc.setTextColor(...colors.text);
     doc.text(levelLabel, MARGIN + CONTENT_WIDTH - 4, y + 6, { align: 'right' });
+    // Širina oznake se izmeri, DOKLER je nastavljena njena pisava: izmerjena po
+    // preklopu na drobnejšo pisavo žetona je bila prekratka in žeton je zlezel
+    // čez besedilo "visoko tveganje".
+    const levelLabelWidth = doc.getTextWidth(levelLabel);
+
+    /**
+     * Žeton z rokom levo od stopnje — enako kot RiskCard na zaslonu.
+     *
+     * Datum je doslej živel samo sredi stavka v opombi, kjer se bere kot podatek.
+     * Kot žeton se bere kot ura, ki teče, in prav to tehnični rok tudi je.
+     */
+    const deadline = riskDeadline(risk, now);
+    if (deadline) {
+      setFont(doc, deadline.expired ? 'bold' : 'normal');
+      doc.setFontSize(7);
+      const chipText = deadlineChipText(deadline);
+      const chipWidth = doc.getTextWidth(chipText) + 5;
+      const chipX = MARGIN + CONTENT_WIDTH - 4 - levelLabelWidth - 4 - chipWidth;
+
+      doc.setFillColor(...PALETTE.white);
+      doc.setDrawColor(...(deadline.expired ? PALETTE.danger : PALETTE.border));
+      doc.roundedRect(chipX, y + 2, chipWidth, 5.5, 1.5, 1.5, 'FD');
+      doc.setTextColor(...(deadline.expired ? PALETTE.danger : PALETTE.textMuted));
+      doc.text(chipText, chipX + chipWidth / 2, y + 5.9, { align: 'center' });
+    }
 
     if (noteLines.length > 0) {
       setFont(doc, 'normal');

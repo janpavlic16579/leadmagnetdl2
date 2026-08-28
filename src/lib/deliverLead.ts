@@ -200,6 +200,11 @@ export async function deliverLead(
       totalsRange: input.totalsRange,
       highestModule: input.highestModule,
       followUpSequence: input.followUpSequence,
+      // Isti podatek, kot ga dobi strankino poročilo: priprava mora vedeti, katere
+      // številke ima stranka pred sabo, sicer je svetovalec presenečen nad podatkom
+      // iz lastne hiše.
+      accountingCapacity: input.accountingCapacity,
+      coverage: input.coverage,
     });
 
     // Brez webhooka o dostavi ni kaj čakati — priprava tako ali tako pripada

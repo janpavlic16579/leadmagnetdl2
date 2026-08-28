@@ -1,5 +1,4 @@
 import jsPDF from 'jspdf';
-import { roleDisplay } from './answerLabels';
 import { formatEUR, formatEURRange, formatHours, formatPercent, isoDate } from './format';
 import { displayRange, type EURRange } from './range';
 import { slugify, type DownloadFile } from './download';
@@ -23,12 +22,15 @@ import {
   setFont,
 } from './pdfKit';
 import {
-  contactPerson,
-  hourAssumptionSource,
-  taxNumberCell,
+  assumptionSource,
+  headlinePainRows,
+  outputLabel,
+  qualificationRows,
+  scoreRows,
   type MeasuredArea,
   type SalesReport,
 } from './salesReport';
+import { SHARED_COPY } from '../config/copy';
 
 /**
  * Prodajna priprava na pogovor.
@@ -43,7 +45,9 @@ import {
  * ostalo je zdaj podnaslov znotraj teh petih, nič vsebine ni izpadlo.
  *
  * Zgradba mora biti ista kot v salesReportHtml.ts — svetovalec bere obe datoteki
- * in razlika med njima bi izgledala kot razlika v podatkih.
+ * in razlika med njima bi izgledala kot razlika v podatkih. Vrstice razdelkov 1 in 2
+ * zato nastanejo v salesReport.ts (scoreRows, qualificationRows) in se tu samo
+ * izpišejo; parnost varuje salesReportParity.test.ts.
  *
  * Datoteka se fizično prenese na napravo, kjer sedi stranka, zato je ocena
  * ustreznosti ubesedena kot ustreznost in ne kot sodba o podjetju.
@@ -69,7 +73,7 @@ export async function buildSalesPdfFile(report: SalesReport): Promise<DownloadFi
 
   const company = slugify(report.meta.companyName);
   return {
-    filename: `datalab-prodajna-priprava${company ? `-${company}` : ''}-${isoDate(new Date(report.meta.generatedAtISO))}.pdf`,
+    filename: `datalab-priprava-na-pogovor${company ? `-${company}` : ''}-${isoDate(new Date(report.meta.generatedAtISO))}.pdf`,
     blob: doc.output('blob'),
   };
 }
@@ -115,37 +119,29 @@ function drawHeader(
 
 function drawQualification(doc: jsPDF, report: SalesReport, startY: number): number {
   const q = report.qualification;
-  const band = `${formatPercent(q.systemGap.min)} – ${formatPercent(q.systemGap.max)}`;
 
-  // Zrcali vrstice v salesReportHtml.ts, isti vrstni red — svetovalec bere obe
-  // datoteki in razlika med njima bi izgledala kot razlika v podatkih.
-  const rows: string[][] = [
-    ['Kontaktna oseba', contactPerson(report) || '—'],
-    ['E-naslov', report.meta.email || '—'],
-    ['Telefon', report.meta.phone || '—'],
-    ['Davčna številka', taxNumberCell(report)],
-    ['Dejavnost', q.industryLabel],
-    ['Vprašalnik', q.segmentName],
-    ['Velikost', `${q.sizeClass} zaposlenih (vneseno: ${q.employeeCount})`],
-    ['Vlogo navaja kot', roleDisplay(q.roleLabel, q.roleOther)],
-    ['Pretežno dela', q.businessTypeLabel ?? '—'],
-    ['Sedanji sistem', q.currentSystemLabel ?? '—'],
-    ['Obstoječi uporabnik PANTHEON', q.isPantheonCustomer ? 'Da' : 'Ne'],
-    ['Vrzel sedanjega sistema (prodajni signal)', `${band} — v izračun ne vstopa`],
-    ['Vir obiska', report.meta.utmSource ?? 'neposredno'],
-    ['Privolitev — obdelava osebnih podatkov', report.meta.consentProcessing ? 'Da' : 'Ne'],
-    ['Privolitev — ponudbe PANTHEON', report.meta.consentOffers ? 'Da' : 'Ne'],
-    ['Privolitev — vsebine in dogodki', report.meta.consentContent ? 'Da' : 'Ne'],
-  ];
-
+  // Vrstice pridejo iz salesReport.qualificationRows — ista funkcija napaja HTML.
+  // Prej sta bili tabeli prepisani ročno in varovani samo s komentarjem; svetovalec
+  // bere obe datoteki in razlika med njima izgleda kot razlika v podatkih.
   let y = ensurePageSpace(doc, startY, 24);
   y = drawSectionTitle(doc, 'Osnovni podatki', y);
-  y = drawTable(doc, { head: ['', 'Odgovor'], rows, startY: y, columnWidths: [62] });
+  y = drawTable(doc, {
+    head: ['', 'Odgovor'],
+    rows: qualificationRows(report).map(([label, value]) => [label, value]),
+    startY: y,
+    columnWidths: [62],
+  });
 
-  if (!q.isPantheonCustomer) {
+  if (!q.technicalRiskModuleShown) {
     y = drawMutedParagraph(
       doc,
       'Stranka ni obstoječi uporabnik PANTHEON, zato ji tehnična opozorila o rokih (SQL Server, Windows Server, ZIERDED) niso bila prikazana. Njihova odsotnost v tem poročilu torej ni podatek o podjetju.',
+      y,
+    );
+  } else if (q.deadlines.length === 0) {
+    y = drawMutedParagraph(
+      doc,
+      'Tehnična opozorila o rokih smo ji pokazali, odkljukala ni nobenega — po njeni izjavi ti roki zanjo ne veljajo.',
       y,
     );
   }
@@ -196,17 +192,50 @@ function drawSummary(doc: jsPDF, report: SalesReport, startY: number): number {
     columnWidths: [58, 34],
   });
 
+  y = drawClientView(doc, report, y);
+
   if (s.confidence) {
     y = drawMutedParagraph(doc, `${CONFIDENCE_LABEL[s.confidence]}. ${s.confidenceReason}`, y);
   }
-  if (report.softness.plausibilityWarning) {
+
+  // Opozorilo o verjetnosti stoji samo v razdelku 1, nad zneskom: pove, česa svetovalec
+  // ne sme izgovoriti, kar je uporabno le pred tem, ko znesek izgovori.
+  const missingCause = report.measured.filter(
+    (area) => area.totalEUR > 0 && area.mainCauseLabel === null,
+  );
+  if (missingCause.length > 0) {
     y = drawMutedParagraph(
       doc,
-      `Opozorilo o verjetnosti: ${report.softness.plausibilityWarning}`,
+      `Brez izbranega glavnega vzroka: ${missingCause
+        .map((area) => `${area.title} (${formatEUR(area.totalEUR)})`)
+        .join(', ')}. Za ta področja velja previden privzeti delež — vprašanje po vzroku je najcenejši dvig naslovljivega potenciala.`,
       y,
     );
   }
+
   return y;
+}
+
+/** Kaj ima stranka pred sabo — glej SalesReportClientView. */
+function drawClientView(doc: jsPDF, report: SalesReport, startY: number): number {
+  const view = report.clientView;
+  const rows: string[][] = [['Skupaj na leto', view.heroText]];
+  if (view.derivativesText) rows.push(['Iz tega izpelje', view.derivativesText]);
+  if (view.coverageText) rows.push(['Pokritost', view.coverageText]);
+  if (view.accountingCapacityText) rows.push(['Prevedeno v posel', view.accountingCapacityText]);
+
+  let y = drawSubTitle(doc, 'Kaj stranka gleda v svojem poročilu', startY);
+  y = drawTable(doc, { head: ['', 'Kot to bere stranka'], rows, startY: y, columnWidths: [46] });
+
+  if (view.payback) {
+    y = drawTable(doc, {
+      head: [SHARED_COPY.paybackInvestmentHeader, SHARED_COPY.paybackDurationHeader],
+      rows: view.payback.map((row) => [row.investmentText, row.durationText]),
+      startY: ensurePageSpace(doc, y, 22),
+      columnWidths: [60],
+    });
+  }
+  return drawMutedParagraph(doc, view.paybackNote, y);
 }
 
 // --- 3b. Njihovi največji painpointi -----------------------------------------
@@ -216,34 +245,40 @@ function drawTriage(doc: jsPDF, report: SalesReport, startY: number): number {
 
   let y = ensurePageSpace(doc, startY, 30);
 
-  const painfulUnmeasured = report.triage.filter(
-    (row) => !row.measured && row.score !== null && row.score >= 2,
-  );
-
+  // Vrstni red določi builder (najbolj boleče na vrh), tri stanja namesto dveh.
+  // Opomba o neizmerjenih bolečih področjih je odslej v razdelku 1 — po dvigu tu ne
+  // pove nič novega, dokument pa se ne sme daljšati.
   y = drawTable(doc, {
-    head: ['Področje', 'Ocena stranke', 'Izmerjeno'],
+    head: ['Področje', 'Ocena stranke', 'Stanje', 'Letni znesek'],
     rows: report.triage.map((row) => [
       row.title,
       row.scoreLabel ? `${row.scoreLabel} (${row.score}/3)` : 'ni ocenjeno',
-      row.measured ? 'da' : 'ne',
+      triageState(row),
+      row.annualEUR === null ? '—' : formatEUR(row.annualEUR),
     ]),
     startY: y,
-    columnWidths: [78, 62],
+    columnWidths: [62, 42, 34],
+    lastColumnIsAmount: true,
   });
 
-  if (painfulUnmeasured.length > 0) {
-    // Najboljše vprašanje za sestanek: področje, ki ga je stranka sama označila za
-    // boleče, a ga ni izbrala za izračun. Znesek zanj torej sploh ni na papirju.
-    y = drawMutedParagraph(
-      doc,
-      `Neizmerjeno, a ocenjeno kot boleče: ${painfulUnmeasured
-        .map((row) => row.title)
-        .join(', ')}. Za ta področja ni v poročilu nobenega zneska — vprašanje zanje je najbolj naravno izhodišče pogovora.`,
-      y,
-    );
+  const deadlines = report.qualification.deadlines;
+  if (deadlines.length > 0) {
+    y = drawSubTitle(doc, 'Tehnični roki, ki jih je odkljukala', y);
+    y = drawTable(doc, {
+      head: ['Rok', 'Stanje'],
+      rows: deadlines.map((row) => [row.label, row.statusText]),
+      startY: ensurePageSpace(doc, y, 22),
+      columnWidths: [72],
+    });
   }
 
   return y;
+}
+
+/** Tri stanja namesto dveh — glej TriageRow.answered. */
+function triageState(row: SalesReport['triage'][number]): string {
+  if (row.answered) return 'izmerjeno';
+  return row.selected ? 'izbrano, a prazno' : 'ni izbrano';
 }
 
 // --- Po področjih ------------------------------------------------------------
@@ -270,12 +305,7 @@ function drawAreas(doc: jsPDF, report: SalesReport, startY: number): number {
 
     const outputRows = area.outputs
       .filter((output) => (output.valueEUR ?? 0) > 0)
-      .map((output) => [
-        output.hoursPerMonth
-          ? `${output.label} (${formatHours(output.hoursPerMonth)}/mesec)`
-          : output.label,
-        formatEUR(output.valueEUR ?? 0),
-      ]);
+      .map((output) => [outputLabel(output), formatEUR(output.valueEUR ?? 0)]);
     if (outputRows.length > 0) {
       y = drawTable(doc, {
         head: ['Izračunana postavka', 'Letni znesek'],
@@ -311,6 +341,9 @@ function drawAreaIntro(doc: jsPDF, area: MeasuredArea, y: number): number {
     parts.push(
       `Iz tega vzroka izhaja naslovljiv delež ${formatPercent(area.addressableShare)} — toliko od zneska je z boljšimi procesi sploh mogoče nasloviti.`,
     );
+  }
+  for (const capped of area.cappedOutputs) {
+    parts.push(`Pri postavki "${capped.label}" je omejen na ${formatPercent(capped.cap)}.`);
   }
   return drawMutedParagraph(doc, parts.join(' '), y);
 }
@@ -409,10 +442,38 @@ function drawActions(doc: jsPDF, report: SalesReport, startY: number): number {
  */
 function drawScore(doc: jsPDF, report: SalesReport, startY: number): number {
   const { icp } = report;
-  const deal = report.playbook.dealSizing;
 
   let y = ensurePageSpace(doc, startY, 46);
   y = drawSectionTitle(doc, 'Ocena — kvalifikacija stranke', y);
+
+  // Prošnja za posvet je namera in ne dovoljenje — stranka je sama zaprosila za klic.
+  // Rumeni pas po vzorcu računovodskega pasu v pdf.ts; besedilo citira njeno kljukico
+  // dobesedno in ne obljublja roka, ker se dokument v rezervnem načinu prenese njej.
+  if (report.meta.consentConsulting) {
+    const bandHeight = 16;
+    y = ensurePageSpace(doc, y, bandHeight + 4);
+    doc.setFillColor(...PALETTE.brandYellow);
+    doc.roundedRect(MARGIN, y, CONTENT_WIDTH, bandHeight, 2, 2, 'F');
+    doc.setTextColor(...PALETTE.brandDark);
+    setFont(doc, 'bold');
+    doc.setFontSize(10);
+    doc.text('Stranka je označila: „Da, želim brezplačen posvet — kontaktirajte me.“', MARGIN + 5, y + 6.5);
+    setFont(doc, 'normal');
+    doc.setFontSize(8.5);
+    doc.text(
+      report.meta.phone
+        ? `Telefon: ${report.meta.phone}`
+        : `Telefona ni pustila — dosegljiva po e-pošti: ${report.meta.email || '—'}`,
+      MARGIN + 5,
+      y + 12,
+    );
+    y += bandHeight + 5;
+  }
+
+  // Opozorilo o verjetnosti stoji NAD zneskom: pove, česa svetovalec ne sme izgovoriti.
+  if (report.softness.plausibilityWarning) {
+    y = drawMutedParagraph(doc, `Preden izgovorite znesek: ${report.softness.plausibilityWarning}`, y);
+  }
 
   const cardHeight = 16;
   y = ensurePageSpace(doc, y, cardHeight + 4);
@@ -432,17 +493,24 @@ function drawScore(doc: jsPDF, report: SalesReport, startY: number): number {
   doc.text(icp.bandNote, PAGE_WIDTH - MARGIN - 5, y + 10, { align: 'right' });
   y += cardHeight + 5;
 
-  return drawTable(doc, {
+  // Vrstice pridejo iz salesReport.scoreRows — ista funkcija napaja HTML.
+  y = drawTable(doc, {
     head: ['', 'Ocena'],
-    rows: [
-      ['Velikost posla', `${deal.sizeLabel} (${report.qualification.sizeClass} zaposlenih)`],
-      ['Izmerjena letna bolečina', formatEUR(deal.measuredLossEUR)],
-      ['Nujnost', `${deal.urgency} — ${deal.urgencyReason}`],
-      ['Priporočena licenca', report.playbook.recommendedPantheon.licence.name],
-    ],
+    rows: scoreRows(report).map(([label, value]) => [label, value]),
     startY: ensurePageSpace(doc, y, 24),
     columnWidths: [56],
   });
+
+  const pains = headlinePainRows(report).map(([label, value]) => [label, value]);
+  if (pains.length > 0) {
+    y = drawTable(doc, {
+      head: ['', 'Kje boli'],
+      rows: pains,
+      startY: ensurePageSpace(doc, y, 22),
+      columnWidths: [56],
+    });
+  }
+  return y;
 }
 
 // --- 3. Rezultati vprašalnika ------------------------------------------------
@@ -453,7 +521,7 @@ function drawResults(doc: jsPDF, report: SalesReport, startY: number): number {
   y = drawSectionTitle(doc, 'Rezultati vprašalnika', y);
   y = drawSubTitle(doc, 'Njihove info', y);
   y = drawSummary(doc, report, y);
-  y = drawHourAssumptions(doc, report, y);
+  y = drawAssumptions(doc, report, y);
   y = drawAreas(doc, report, y);
 
   y = drawSubTitle(doc, 'Njihovi največji painpointi', ensurePageSpace(doc, y, 24));
@@ -473,16 +541,20 @@ function drawSubTitle(doc: jsPDF, title: string, y: number): number {
   return next + 8;
 }
 
-/** Urne postavke: niso odgovor na modul, zato svoja kratka tabela. */
-function drawHourAssumptions(doc: jsPDF, report: SalesReport, startY: number): number {
-  const rows = report.softness.hourAssumptions;
+/** Finančna osnova: ni odgovor na modul, zato svoja kratka tabela. */
+function drawAssumptions(doc: jsPDF, report: SalesReport, startY: number): number {
+  const rows = report.softness.assumptions;
   if (rows.length === 0) return startY;
 
   return drawTable(doc, {
-    head: ['Urna postavka', 'Vrednost', 'Vir'],
-    rows: rows.map((row) => [row.label, formatEUR(row.valueEUR), hourAssumptionSource(row)]),
+    head: ['Postavka', 'Vrednost', 'Vir'],
+    rows: rows.map((row) => [
+      row.label,
+      row.valueText,
+      assumptionSource(row) + (row.consequence ? ` — ${row.consequence}` : ''),
+    ]),
     startY: ensurePageSpace(doc, startY, 22),
-    columnWidths: [82, 26],
+    columnWidths: [72, 26],
   });
 }
 
@@ -599,25 +671,8 @@ function drawIcp(doc: jsPDF, report: SalesReport, startY: number): void {
   let y = ensurePageSpace(doc, startY, 40);
   y = drawSectionTitle(doc, 'Kvalifikacija stranke — podrobnejša razlaga', y);
 
-  // Skupna ocena kot kartica, da je vidna na prvi pogled.
-  const cardHeight = 16;
-  y = ensurePageSpace(doc, y, cardHeight + 4);
-  doc.setFillColor(...PALETTE.cream);
-  doc.setDrawColor(...PALETTE.border);
-  doc.setLineWidth(0.2);
-  doc.roundedRect(MARGIN, y, CONTENT_WIDTH, cardHeight, 1.5, 1.5, 'FD');
-
-  setFont(doc, 'bold');
-  doc.setFontSize(16);
-  doc.setTextColor(...PALETTE.amber);
-  doc.text(`${icp.total} / 100 · pas ${icp.band}`, MARGIN + 5, y + 10);
-
-  setFont(doc, 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(...PALETTE.textMuted);
-  doc.text(icp.bandNote, PAGE_WIDTH - MARGIN - 5, y + 10, { align: 'right' });
-  y += cardHeight + 5;
-
+  // Kartica s skupno oceno stoji že v razdelku 1 in se tu ne ponovi: razdelek je
+  // utemeljitev sodbe, ne sodba drugič. Sproščeni prostor pripada vrhu dokumenta.
   y = drawTable(doc, {
     head: ['Dimenzija', 'Točke', 'Iz česa'],
     rows: icp.dimensions.map((dimension) => [
@@ -631,7 +686,9 @@ function drawIcp(doc: jsPDF, report: SalesReport, startY: number): void {
 
   drawMutedParagraph(
     doc,
-    'Merila so začetne ocene brez empirije in se uravnavajo v src/config/icp.ts. Ocena pove ustreznost profilu, ne kakovosti podjetja.',
+    // Brez poti do izvorne kode: dokument se v rezervnem načinu prenese na napravo
+    // stranke, kjer je sklic na datoteko v repozitoriju tuje telo.
+    'Merila so začetna ocena in se še umerjajo. Ocena pove ustreznost profilu, ne kakovosti podjetja.',
     y,
     7.5,
   );

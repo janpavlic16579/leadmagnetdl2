@@ -1,10 +1,12 @@
-import { roleDisplay } from './answerLabels';
+import { SHARED_COPY } from '../config/copy';
 import { formatEUR, formatEURRange, formatHours, formatPercent } from './format';
 import { displayRange, type EURRange } from './range';
 import {
-  contactPerson,
-  hourAssumptionSource,
-  taxNumberCell,
+  assumptionSource,
+  headlinePainRows,
+  outputLabel,
+  qualificationRows,
+  scoreRows,
   type MeasuredArea,
   type SalesReport,
 } from './salesReport';
@@ -70,21 +72,40 @@ ${sectionIcp(report)}
  */
 function sectionScore(report: SalesReport): string {
   const { icp } = report;
-  const deal = report.playbook.dealSizing;
+
+  // Prošnja za posvet je edino polje obrazca, ki izraža NAMERO in ne dovoljenja —
+  // stranka je sama zaprosila za klic. Citirana je dobesedno, brez obljube roka:
+  // obljubo bi bilo treba držati, dokument pa se v rezervnem načinu prenese prav njej.
+  const consult = report.meta.consentConsulting
+    ? `<section class="highlight">
+    <p><strong>Stranka je ob oddaji označila: „Da, želim brezplačen posvet — kontaktirajte me.“</strong></p>
+    <p class="note">${esc(
+      report.meta.phone
+        ? `Telefon: ${report.meta.phone}`
+        : `Telefona ni pustila — dosegljiva po e-pošti: ${report.meta.email || '—'}`,
+    )}</p>
+  </section>`
+    : '';
+
+  // Opozorilo o verjetnosti stoji NAD zneskom in ne pod njim: pove, česa svetovalec
+  // ne sme izgovoriti, kar je uporabno samo pred tem, ko znesek izgovori.
+  const warning = report.softness.plausibilityWarning
+    ? `<p class="warn"><strong>Preden izgovorite znesek:</strong> ${esc(
+        report.softness.plausibilityWarning,
+      )}</p>`
+    : '';
 
   return `<section class="icp">
   <h2>Ocena — kvalifikacija stranke</h2>
+  ${consult}
+  ${warning}
   <div class="icp-head">
     <span class="icp-total">${icp.total} / 100</span>
     <span class="icp-band icp-band-${icp.band}">pas ${icp.band}</span>
     <span class="note">${esc(icp.bandNote)}</span>
   </div>
-  ${keyValueTable([
-    ['Velikost posla', `${deal.sizeLabel} (${report.qualification.sizeClass} zaposlenih)`],
-    ['Izmerjena letna bolečina', formatEUR(deal.measuredLossEUR)],
-    ['Nujnost', `${deal.urgency} — ${deal.urgencyReason}`],
-    ['Priporočena licenca', report.playbook.recommendedPantheon.licence.name],
-  ])}
+  ${keyValueTable(scoreRows(report))}
+  ${keyValueTable(headlinePainRows(report))}
 </section>`;
 }
 
@@ -140,25 +161,26 @@ function subsectionTheirInfo(report: SalesReport): string {
     );
   }
 
-  const hours = report.softness.hourAssumptions;
+  const assumptions = report.softness.assumptions;
 
   return `<h3>Njihove info</h3>
   <div class="cards">${cards.join('')}</div>
-  <p class="note">${esc(s.confidenceReason)}</p>
+  ${clientViewBlock(report)}
+  <p class="note"><strong>${esc(
+    s.confidence ? SHARED_COPY.confidenceLabel[s.confidence] : 'Zanesljivost ni ocenjena',
+  )}.</strong> ${esc(s.confidenceReason)}</p>
+  ${missingMainCauseNote(report)}
   ${
-    report.softness.plausibilityWarning
-      ? `<p class="warn"><strong>Opozorilo o verjetnosti:</strong> ${esc(report.softness.plausibilityWarning)}</p>`
-      : ''
-  }
-  ${
-    hours.length > 0
+    assumptions.length > 0
       ? table(
-          ['Urna postavka', 'Vrednost', 'Vir'],
-          hours.map((row) => [
+          ['Postavka', 'Vrednost', 'Vir'],
+          assumptions.map((row) => [
             row.label,
-            formatEUR(row.valueEUR),
+            row.valueText,
             raw(
-              `<span class="${row.estimated ? 'soft' : 'firm'}">${esc(hourAssumptionSource(row))}</span>`,
+              `<span class="${row.estimated ? 'soft' : 'firm'}">${esc(
+                assumptionSource(row) + (row.consequence ? ` — ${row.consequence}` : ''),
+              )}</span>`,
             ),
           ]),
         )
@@ -167,30 +189,62 @@ function subsectionTheirInfo(report: SalesReport): string {
   ${report.measured.map(areaBlock).join('\n')}`;
 }
 
+/**
+ * Kaj ima stranka pred sabo. Vse številke gredo skozi iste formatirnike in ista vrata
+ * kot njeno poročilo — glej SalesReportClientView.
+ */
+function clientViewBlock(report: SalesReport): string {
+  const view = report.clientView;
+  const rows: [string, string][] = [['Skupaj na leto', view.heroText]];
+  if (view.derivativesText) rows.push(['Iz tega izpelje', view.derivativesText]);
+  if (view.coverageText) rows.push(['Pokritost', view.coverageText]);
+  if (view.accountingCapacityText) {
+    rows.push(['Prevedeno v posel', view.accountingCapacityText]);
+  }
+
+  const payback = view.payback
+    ? table(
+        [SHARED_COPY.paybackInvestmentHeader, SHARED_COPY.paybackDurationHeader],
+        view.payback.map((row) => [row.investmentText, row.durationText]),
+      )
+    : '';
+
+  return `<h4>Kaj stranka gleda v svojem poročilu</h4>
+  ${keyValueTable(rows)}
+  ${payback}
+  <p class="note">${esc(view.paybackNote)}</p>`;
+}
+
+/**
+ * Glavni vzrok je edini koeficient NAD izmerjenim zneskom — neodgovor pomeni tihi
+ * previdni delež namesto morebiti precej višjega. To je najcenejši dvig številke na
+ * sestanku, zato mora biti viden.
+ */
+function missingMainCauseNote(report: SalesReport): string {
+  const areas = report.measured.filter((area) => area.totalEUR > 0 && area.mainCauseLabel === null);
+  if (areas.length === 0) return '';
+  return `<p class="warn"><strong>Brez izbranega glavnega vzroka:</strong> ${esc(
+    areas.map((area) => `${area.title} (${formatEUR(area.totalEUR)})`).join(', '),
+  )}. Za ta področja velja previden privzeti delež — vprašanje po vzroku je najcenejši dvig
+  naslovljivega potenciala.</p>`;
+}
+
 function subsectionPainPoints(report: SalesReport): string {
-  const painful = report.triage.filter(
-    (row) => !row.measured && row.score !== null && row.score >= 2,
-  );
   const questions = report.playbook.openingQuestions;
   const objections = report.playbook.objections;
 
+  // Vrstni red je določen v builderju (najbolj boleče na vrh) — tu se samo izpiše.
   const triageTable =
     report.triage.length > 0
       ? table(
-          ['Področje', 'Ocena stranke', 'Izmerjeno'],
+          ['Področje', 'Ocena stranke', 'Stanje', 'Letni znesek'],
           report.triage.map((row) => [
             row.title,
             row.scoreLabel ? `${row.scoreLabel} (${row.score}/3)` : 'ni ocenjeno',
-            row.measured ? 'da' : raw('<span class="soft">ne</span>'),
+            triageStateCell(row),
+            row.annualEUR === null ? '—' : formatEUR(row.annualEUR),
           ]),
         )
-      : '';
-
-  const painfulNote =
-    painful.length > 0
-      ? `<p class="note"><strong>Neizmerjeno, a ocenjeno kot boleče:</strong>
-         ${esc(painful.map((row) => row.title).join(', '))}. Za ta področja v poročilu ni nobenega
-         zneska — vprašanje zanje je najbolj naravno izhodišče pogovora.</p>`
       : '';
 
   const questionsBlock =
@@ -210,7 +264,7 @@ function subsectionPainPoints(report: SalesReport): string {
          ${objections
            .map(
              (item) => `<article>
-      <h3>${esc(item.objection)}</h3>
+      <h5>${esc(item.objection)}</h5>
       <p class="note">Sproženo: ${esc(item.trigger)}</p>
       <p>${esc(item.answer)}</p>
     </article>`,
@@ -218,12 +272,39 @@ function subsectionPainPoints(report: SalesReport): string {
            .join('')}`
       : '';
 
+  // Opomba o neizmerjenih bolečih področjih stoji v razdelku 1 (headlinePainRows) in
+  // se tu ne ponovi. Roki pred tveganji — isti vrstni red kot v PDF.
   return `<h3>Njihovi največji painpointi</h3>
   ${triageTable}
-  ${painfulNote}
+  ${deadlinesBlock(report)}
   ${risksBlock(report)}
   ${questionsBlock}
   ${objectionsBlock}`;
+}
+
+/** Tri stanja namesto dveh — glej TriageRow.answered. */
+function triageStateCell(row: SalesReport['triage'][number]): Cell {
+  if (row.answered) return 'izmerjeno';
+  if (row.selected) return raw('<span class="soft">izbrano, a prazno</span>');
+  return raw('<span class="soft">ni izbrano</span>');
+}
+
+/**
+ * Roki z datumi. Kartice tveganj nosijo besedilo opozorila, datum pa je tisto, kar gre
+ * v koledar — in pri pretečenem roku je to najmočnejši argument nujnosti, kar jih
+ * poročilo premore.
+ */
+function deadlinesBlock(report: SalesReport): string {
+  const deadlines = report.qualification.deadlines;
+  if (deadlines.length === 0) return '';
+  return `<h4>Tehnični roki, ki jih je odkljukala</h4>
+  ${table(
+    ['Rok', 'Stanje'],
+    deadlines.map((row) => [
+      row.label,
+      row.expired ? raw(`<span class="soft">${esc(row.statusText)}</span>`) : row.statusText,
+    ]),
+  )}`;
 }
 
 
@@ -261,20 +342,24 @@ function sectionRecommendation(report: SalesReport): string {
  */
 function sectionIcp(report: SalesReport): string {
   const { icp } = report;
+  // Skupna ocena je že v razdelku 1; tu jo ne ponavljamo. Razčlenitev je gradivo za
+  // uravnavanje meril in ne za sestanek, zato je zložena — svetovalec deset minut pred
+  // sestankom potrebuje vrh dokumenta, ne sedmih dimenzij.
   return `<section class="icp">
   <h2>Kvalifikacija stranke — podrobnejša razlaga</h2>
-  <p class="note">Skupna ocena <strong>${icp.total} / 100</strong> (pas ${icp.band}) je vsota spodnjih
-  sedmih dimenzij. Vsaka pove, kaj je izmerila in koliko točk je prispevala.</p>
-  ${table(
-    ['Dimenzija', 'Točke', 'Iz česa'],
-    icp.dimensions.map((dimension) => [
-      dimension.label,
-      `${Math.round(dimension.points)} / ${Math.round(dimension.weight * 100)}`,
-      dimension.note,
-    ]),
-  )}
-  <p class="note">Merila so začetne ocene brez empirije in se uravnavajo v
-  <code>src/config/icp.ts</code>. Ocena pove ustreznost profilu, ne kakovosti podjetja.</p>
+  <details>
+    <summary>Razčlenitev ocene po sedmih dimenzijah</summary>
+    ${table(
+      ['Dimenzija', 'Točke', 'Iz česa'],
+      icp.dimensions.map((dimension) => [
+        dimension.label,
+        `${Math.round(dimension.points)} / ${Math.round(dimension.weight * 100)}`,
+        dimension.note,
+      ]),
+    )}
+  </details>
+  <p class="note">Merila so začetna ocena in se še umerjajo. Ocena pove ustreznost profilu,
+  ne kakovosti podjetja.</p>
 </section>`;
 }
 
@@ -282,39 +367,21 @@ function sectionIcp(report: SalesReport): string {
 
 function sectionQualification(report: SalesReport): string {
   const q = report.qualification;
-  const band = `${formatPercent(q.systemGap.min)} – ${formatPercent(q.systemGap.max)}`;
 
-  const rows: [string, string][] = [
-    // Kontakt gre na vrh: svetovalec najprej potrebuje, koga pokliče.
-    ['Kontaktna oseba', contactPerson(report) || '—'],
-    ['E-naslov', report.meta.email || '—'],
-    ['Telefon', report.meta.phone || '—'],
-    ['Davčna številka', taxNumberCell(report)],
-    ['Dejavnost', q.industryLabel],
-    ['Vprašalnik', q.segmentName],
-    ['Velikost', `${q.sizeClass} zaposlenih (vneseno: ${q.employeeCount})`],
-    ['Vlogo navaja kot', roleDisplay(q.roleLabel, q.roleOther)],
-    ['Pretežno dela', q.businessTypeLabel ?? '—'],
-    ['Sedanji sistem', q.currentSystemLabel ?? '—'],
-    ['Obstoječi uporabnik PANTHEON', q.isPantheonCustomer ? 'Da' : 'Ne'],
-    ['Vrzel sedanjega sistema (prodajni signal)', `${band} — v izračun ne vstopa`],
-    ['Vir obiska', report.meta.utmSource ?? 'neposredno'],
-    // Tri ločene vrstice in ne ena združena: revizijsko vprašanje je "ali je
-    // privolil v trženje?", na kar skupna celica ne odgovori.
-    ['Privolitev — obdelava osebnih podatkov', report.meta.consentProcessing ? 'Da' : 'Ne'],
-    ['Privolitev — ponudbe PANTHEON', report.meta.consentOffers ? 'Da' : 'Ne'],
-    ['Privolitev — vsebine in dogodki', report.meta.consentContent ? 'Da' : 'Ne'],
-  ];
-
-  const note = q.isPantheonCustomer
-    ? ''
-    : `<p class="note">Stranka ni obstoječi uporabnik PANTHEON, zato ji tehnična opozorila o rokih
+  // Trije primeri, ne dva: modula ni videla / videla ga je in ni odkljukala nič /
+  // odkljukala je. Srednji je odgovor in ne molk.
+  const note = !q.technicalRiskModuleShown
+    ? `<p class="note">Stranka ni obstoječi uporabnik PANTHEON, zato ji tehnična opozorila o rokih
        (SQL Server, Windows Server, ZIERDED) niso bila prikazana. Njihova odsotnost tu torej ni
-       podatek o podjetju.</p>`;
+       podatek o podjetju.</p>`
+    : q.deadlines.length === 0
+      ? `<p class="note">Tehnična opozorila o rokih smo ji pokazali, odkljukala ni nobenega — po
+         njeni izjavi ti roki zanjo ne veljajo.</p>`
+      : '';
 
   return `<section>
   <h2>Osnovni podatki</h2>
-  ${keyValueTable(rows)}
+  ${keyValueTable(qualificationRows(report))}
   ${note}
 </section>`;
 }
@@ -331,6 +398,11 @@ function areaBlock(area: MeasuredArea): string {
   if (area.addressableShare !== null) {
     intro.push(`Naslovljiv delež ${esc(formatPercent(area.addressableShare))}.`);
   }
+  for (const capped of area.cappedOutputs) {
+    intro.push(
+      `Pri postavki „${esc(capped.label)}“ je omejen na ${esc(formatPercent(capped.cap))}.`,
+    );
+  }
 
   const outputs = area.outputs.filter((output) => (output.valueEUR ?? 0) > 0);
 
@@ -342,9 +414,7 @@ function areaBlock(area: MeasuredArea): string {
       ? table(
           ['Izračunana postavka', 'Letni znesek'],
           outputs.map((output) => [
-            output.hoursPerMonth
-              ? `${output.label} (${formatHours(output.hoursPerMonth)}/mesec)`
-              : output.label,
+            outputLabel(output),
             formatEUR(output.valueEUR ?? 0),
           ]),
         )

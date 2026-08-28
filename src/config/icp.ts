@@ -161,9 +161,20 @@ export const ICP_BAND_NOTE: Record<IcpBand, string> = {
 
 const DAY_MS = 86_400_000;
 
-/** Dnevi do roka; negativno pomeni, da je rok že mimo. */
-function daysUntil(deadlineISO: string, fromISO: string): number {
-  return Math.round((Date.parse(deadlineISO) - Date.parse(fromISO)) / DAY_MS);
+/**
+ * Dnevi do roka; negativno pomeni, da je rok že mimo.
+ *
+ * Izvoženo, ker isti rok odslej ni le vhod v oceno nujnosti, ampak tudi vrstica v
+ * pripravi ("POTEKEL 14. 7. 2026, pred 43 dnevi"). Dve štetji dni bi se ob prvi
+ * spremembi razšli in dokument bi si nasprotoval sam s sabo.
+ */
+export function daysUntil(deadlineISO: string, fromISO: string): number {
+  // Oba operanda kot KOLEDARSKA datuma. Rok je datum brez ure, žig pa trenutek; z
+  // mešanico je bilo štetje odvisno od ure oddaje — popoldne na dan roka je izračun
+  // pokazal današnji datum in zraven trdil, da je potekel včeraj.
+  return Math.round(
+    (Date.parse(deadlineISO.slice(0, 10)) - Date.parse(fromISO.slice(0, 10))) / DAY_MS,
+  );
 }
 
 export const ICP_DIMENSIONS: IcpDimension[] = [

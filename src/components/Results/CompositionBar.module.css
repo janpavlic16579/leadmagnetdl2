@@ -1,0 +1,72 @@
+/*
+ * Naložena vrstica sestave naslovne vsote.
+ *
+ * Višina 14 px in ne 6: vrstica ni okrasna črta, ampak edini prikaz razmerja med
+ * tremi vrstami denarja, in mora biti berljiva tudi ob barvni slepoti — barve
+ * serij so ločene po svetlosti (glej --color-chart-* v tokens.css).
+ */
+.bar {
+  display: flex;
+  width: 100%;
+  height: 14px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-accent);
+  margin-bottom: var(--space-3);
+}
+
+/*
+ * Najmanjša vidna širina: koš z enim odstotkom vsote bi bil brez tega širok pol
+ * piksla — v legendi naveden, na vrstici pa neviden, kar izpade kot napaka izrisa.
+ * Bela ločnica loči sosednja segmenta tudi, kadar sta si po svetlosti blizu.
+ */
+.segment {
+  min-width: 3px;
+  border-right: 1px solid var(--color-surface);
+}
+
+.segment:last-child {
+  border-right: none;
+}
+
+.legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* Ime postavke potisne znesek na desni rob — poravnani zneski se berejo kot stolpec. */
+.legendLabel {
+  flex: 1;
+  color: var(--color-text);
+}
+
+.legendValue {
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.legendShare {
+  margin-left: var(--space-2);
+  font-weight: 400;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}

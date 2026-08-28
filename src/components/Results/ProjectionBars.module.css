@@ -1,0 +1,81 @@
+/*
+ * Kumulativa po letih: tri vrstice, ki rastejo do polne širine.
+ *
+ * Mreža in ne flex, ker morajo biti oznaka leta, tir in znesek poravnani v
+ * stolpce — vrstice, katerih stolpci se ne ujemajo, se berejo kot trije ločeni
+ * podatki namesto kot ena naraščajoča vrsta.
+ */
+.list {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.year {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.track {
+  height: 18px;
+  background: var(--color-accent);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  /*
+   * Prehod je namenoma na širini in ne animacija ob vstopu: stolpec zraste, ko
+   * se vrstica razkrije (lib/useReveal). Globalno stikalo za zmanjšano gibanje
+   * (tokens.css) ga skrajša na 0,01 ms.
+   */
+  background: var(--color-chart-margin);
+  transition: width 400ms ease;
+}
+
+/* Zadnje leto je trojni znesek — isti poudarek kot leča v naslovnem pasu. */
+.fillFinal {
+  background: var(--color-primary);
+}
+
+.value {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.note {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+/*
+ * Pod 520 px oznaka leta in znesek ne moreta stati ob tiru: "najmanj 214.356 EUR"
+ * potisne tir pod 60 px in stolpci postanejo neberljivi. Vrstica se zato prelomi
+ * v dve — oznaka in znesek zgoraj, tir čez vso širino spodaj.
+ */
+@media (max-width: 520px) {
+  .row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .track {
+    grid-column: 1 / -1;
+    height: 14px;
+  }
+}

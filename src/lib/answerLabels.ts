@@ -1,9 +1,11 @@
-import { industryAverageBand } from '../config/contexts';
+import { industryAverageBand, industryAverageScaleBand } from '../config/contexts';
 import type {
   ContextOption,
   ContextQuestion,
   CostAssumption,
   CostQuestion,
+  ScaleAssumption,
+  ScaleQuestion,
   SegmentContext,
 } from '../config/contexts';
 import { MAIN_CAUSE_KEY } from '../config/modules/addressableShare';
@@ -70,7 +72,7 @@ export function isPantheonCustomer(
  * obiskovalca razglasili za neodgovor.
  *
  * Povprečje panoge dobi oznako pasu, v katerem leži. Da je to NAŠA ocena in ne
- * obiskovalčeva, pove `source` v prodajni pripravi (hourAssumptionSource) — tu se
+ * obiskovalčeva, pove `source` v prodajni pripravi (assumptionSource) — tu se
  * imenuje samo razpon, v katerem se izračun giblje.
  */
 export function costBandLabel(
@@ -82,6 +84,28 @@ export function costBandLabel(
     return question.bands.find((band) => band.id === assumption.bandId)?.label ?? null;
   }
   if (assumption.source === 'industryAverage') return industryAverageBand(question)?.label ?? null;
+  return null;
+}
+
+/**
+ * Isto za merska vprašanja (prihodek, marža, strošek kapitala).
+ *
+ * Dvojnik `costBandLabel` in ne skupna generična funkcija: `CostBand` govori v
+ * `minEUR/maxEUR/midpointEUR`, `ScaleBand` pa v `min/max/midpoint`, ker je enkrat EUR
+ * in drugič delež. Ista ločnica je namerna že pri `industryAverageBand` /
+ * `industryAverageScaleBand` (config/contexts) — poenotenje prek `any` bi enoto skrilo.
+ */
+export function scaleBandLabel(
+  question: ScaleQuestion | undefined,
+  assumption: ScaleAssumption,
+): string | null {
+  if (!question) return null;
+  if (assumption.source === 'band') {
+    return question.bands.find((band) => band.id === assumption.bandId)?.label ?? null;
+  }
+  if (assumption.source === 'industryAverage') {
+    return industryAverageScaleBand(question)?.label ?? null;
+  }
   return null;
 }
 
