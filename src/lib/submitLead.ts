@@ -1,4 +1,4 @@
-import { CSV_COLUMNS, buildCsvRow, type LeadExportRecord } from './exportRecord';
+import { CSV_COLUMNS, buildRowValues, type LeadExportRecord } from './exportRecord';
 
 /**
  * Dostava leada na konfigurabilen webhook — zapiranje kalibracijske zanke.
@@ -30,7 +30,9 @@ export interface LeadSubmission {
  */
 export interface LeadWirePayload extends LeadSubmission {
   /**
-   * Ista glava in ista vrstica kot pri ročnem izvozu CSV.
+   * Ista glava in ista vrstica kot pri ročnem izvozu CSV, le brez ubežanja —
+   * to pripada obliki CSV, ne podatku (celica preglednice narekovajev ne
+   * potrebuje in jih je prikazala kot del besedila).
    *
    * Sprejemnik s tem ne pozna nobenega polja izračuna: vrstico samo pripne. Če bi
    * stolpce sestavljal sam, bi bila preslikava podvojena — enkrat v
@@ -88,7 +90,7 @@ export async function submitLead(
   try {
     const payload: LeadWirePayload = {
       ...submission,
-      sheet: { columns: CSV_COLUMNS, row: buildCsvRow(submission.record) },
+      sheet: { columns: CSV_COLUMNS, row: buildRowValues(submission.record) },
     };
     const body = JSON.stringify(payload);
 

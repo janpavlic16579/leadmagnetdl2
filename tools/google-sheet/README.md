@@ -10,7 +10,7 @@ preglednici sami. Brez strežnika, brez zunanje storitve, brez stroška.
 razred, kontakt, privolitve, vsi koši zneskov, izbrana področja, triažne ocene,
 zanesljivost, urni postavki z izvorom, `utm_source` in follow-up sekvenca. Skripta
 doda še `prejeto` (čas prejema) in `prodajnaPriprava` (povezava do dokumenta na
-Drive).
+Drive). Ob vsaki oddaji lahko pošlje tudi obvestilo na e-pošto (spodaj).
 
 **Kdo v preglednico NE pride.** Kdor vprašalnik zapusti pred obrazcem — brez
 e-naslova in brez privolitve zapisa ni (`buildLeadExportRecord` tedaj vrne `null`).
@@ -37,6 +37,28 @@ ne ta preglednica.
    ob gradnji (`.github/workflows/deploy.yml`), zato je treba po nastavitvi
    **znova pognati deploy** — sam od sebe se v že objavljen sveženj ne prikrade.
 6. **Lokalno** (neobvezno): isti naslov v `.env`, po vzorcu `.env.example`.
+
+## Obvestilo na e-pošto ob vsaki oddaji
+
+V `Koda.gs` na vrhu izpolnite `E_NASLOV_ZA_OBVESTILA` (več naslovov ločite z
+vejico); prazno pomeni brez obvestil. Nato spremembo **razmestite kot novo
+različico** (spodaj) — ob tem bo Google zahteval dodatno dovoljenje za pošiljanje
+pošte v vašem imenu.
+
+Sporočilo je sestavljeno tako, da se je mogoče odločiti brez odpiranja
+preglednice: podjetje, panoga, velikost, kontakt, letni znesek po treh koših,
+zanesljivost vnosa, izbrana področja in povezavi do prodajne priprave ter
+preglednice. Če je obiskovalec **prosil za posvet**, se to znajde v zadevi
+(`[POSVET] Nov lead: …`) — to je edino polje obrazca, ki pove namero in ne le
+dovoljenja.
+
+Pošta gre **za** zapisom vrstice in v svojem `try/catch`: izčrpana kvota ali
+napačen naslov ne smeta pomeniti, da aplikacija dostavo razume kot neuspelo in
+prodajno pripravo prenese stranki. Dnevna kvota je 100 prejemnikov pri navadnem
+Google računu in 1500 pri Workspacu.
+
+Vgrajena obvestila preglednice (*Orodja → Nastavitve obvestil*) tu **ne
+delujejo** — sprožijo se ob človeškem urejanju, ne ob vpisu iz skripte.
 
 ### Ko skripto spremenite
 

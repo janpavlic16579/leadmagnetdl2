@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { leadWebhookUrl, submitLead, type LeadSubmission } from './submitLead';
-import { buildLeadExportRecord, CSV_COLUMNS, buildCsvRow } from './exportRecord';
+import { buildLeadExportRecord, CSV_COLUMNS, buildRowValues } from './exportRecord';
 import type { ResultTotals } from './potential';
 
 const TOTALS: ResultTotals = {
@@ -115,8 +115,22 @@ describe('submitLead', () => {
 
     const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
     expect(body.sheet.columns).toEqual(CSV_COLUMNS);
-    expect(body.sheet.row).toEqual(buildCsvRow(RECORD));
+    expect(body.sheet.row).toEqual(buildRowValues(RECORD));
     expect(body.sheet.row).toHaveLength(CSV_COLUMNS.length);
+  });
+
+  /**
+   * Vejica v oznaki dejavnosti je v CSV razlog za narekovaje, v celici
+   * preglednice pa se pokažejo kot del besedila.
+   */
+  it('vrednosti NISO ubežane za CSV — narekovaji pripadajo obliki, ne podatku', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    await submitLead(SUBMISSION, 'https://x', fetchImpl as never);
+
+    const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(body.sheet.row[CSV_COLUMNS.indexOf('industryLabel')]).toBe(
+      'Trgovina, veleprodaja in distribucija',
+    );
   });
 
   /**
