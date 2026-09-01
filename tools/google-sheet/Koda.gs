@@ -43,6 +43,12 @@ var NASTAVITVE = {
   SHRANI_PRIPRAVO: true,
   IME_MAPE_PRIPRAV: 'LM-10 prodajne priprave',
 
+  /**
+   * Komu gre obvestilo ob vsaki oddaji. Prazno = brez obvestil.
+   * Več naslovov ločite z vejico: 'prodaja@datalab.si, jan@datalab.si'.
+   */
+  E_NASLOV_ZA_OBVESTILA: '',
+
   /** Prazno = skripta teče v preglednici (Razširitve → Apps Script). */
   ID_PREGLEDNICE: '',
 };
@@ -93,7 +99,17 @@ function doPost(e) {
       }
     }
 
-    zapisiVrstico(zdruziVrednosti(oddaja, povezava));
+    var vrednosti = zdruziVrednosti(oddaja, povezava);
+    zapisiVrstico(vrednosti);
+
+    // ŠELE ZA vrstico in v svojem try/catch. Obvestilo je priročnost, vrstica je
+    // zapis: padla pošta (kvota, napačen naslov) ne sme pomeniti, da aplikacija
+    // dostavo razume kot neuspelo in prodajno pripravo prenese stranki.
+    try {
+      posljiObvestilo(vrednosti);
+    } catch (err) {
+      console.warn('Obvestila ni bilo mogoče poslati: ' + err);
+    }
   } finally {
     kljucavnica.releaseLock();
   }
@@ -220,6 +236,63 @@ function pridobiList() {
     list = preglednica.insertSheet(NASTAVITVE.IME_LISTA);
   }
   return list;
+}
+
+/**
+ * Obvestilo o novem leadu.
+ *
+ * Vsebina je izbrana tako, da se je mogoče odločiti brez odpiranja preglednice:
+ * kdo, iz katere panoge, kako velik, koliko ga stane in ali je PROSIL za posvet.
+ * Zadnje je edino polje, ki pove namero in ne le dovoljenja, zato stoji v zadevi.
+ *
+ * Dnevna kvota MailApp je 100 prejemnikov pri navadnem Google računu in 1500 pri
+ * Workspacu — za lead magnet daleč dovolj, a ob množičnem testiranju jo je mogoče
+ * izčrpati; tedaj obvestila utihnejo, vrstice pa se pišejo naprej.
+ */
+function posljiObvestilo(vrednosti) {
+  var prejemniki = String(NASTAVITVE.E_NASLOV_ZA_OBVESTILA || '').trim();
+  if (!prejemniki) return;
+
+  var v = function (ime) {
+    return vrednosti[ime] === undefined || vrednosti[ime] === '' ? '—' : String(vrednosti[ime]);
+  };
+  var posvet = String(vrednosti.consentConsulting) === 'true';
+  var podjetje = v('companyName');
+  var letno = stevilo(vrednosti.directLossEUR) + stevilo(vrednosti.lostMarginEUR) + stevilo(vrednosti.capacityEUR);
+
+  var vrstice = [
+    (posvet ? 'PROSI ZA POSVET.' : ''),
+    'Podjetje: ' + podjetje + ' (' + v('industryLabel') + ', ' + v('sizeClass') + ' zaposlenih)',
+    'Kontakt: ' + v('firstName') + ' ' + v('lastName') + ', ' + v('role'),
+    'E-naslov: ' + v('email'),
+    'Telefon: ' + v('phone'),
+    'Davčna: ' + v('taxNumber'),
+    '',
+    'Letni izračun: ' + Utilities.formatString('%s EUR', letno.toLocaleString('sl-SI')),
+    '  odliv: ' + v('directLossEUR') + ' EUR · nezaslužena marža: ' + v('lostMarginEUR') +
+      ' EUR · vrednost časa: ' + v('capacityEUR') + ' EUR',
+    'Enkratni kapital: ' + v('oneTimeCapitalEUR') + ' EUR',
+    'Zanesljivost vnosa: ' + v('confidence'),
+    'Področja: ' + v('selectedModules'),
+    'Sekvenca: ' + v('followUpSequence') + ' · vir: ' + v('utmSource'),
+    '',
+    'Prodajna priprava: ' + v('prodajnaPriprava'),
+    'Preglednica: ' + pridobiList().getParent().getUrl(),
+  ].filter(function (vrstica) {
+    return vrstica !== '';
+  });
+
+  MailApp.sendEmail({
+    to: prejemniki,
+    subject: (posvet ? '[POSVET] ' : '') + 'Nov lead: ' + podjetje,
+    body: vrstice.join('\n'),
+  });
+}
+
+/** Vrednosti pridejo kot nizi; prazno polje je 0 in ne NaN. */
+function stevilo(vrednost) {
+  var n = Number(vrednost);
+  return isNaN(n) ? 0 : n;
 }
 
 /**

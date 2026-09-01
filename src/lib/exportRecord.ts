@@ -226,11 +226,18 @@ function csvEscape(value: string): string {
 }
 
 /**
- * Vrstica CSV, izluščena iz prenosa, da lahko test trdi enako dolžino kot
+ * Vrednosti vrstice, NEUBEŽANE — v istem zaporedju kot CSV_COLUMNS.
+ *
+ * Ločeno od `buildCsvRow` zato, ker ubežanje pripada CSV in ne podatku:
+ * webhook (Google Sheet) je dobival `"Trgovina, veleprodaja in distribucija"`
+ * z narekovaji vred, ker ima oznaka vejico. Celica preglednice narekovajev ne
+ * potrebuje in jih je prikazala kot del besedila.
+ *
+ * Vrstica je izluščena iz prenosa tudi zato, da lahko test trdi enako dolžino kot
  * CSV_COLUMNS. Dodajanje samo v eno od obeh polj tiho zamakne vse za njim —
  * natanko napaka, pred katero svari opomba nad seznamom stolpcev.
  */
-export function buildCsvRow(record: LeadExportRecord): string[] {
+export function buildRowValues(record: LeadExportRecord): string[] {
   const risks = record.outputs.filter((output) => output.bucket === 'risk');
 
   return [
@@ -277,7 +284,12 @@ export function buildCsvRow(record: LeadExportRecord): string[] {
     record.profile?.operationalHour.source ?? '',
     record.profile?.adminHour.source ?? '',
     String(record.consentConsulting),
-  ].map((value) => csvEscape(value));
+  ];
+}
+
+/** Ista vrstica, pripravljena za CSV: vejice, narekovaji in prelomi ubežani. */
+export function buildCsvRow(record: LeadExportRecord): string[] {
+  return buildRowValues(record).map(csvEscape);
 }
 
 export function downloadAsCsv(record: LeadExportRecord): void {
