@@ -32,6 +32,10 @@ Obe se v objavi bereta iz repozitorijskih spremenljivk (`vars`) v `.github/workf
 Predpona `VITE_` pomeni, da vrednost pristane v javnem svežnju — webhook se mora zato braniti sam
 (omejevanje hitrosti, CORS, preverjanje izvora) in ne s skrivnostjo naslova.
 
+Sprejemnik webhooka, ki oddaje **beleži v Google Sheet**, je v
+[`tools/google-sheet/`](tools/google-sheet/README.md) — Apps Script v preglednici, brez strežnika.
+Vzorec `.env` je v [`.env.example`](.env.example).
+
 Aplikacija se objavlja na podpot `/leadmagnetdl/` (`base` v `vite.config.ts`). Poti do datotek v `public/`
 je zato treba sestaviti prek `import.meta.env.BASE_URL` — Vite prepiše samo poti v `index.html`, ne pa
 tudi tistih v kodi ali v CSS `url()`.
@@ -562,10 +566,14 @@ njej; glej razlago pod tabelo.
 Dostava je odvisna od build spremenljivke **`VITE_LEAD_WEBHOOK_URL`** (`.env`):
 
 - **Webhook nastavljen:** ob oddaji se na naslov POST-a JSON (`src/lib/submitLead.ts`) z izvoznim
-  zapisom (`buildLeadExportRecord`, `src/lib/exportRecord.ts`) in prodajno pripravo kot HTML. S tem
-  se prvič lahko zaprejo kalibracijske zanke ("preveriti po ~50 vnosih"). Zahteva ima osemsekundno
-  omejitev in `keepalive`: viseč strežnik ne sme zadrževati strankinega prenosa, zaprt zavihek pa ne
-  sme pobrisati leada.
+  zapisom (`buildLeadExportRecord`, `src/lib/exportRecord.ts`), prodajno pripravo kot HTML in
+  vrstico za preglednico (`sheet`: ista glava in vrstica kot pri izvozu CSV — sprejemniku tako ni
+  treba poznati nobenega polja izračuna). S tem se prvič lahko zaprejo kalibracijske zanke
+  ("preveriti po ~50 vnosih"). Zahteva ima osemsekundno omejitev in `keepalive`: viseč strežnik ne
+  sme zadrževati strankinega prenosa, zaprt zavihek pa ne sme pobrisati leada. Tip vsebine je
+  `text/plain` in ne `application/json`: slednji sproži predhodno zahtevo CORS (`OPTIONS`), na
+  katero Apps Script ne odgovori. Pri pripravi, večji od 60 KB, se `keepalive` opusti — brskalnik
+  večjega telesa ne skrajša, ampak celo zahtevo zavrne.
 - **Webhook ni nastavljen (privzeto) ali dostava ne uspe:** prodajna priprava se prenese k stranki,
   zahvalni zaslon pa jo prosi, naj jo posreduje pred sestankom. To je **začasno stanje**: dokler
   naslova ni, je posredovanje po stranki edina pot, po kateri svetovalec pripravo sploh dobi. Cena
@@ -728,6 +736,11 @@ prikazali nazaj.
 `src/lib/exportRecord.ts` (`LeadExportRecord`, CSV + JSON) je **ožičen prek webhooka**: ob oddaji
 obrazca `buildLeadExportRecord` sestavi zapis (samo ob obvezni privolitvi — brez nje vrne `null`),
 `src/lib/submitLead.ts` pa ga POST-a na `VITE_LEAD_WEBHOOK_URL`, skupaj s prodajno pripravo v HTML.
+
+Dokler pravega CRM ni, oddaje sprejema **Google Sheet** ([`tools/google-sheet/`](tools/google-sheet/README.md)):
+Apps Script pripne eno vrstico na list in prodajno pripravo shrani na Drive. Stolpcev ne pozna —
+glava in vrstica prideta v zahtevi, sestavi ju `CSV_COLUMNS`/`buildCsvRow`. Nov stolpec zato ni
+poseg v skripto; sama ga pripne na konec glave.
 Brez nastavljenega webhooka se zapis ne pošilja nikamor; funkciji `downloadAsCsv`/`downloadAsJson`
 ostajata za ročni izvoz. Glava CSV je namenoma fiksna in enaka za vse segmente; novi stolpci se
 dodajajo **na konec**, ker je vsaka obstoječa preslikava pozicijska (zadnji dodani: `lostMarginEUR`).
@@ -737,7 +750,8 @@ sekvenco zapis sodi, ključ pa potuje v izvoznem zapisu (`followUpSequence`), da
 
 ## Odprta vprašanja pred objavo
 
-1. Kateri CRM in ali ima API/webhook za lead s custom polji.
+1. Kateri CRM in ali ima API/webhook za lead s custom polji. (Vmesna rešitev: Google Sheet,
+   `tools/google-sheet/` — ista pot, drug sprejemnik.)
 2. Kdo interno potrdi naslovljive deleže — bodo javno vidni.
 3. Domena: samostojna landing stran ali podstran datalab.si.
 4. Strokovna potrditev besedil "3 ukrepov".

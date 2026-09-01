@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { leadWebhookUrl, submitLead, type LeadSubmission } from './submitLead';
-import { buildLeadExportRecord } from './exportRecord';
+import { buildLeadExportRecord, CSV_COLUMNS, buildCsvRow } from './exportRecord';
 import type { ResultTotals } from './potential';
 
 const TOTALS: ResultTotals = {
@@ -95,6 +95,44 @@ describe('submitLead', () => {
     const body = JSON.parse(init.body);
     expect(body.record.email).toBe('janez@testko.si');
     expect(body.salesReportHtml).toContain('doctype');
+  });
+
+  /**
+   * `application/json` sproži predhodno zahtevo CORS, na katero Apps Script ne
+   * odgovori — dostava v Google Sheet bi padla pri vsakem leadu, v testih pa se
+   * to ne bi poznalo. Zato je tip vsebine tu trditev in ne podrobnost izvedbe.
+   */
+  it('pošlje kot text/plain — sicer bi predhodna zahteva CORS ustavila Apps Script', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    await submitLead(SUBMISSION, 'https://crm.example/hook', fetchImpl as never);
+
+    expect(fetchImpl.mock.calls[0][1].headers['Content-Type']).toBe('text/plain;charset=utf-8');
+  });
+
+  it('priloži glavo in vrstico CSV, da sprejemniku ni treba poznati nobenega polja', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    await submitLead(SUBMISSION, 'https://crm.example/hook', fetchImpl as never);
+
+    const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(body.sheet.columns).toEqual(CSV_COLUMNS);
+    expect(body.sheet.row).toEqual(buildCsvRow(RECORD));
+    expect(body.sheet.row).toHaveLength(CSV_COLUMNS.length);
+  });
+
+  /**
+   * `keepalive` je edino, kar POST obdrži pri življenju ob zaprtem zavihku, a
+   * specifikacija omejuje telo takih zahtev na 64 KiB in brskalnik večje ZAVRNE.
+   * Razvejana priprava zato ne sme tiho odnesti celotne dostave.
+   */
+  it('pri veliki pripravi opusti keepalive namesto da bi brskalnik zahtevo zavrnil', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+
+    await submitLead(SUBMISSION, 'https://x', fetchImpl as never);
+    expect(fetchImpl.mock.calls[0][1].keepalive).toBe(true);
+
+    const huge: LeadSubmission = { record: RECORD, salesReportHtml: 'x'.repeat(70_000) };
+    await submitLead(huge, 'https://x', fetchImpl as never);
+    expect(fetchImpl.mock.calls[1][1].keepalive).toBe(false);
   });
 
   it('napaka strežnika ali omrežja NIKOLI ne vrže — vrne false', async () => {
