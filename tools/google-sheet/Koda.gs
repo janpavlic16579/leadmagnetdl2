@@ -58,6 +58,134 @@ var PREJETO = 'prejeto';
 var PRIPRAVA = 'prodajnaPriprava';
 
 /**
+ * Izpeljani stolpec: prošnja za posvet, zapisana tako, da jo klicatelj vidi ob
+ * telefonski številki.
+ *
+ * `consentConsulting` isto pove z "true"/"false" in ostane skrit — po njem
+ * filtrira stroj. Ta stolpec je za oko: v seznamu leadov mora biti v pol
+ * sekunde jasno, koga je obljubljeno poklicati.
+ */
+var KLICI_TAKOJ = 'kliciTakoj';
+
+/**
+ * Izpeljani stolpec: skupni letni znesek — vsota odliva, nezaslužene marže in
+ * vrednosti časa.
+ *
+ * Ista številka je uvodna poved klica in je bila doslej SAMO v e-obvestilu
+ * (`posljiObvestilo`). V preglednici je klicatelj ni mogel dobiti drugače kot s
+ * seštevanjem treh stolpcev na pamet.
+ */
+var LETNO = 'letno';
+
+/**
+ * Stolpci, v katere piše KLICATELJ in ne aplikacija.
+ *
+ * Stojijo takoj za `email` in ne skrajno desno: pot od telefonske številke do
+ * polja za vpis bi bila sicer dve do tri širine zaslona, ravnanje, ki terja
+ * toliko drsenja, pa se ne obdrži — klicatelj si začne beležiti drugam in
+ * stolpci ostanejo prazni.
+ *
+ * Lega je čista ergonomska izbira, brez podatkovnih posledic: nova oddaja jih ne
+ * more povoziti, ker `zapisiVrstico` piše po IMENIH stolpcev, teh imen pa v
+ * oddaji ni — pusti jih prazne v svoji vrstici in se že vpisanih vrstic sploh ne
+ * dotakne. `urediStolpce` pa dela z indeksi in stolpca ne more izgubiti.
+ *
+ * IMEN NE PREIMENUJTE v preglednici. Vezava je po imenu: preimenovan stolpec
+ * skripta razume kot tuj, ob naslednji oddaji pa nastane nov, prazen zraven.
+ */
+var POKLICANO = 'poklicano';
+var SESTANEK = 'sestanek';
+var OPOMBE = 'opombe';
+var DELOVNI_STOLPCI = [POKLICANO, SESTANEK, OPOMBE];
+
+/** Edine tri vrednosti, ki jih spustni seznam v stolpcu `sestanek` dovoli. */
+var SESTANEK_MOZNOSTI = ['sestanek', 'ne želi', 'drugič'];
+
+/**
+ * Vrstni red stolpcev na listu — SAMO za branje s strani človeka.
+ *
+ * Ni isto kot `CSV_COLUMNS` v aplikaciji: tam je zaporedje zamrznjeno, ker so
+ * preslikave v CRM pozicijske in bi vsako vrivanje tiho zamaknilo vse za sabo.
+ * Tu tega tveganja ni — vrstica se piše po IMENIH stolpcev (glej `zapisiVrstico`),
+ * zato je zaporedje na listu prosto in sme slediti temu, kako se lead bere:
+ * kdaj, kdo, kje dela, kako velik je, kako ga dosežem — šele nato številke.
+ *
+ * Imena, ki jih tu ni, se pripnejo za temi, v vrstnem redu iz aplikacije.
+ * Spreminjanje tega seznama ne pokvari ničesar; da preuredi ŽE zapisane vrstice,
+ * je treba enkrat pognati `urediStolpce`.
+ */
+var VRSTNI_RED = [
+  PREJETO,
+  'firstName',
+  'lastName',
+  'companyName',
+  'industryLabel',
+  'employeeCount',
+  'phone',
+  // Ob telefonu in ne pri privolitvah: klicatelj gleda ta dva podatka skupaj.
+  KLICI_TAKOJ,
+  'email',
+  LETNO,
+  // Edini stolpec, ki pove, O ČEM naj klicatelj govori: oznake tveganj s stopnjo,
+  // sestavljene iz odgovorov stranke. Vse ostalo je "kdo" in "koliko".
+  'risks',
+  POKLICANO,
+  SESTANEK,
+  OPOMBE,
+  'directLossEUR',
+  'lostMarginEUR',
+  'capacityEUR',
+  'capacityHoursPerMonth',
+  'oneTimeCapitalEUR',
+  'potentialMinEUR',
+  'confidence',
+  'selectedModules',
+  PRIPRAVA,
+  'role',
+  'roleOther',
+  'businessType',
+  'currentSystem',
+  'operationalHourCostEUR',
+  'adminHourCostEUR',
+  'taxNumber',
+  'consentOffers',
+  'consentContent',
+  'followUpSequence',
+  'utmSource',
+];
+
+/**
+ * Stolpci, ki se ob `urediStolpce` SKRIJEJO — ne izbrišejo.
+ *
+ * Vsi so bodisi strojni dvojniki nečesa berljivega (`industry` proti
+ * `industryLabel`, `timestampISO` proti `prejeto`), bodisi vrednost, ki je za
+ * vsak lead enaka (`gdprConsent` je vedno true, sicer zapisa ne bi bilo), bodisi
+ * surov JSON, ki je uporaben za analizo in nemogoč za branje. Podatek ostane —
+ * skrit stolpec se kadarkoli vrne z desnim klikom na sosednja stolpca.
+ *
+ * `sizeClass` je tu na izrecno željo: velikost podjetja se bere iz števila
+ * zaposlenih, razred pa je iz njega izpeljan in v pogledu podvaja isto.
+ */
+var SKRIJ = [
+  'timestampISO',
+  'segment',
+  'industry',
+  'sizeClass',
+  'gdprConsent',
+  // Število tveganj brez njihove vsebine ne pove nič; vsebino nosi `risks`, ki
+  // je zato viden.
+  'riskCount',
+  'triageScores',
+  'moduleInputsJson',
+  'potentialMaxEUR',
+  'hourCostsEstimated',
+  'operationalHourSource',
+  'adminHourSource',
+  // Isto pove KLICI_TAKOJ, le berljivo. Strojna oblika ostane za filtre.
+  'consentConsulting',
+];
+
+/**
  * Odgovor v brskalniku, ko naslov objave odprete z GET — edini hiter način
  * preveriti, ali je razmestitev živa in ali gleda v pravo preglednico.
  */
@@ -157,7 +285,7 @@ function zdruziVrednosti(oddaja, povezavaPriprave) {
     for (var i = 0; i < oddaja.sheet.columns.length; i++) {
       vrednosti[String(oddaja.sheet.columns[i])] = oddaja.sheet.row[i];
     }
-    return vrednosti;
+    return dopolniIzpeljano(vrednosti);
   }
 
   var zapis = oddaja.record;
@@ -171,7 +299,43 @@ function zdruziVrednosti(oddaja, povezavaPriprave) {
   vrednosti.firstName = zapis.firstName;
   vrednosti.lastName = zapis.lastName;
   vrednosti.phone = zapis.phone;
+  // Tudi po rezervni poti, sicer bi strojni in berljivi stolpec trdila različno.
+  vrednosti.consentConsulting = zapis.consentConsulting;
+  return dopolniIzpeljano(vrednosti);
+}
+
+/**
+ * Stolpci, ki jih aplikacija ne pošlje, ker jih izračuna šele pogled na list.
+ *
+ * Kliče se na OBEH poteh `zdruziVrednosti` — funkcija ima zgodnji `return`, in
+ * dopolnitev samo na eni bi pomenila prazna stolpca pri vsaki drugi oddaji.
+ */
+function dopolniIzpeljano(vrednosti) {
+  vrednosti[KLICI_TAKOJ] = jePosvet(vrednosti.consentConsulting) ? 'DA' : '';
+  vrednosti[LETNO] =
+    stevilo(vrednosti.directLossEUR) +
+    stevilo(vrednosti.lostMarginEUR) +
+    stevilo(vrednosti.capacityEUR);
+
+  // Klicateljevih stolpcev ne sme zapisati NIHČE razen klicatelja. Danes jih v
+  // oddaji ni in prazna vrednost bi nastala sama; to je varovalo za jutri, ko bi
+  // kdo v CSV_COLUMNS dodal stolpec z enakim imenom in bi vsaka oddaja tiho
+  // pobrisala, kar je klicatelj vpisal.
+  DELOVNI_STOLPCI.forEach(function (ime) {
+    delete vrednosti[ime];
+  });
   return vrednosti;
+}
+
+/**
+ * Ali je obiskovalec prosil za posvet.
+ *
+ * Strpna do obeh oblik namenoma: iz aplikacije pride niz `'true'`
+ * (`String(record.consentConsulting)` v `buildRowValues`), z lista pa logični
+ * `true`, ker preglednica niz "true" ob zapisu pretvori v logično vrednost.
+ */
+function jePosvet(vrednost) {
+  return vrednost === true || String(vrednost).trim().toLowerCase() === 'true';
 }
 
 function zapisiVrstico(vrednosti) {
@@ -179,11 +343,18 @@ function zapisiVrstico(vrednosti) {
   var glava = preberiGlavo(list);
 
   // Nova imena se pripnejo na konec glave. Vrivanje na sredino bi zamaknilo vse
-  // že zapisane vrstice — te se ne prepisujejo nikoli.
+  // že zapisane vrstice — te se ne prepisujejo nikoli. Zato tudi ta funkcija
+  // NIKOLI ne preureja: to zna samo `urediStolpce`, ki ga sproži človek.
   var nova = [];
   for (var ime in vrednosti) {
     if (glava.indexOf(ime) === -1 && nova.indexOf(ime) === -1) nova.push(ime);
   }
+  // Na praznem listu je vseeno, v kakšnem vrstnem redu imena pridejo iz zahteve,
+  // zato prva glava nastane kar v berljivem zaporedju — in takoj s klicateljevimi
+  // stolpci vred. To gre skozi isti en zapis kot glava sama: vroča pot oddaje ne
+  // sme dobiti nobenega dodatnega klica, ker je vsak od njih nov način, kako
+  // dostava pade in prodajna priprava odide stranki.
+  if (!glava.length) nova = razvrstiImena(nova.concat(DELOVNI_STOLPCI));
   if (nova.length) {
     zagotoviStolpce(list, glava.length + nova.length);
     list
@@ -198,6 +369,325 @@ function zapisiVrstico(vrednosti) {
     return zaCelico(vrednosti[ime]);
   });
   list.appendRow(vrstica);
+}
+
+/**
+ * Imena, razvrščena po VRSTNI_RED; kar seznama ne pozna, gre za tem in obdrži
+ * medsebojni vrstni red.
+ */
+function razvrstiImena(imena) {
+  var rezultat = [];
+  VRSTNI_RED.forEach(function (ime) {
+    if (imena.indexOf(ime) !== -1 && rezultat.indexOf(ime) === -1) rezultat.push(ime);
+  });
+  imena.forEach(function (ime) {
+    if (rezultat.indexOf(ime) === -1) rezultat.push(ime);
+  });
+  return rezultat;
+}
+
+/**
+ * ENKRATNI POSEG, ki ga poženete v urejevalniku: preuredi stolpce že zapisanih
+ * vrstic po VRSTNI_RED, skrije stolpce iz SKRIJ in list uredi za branje.
+ *
+ * `zapisiVrstico` tega ne počne sam in ne sme: preurejanje ob vsaki oddaji bi
+ * pomenilo, da se ob vsakem leadu prepiše cel list — ena napaka ali ena prekinjena
+ * izvedba in podatki so premešani. Tu je poseg zaveden, redek in ga sproži človek.
+ *
+ * Dela z INDEKSI in ne z imeni: če bi se v glavi kdaj znašli dve enaki imeni,
+ * bi razvrščanje po imenih enega od stolpcev tiho izpustilo. Tako se vsak stolpec
+ * prestavi natanko enkrat in noben podatek ne more izpasti.
+ *
+ * Varno je pognati večkrat — drugič ne spremeni ničesar.
+ */
+function urediStolpce() {
+  // ISTA ključavnica kot doPost, in okoli BRANJA ter pisanja hkrati. Brez nje:
+  // oddaja, ki pride med preurejanjem, se pripne po STAREM zaporedju stolpcev,
+  // veliki prepis pa je ne pokrije (zajame le toliko vrstic, kolikor jih je bilo
+  // ob branju). Vrstica ostane tiho zamaknjena — pod "firstName" datum, pod
+  // "phone" e-naslov — in je videti popolnoma pravilna.
+  var kljucavnica = LockService.getScriptLock();
+  kljucavnica.waitLock(30000);
+  try {
+    return preurediList();
+  } finally {
+    kljucavnica.releaseLock();
+  }
+}
+
+function preurediList() {
+  var list = pridobiList();
+  if (list.getLastRow() === 0) throw new Error('List je prazen — ni česa urejati.');
+
+  // Glavo razširimo LOČENO in prej: ta zapis gre samo v device stolpce, zato
+  // podatka ne more poškodovati. Veliki prepis spodaj s tem obdrži svoj pogoj
+  // "stolpcev je enako mnogo kot prej", na katerem stoji njegova varnost.
+  dodajManjkajocaImena(list);
+
+  var podatki = list.getDataRange().getValues();
+  var glava = podatki[0].map(function (celica) {
+    return String(celica);
+  });
+
+  var indeksi = zeleniIndeksi(glava);
+
+  // Trditev pred edinim zapisom. Če bi razvrščanje kdaj izpustilo stolpec, je
+  // neškodljiva napaka neprimerno boljša od tihega prepisa, po katerem prvotnega
+  // zaporedja iz zapisanih vrstic ni več mogoče rekonstruirati.
+  if (indeksi.length !== glava.length) {
+    throw new Error(
+      'Preurejanje bi izgubilo stolpce (' +
+        indeksi.length +
+        ' od ' +
+        glava.length +
+        ') — nič ni bilo zapisano.',
+    );
+  }
+
+  var novaGlava = indeksi.map(function (i) {
+    return glava[i];
+  });
+
+  var nove = [novaGlava];
+  for (var r = 1; r < podatki.length; r++) {
+    var vrstica = indeksi.map(function (i) {
+      // Skozi zaCelico tudi pri premikanju: getValues vrne "+386 1 234 5678"
+      // brez uvodnega opuščaja, in če bi tak niz zapisali nazaj, bi ga
+      // preglednica razumela kot formulo. Isto velja za vodilne ničle.
+      return zaCelico(podatki[r][i]);
+    });
+    // Izpeljanke za nazaj — v pomnilniku, v že zgrajeni vrstici. Noben dodaten
+    // zapis in nobena dodatna točka odpovedi; vse gre skozi tisti en setValues.
+    izpolniIzpeljanke(vrstica, novaGlava);
+    nove.push(vrstica);
+  }
+
+  // Najprej zapis, šele nato čiščenje ostanka: če bi list počistili vnaprej in
+  // bi zapis padel, bi bili leadi izgubljeni. Stolpcev je enako mnogo kot prej,
+  // zato prepis pokrije prav vse celice.
+  list.getRange(1, 1, nove.length, novaGlava.length).setValues(nove);
+
+  urediVidez(list, novaGlava);
+  return 'Urejeno: ' + novaGlava.length + ' stolpcev, ' + (nove.length - 1) + ' vrstic.';
+}
+
+/**
+ * V glavo doda imena, ki jih aplikacija nikoli ne pošlje: izpeljanki
+ * (`kliciTakoj`, `letno`) in tri klicateljeve stolpce.
+ *
+ * Piše izključno v stolpce, ki hip prej niso obstajali, zato zapisanega podatka
+ * ne more poškodovati. Če bi karkoli za tem padlo, ostane list z nekaj praznimi
+ * stolpci na desni in ponoven zagon vse popravi.
+ */
+function dodajManjkajocaImena(list) {
+  var glava = preberiGlavo(list);
+  var manjkajoca = [KLICI_TAKOJ, LETNO].concat(DELOVNI_STOLPCI).filter(function (ime) {
+    return glava.indexOf(ime) === -1;
+  });
+  if (!manjkajoca.length) return glava;
+
+  zagotoviStolpce(list, glava.length + manjkajoca.length);
+  list
+    .getRange(1, glava.length + 1, 1, manjkajoca.length)
+    .setValues([manjkajoca])
+    .setFontWeight('bold');
+  return glava.concat(manjkajoca);
+}
+
+/**
+ * Izpeljanki za že zapisano vrstico. Piše SAMO v prazno celico — ročni popravek
+ * klicatelja se ob ponovnem zagonu ne sme povoziti.
+ */
+function izpolniIzpeljanke(vrstica, glava) {
+  var pri = function (ime) {
+    var i = glava.indexOf(ime);
+    return i === -1 ? '' : vrstica[i];
+  };
+  var nastavi = function (ime, vrednost) {
+    var i = glava.indexOf(ime);
+    if (i === -1) return;
+    if (vrstica[i] === '' || vrstica[i] === null || vrstica[i] === undefined) {
+      vrstica[i] = vrednost;
+    }
+  };
+
+  nastavi(KLICI_TAKOJ, jePosvet(pri('consentConsulting')) ? 'DA' : '');
+  nastavi(
+    LETNO,
+    stevilo(pri('directLossEUR')) + stevilo(pri('lostMarginEUR')) + stevilo(pri('capacityEUR')),
+  );
+}
+
+/**
+ * Zaporedje stolpcev kot indeksi v obstoječi glavi. Vsak indeks se pojavi
+ * natanko enkrat, tudi če je ime prazno ali podvojeno — od tod izhaja jamstvo,
+ * da `urediStolpce` ne more izgubiti stolpca.
+ */
+function zeleniIndeksi(glava) {
+  var uporabljeni = {};
+  var indeksi = [];
+
+  VRSTNI_RED.forEach(function (ime) {
+    var i = glava.indexOf(ime);
+    if (i !== -1 && !uporabljeni[i]) {
+      uporabljeni[i] = true;
+      indeksi.push(i);
+    }
+  });
+  for (var i = 0; i < glava.length; i++) {
+    if (!uporabljeni[i]) {
+      uporabljeni[i] = true;
+      indeksi.push(i);
+    }
+  }
+  return indeksi;
+}
+
+/** Denarni stolpci — brez oblike so to gole številke, ki jih je treba šteti. */
+var DENARNI = [
+  LETNO,
+  'directLossEUR',
+  'lostMarginEUR',
+  'capacityEUR',
+  'oneTimeCapitalEUR',
+  'potentialMinEUR',
+  'operationalHourCostEUR',
+  'adminHourCostEUR',
+];
+
+/**
+ * Pojasnila na glavah, ki niso samoumevne.
+ *
+ * Imena stolpcev so hkrati KLJUČI, po katerih se piše vrstica, zato jih ni
+ * mogoče prevesti — preimenovana glava bi vezavo podrla. Opomba pove isto, ne da
+ * bi se ključa dotaknila, in preživi vsako prerazvrstitev.
+ */
+var POJASNILA = {
+  kliciTakoj: 'DA = obiskovalec je v obrazcu prosil, da njegove številke pregledamo skupaj.',
+  letno: 'Skupni letni znesek: odliv + nezaslužena marža + vrednost izgubljenega časa.',
+  risks: 'Tveganja iz odgovorov stranke, s stopnjo. Iztočnica za pogovor.',
+  capacityEUR: 'Vrednost časa, ki se porabi za delo, ki ga sistem lahko prevzame.',
+  capacityHoursPerMonth: 'Iste ure kot capacityEUR, le v urah na mesec.',
+  oneTimeCapitalEUR: 'Enkraten znesek (sprostljiv obratni kapital) — z letnimi se NE sešteva.',
+  potentialMinEUR: 'Naslovljiv potencial na leto. Max je enak in je zato skrit.',
+  confidence: 'Koliko izračuna je vnesel obiskovalec in koliko je privzetih vrednosti.',
+  hourCostsEstimated: 'true = vsaj ena urna postavka ni vnesena, ampak izbrana ali privzeta.',
+  followUpSequence: 'Ključ sekvence za CRM. Ne pove ničesar o stranki.',
+  poklicano: 'Obkljukajte, ko je klic opravljen.',
+  sestanek: 'Izid klica: sestanek / ne želi / drugič.',
+  opombe: 'Prosto besedilo. Oblikovano kot navadno besedilo, da datumi in formule ostanejo, kot jih vpišete.',
+};
+
+/**
+ * Vidna podoba lista: skriti strojni stolpci, širine, oblike, potrditvena polja,
+ * spustni seznam, filter.
+ *
+ * Vse to je treba postavljati ZNOVA ob vsakem preurejanju. `setValues` premakne
+ * samo VREDNOSTI — veljavnost podatkov, oblike števil, širine in zapiski ostanejo
+ * na starem indeksu stolpca. Brez tega bi po prerazvrstitvi spustni seznam
+ * obtičal sredi e-naslovov, potrditveno polje pa sredi zneskov.
+ */
+function urediVidez(list, glava) {
+  var vrstic = Math.max(0, list.getLastRow() - 1);
+  // Do konca lista in ne le do zadnje vrstice: veljavnost mora čakati tudi na
+  // vrstice, ki jih bo šele dodala oddaja. Veljavnost ni vsebina in getLastRow
+  // s tem ne premakne.
+  var doKonca = Math.max(0, list.getMaxRows() - 1);
+
+  list.setFrozenRows(1);
+  list.getRange(1, 1, 1, glava.length).setFontWeight('bold').setBackground('#f1f3f4');
+
+  // Veljavnosti najprej povsod dol, nato na novo po IMENU stolpca (glej glavo).
+  if (doKonca) list.getRange(2, 1, doKonca, glava.length).clearDataValidations();
+
+  var sirine = {
+    prejeto: 130,
+    firstName: 110,
+    lastName: 120,
+    companyName: 220,
+    industryLabel: 200,
+    employeeCount: 90,
+    phone: 140,
+    kliciTakoj: 90,
+    email: 210,
+    letno: 110,
+    risks: 300,
+    poklicano: 90,
+    sestanek: 120,
+    opombe: 320,
+    prodajnaPriprava: 220,
+    selectedModules: 220,
+  };
+
+  for (var i = 0; i < glava.length; i++) {
+    var ime = glava[i];
+    var stolpec = i + 1;
+
+    if (POJASNILA[ime]) list.getRange(1, stolpec).setNote(POJASNILA[ime]);
+
+    if (SKRIJ.indexOf(ime) !== -1) {
+      list.hideColumns(stolpec);
+      continue;
+    }
+    list.showColumns(stolpec);
+    if (sirine[ime]) list.setColumnWidth(stolpec, sirine[ime]);
+
+    if (ime === PREJETO && vrstic) {
+      list.getRange(2, stolpec, vrstic, 1).setNumberFormat('d. m. yyyy HH:mm');
+    }
+    if (DENARNI.indexOf(ime) !== -1 && vrstic) {
+      list.getRange(2, stolpec, vrstic, 1).setNumberFormat('#.##0 €');
+    }
+    if (ime === KLICI_TAKOJ && vrstic) {
+      list
+        .getRange(2, stolpec, vrstic, 1)
+        .setFontWeight('bold')
+        .setFontColor('#c5221f')
+        .setHorizontalAlignment('center');
+    }
+
+    if (!doKonca) continue;
+
+    if (ime === POKLICANO) {
+      // requireCheckbox in NE insertCheckboxes: slednji v vsako celico razpona
+      // ZAPIŠE false — s tem potisne getLastRow na konec lista (naslednja oddaja
+      // pristane stotine vrstic niže) in odkljuka vse, kar je klicatelj označil.
+      list
+        .getRange(2, stolpec, doKonca, 1)
+        .setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build())
+        .setHorizontalAlignment('center');
+    }
+    if (ime === SESTANEK) {
+      list.getRange(2, stolpec, doKonca, 1).setDataValidation(
+        SpreadsheetApp.newDataValidation()
+          .requireValueInList(SESTANEK_MOZNOSTI, true)
+          .setAllowInvalid(false)
+          .build(),
+      );
+    }
+    if (ime === OPOMBE) {
+      // Navadno besedilo, dokler je stolpec še prazen: sicer preglednica vnos
+      // razlaga — "=nekaj" postane formula (in je ob naslednjem prepisu ni več),
+      // "3. 9. 2026" pa datum, ki se po prepisu izriše kot serijska številka.
+      list.getRange(2, stolpec, doKonca, 1).setNumberFormat('@');
+    }
+  }
+
+  // Ime in priimek ostaneta vidna tudi ob drsanju do zneskov. Do telefona ne
+  // zamrzujemo — sedem stolpcev bi pojedlo pol zaslona, klicateljeva zanka od
+  // telefona do opomb pa je itak na enem zaslonu.
+  var doPriimka = glava.indexOf('lastName');
+  if (doPriimka !== -1) list.setFrozenColumns(doPriimka + 1);
+
+  // Filter na glavi: "pokaži tiste, ki prosijo za posvet in še niso poklicani"
+  // je klicateljevo prvo opravilo in brez filtra ni izvedljivo.
+  var obstojeci = list.getFilter();
+  if (obstojeci) obstojeci.remove();
+  list.getRange(1, 1, Math.max(2, list.getLastRow()), glava.length).createFilter();
+
+  // Brez preloma besedila: ena oddaja naj ostane ena vrstica, sicer se list
+  // razpotegne v nekaj, česar se ne da preleteti.
+  list.getDataRange().setWrap(false).setVerticalAlignment('middle');
 }
 
 /**
