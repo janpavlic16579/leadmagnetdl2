@@ -63,9 +63,20 @@ var PRIPRAVA = 'prodajnaPriprava';
  */
 function doGet() {
   var list = pridobiList();
-  return ContentService.createTextOutput(
+  var lastnosti = PropertiesService.getScriptProperties();
+
+  // Stanje obvestil je tu zato, ker se je enkrat že zgodilo: vrstice so se
+  // pisale, pošte pa ni bilo, in vzroka ni bilo mogoče videti od zunaj — napaka
+  // pošte je namreč namerno pogoltnjena (glej doPost). Te tri vrstice ločijo
+  // "naslov ni nastavljen" od "razmeščena je stara različica" od "pošiljanje
+  // je vrglo napako", brez brskanja po dnevniku izvedb.
+  var vrstice = [
     'LM-10 zbiralnik deluje. List: ' + list.getName() + ', vrstic: ' + Math.max(0, list.getLastRow() - 1) + '.',
-  );
+    'Obvestila: ' + (NASTAVITVE.E_NASLOV_ZA_OBVESTILA ? 'nastavljena' : 'IZKLOPLJENA (prazen E_NASLOV_ZA_OBVESTILA)'),
+    'Zadnja poslana pošta: ' + (lastnosti.getProperty('ZADNJA_POSTA') || 'še nobena'),
+    'Zadnja napaka pošte: ' + (lastnosti.getProperty('ZADNJA_NAPAKA_POSTE') || 'brez'),
+  ];
+  return ContentService.createTextOutput(vrstice.join('\n'));
 }
 
 function doPost(e) {
@@ -105,10 +116,19 @@ function doPost(e) {
     // ŠELE ZA vrstico in v svojem try/catch. Obvestilo je priročnost, vrstica je
     // zapis: padla pošta (kvota, napačen naslov) ne sme pomeniti, da aplikacija
     // dostavo razume kot neuspelo in prodajno pripravo prenese stranki.
+    var lastnosti = PropertiesService.getScriptProperties();
     try {
       posljiObvestilo(vrednosti);
+      lastnosti.setProperty('ZADNJA_POSTA', new Date().toISOString());
+      lastnosti.deleteProperty('ZADNJA_NAPAKA_POSTE');
     } catch (err) {
       console.warn('Obvestila ni bilo mogoče poslati: ' + err);
+      // Zapisano, ker je odgovor doGet edino, kar je o tem vidno od zunaj.
+      // Naslovi so zakriti: doGet je javen.
+      lastnosti.setProperty(
+        'ZADNJA_NAPAKA_POSTE',
+        new Date().toISOString() + ' — ' + zakrijNaslove(String(err)),
+      );
     }
   } finally {
     kljucavnica.releaseLock();
@@ -239,6 +259,31 @@ function pridobiList() {
 }
 
 /**
+ * Preizkusno sporočilo — poženite ga v urejevalniku (Zaženi), ne po webhooku.
+ *
+ * Obstaja zaradi pasti, ki je stala nekaj krogov: dovoljenja za pošto Google ne
+ * zahteva ob razmestitvi, ampak šele ob prvem klicu MailApp. Web app tedaj pade
+ * z "Nimate dovoljenja", napako pa doPost namenoma pogoltne — vrstice so se
+ * pisale, pošte pa ni bilo in od zunaj ni bilo videti, zakaj.
+ *
+ * Zagon te funkcije iz urejevalnika sproži vprašanje za dovoljenje takrat, ko ste
+ * ob računalniku, in v istem koraku dokaže, da pošta res pride.
+ */
+function preizkusPoste() {
+  if (!NASTAVITVE.E_NASLOV_ZA_OBVESTILA) {
+    throw new Error('E_NASLOV_ZA_OBVESTILA je prazen — vpišite naslov in shranite.');
+  }
+  MailApp.sendEmail({
+    to: NASTAVITVE.E_NASLOV_ZA_OBVESTILA,
+    subject: 'LM-10: preizkus obvestila',
+    body:
+      'Če ste to sporočilo prejeli, ima skripta dovoljenje za pošiljanje in obvestila o novih leadih bodo prihajala sem.\n\n' +
+      'Preostane le še razmestitev nove različice (Deploy → Manage deployments → svinčnik → New version).',
+  });
+  console.log('Poslano na ' + NASTAVITVE.E_NASLOV_ZA_OBVESTILA + '. Preostala dnevna kvota: ' + MailApp.getRemainingDailyQuota());
+}
+
+/**
  * Obvestilo o novem leadu.
  *
  * Vsebina je izbrana tako, da se je mogoče odločiti brez odpiranja preglednice:
@@ -286,6 +331,13 @@ function posljiObvestilo(vrednosti) {
     to: prejemniki,
     subject: (posvet ? '[POSVET] ' : '') + 'Nov lead: ' + podjetje,
     body: vrstice.join('\n'),
+  });
+}
+
+/** Odgovor doGet je javen, sporočila o napakah pa radi navedejo naslov. */
+function zakrijNaslove(besedilo) {
+  return besedilo.replace(/[\w.+-]+@([\w-]+\.)+\w+/g, function (naslov) {
+    return naslov.charAt(0) + '***@' + naslov.split('@')[1];
   });
 }
 

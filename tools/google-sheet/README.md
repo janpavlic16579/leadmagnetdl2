@@ -52,10 +52,28 @@ preglednice. Če je obiskovalec **prosil za posvet**, se to znajde v zadevi
 (`[POSVET] Nov lead: …`) — to je edino polje obrazca, ki pove namero in ne le
 dovoljenja.
 
+**Dovoljenje za pošto morate izsiliti sami.** Google ga ne zahteva ob
+razmestitvi in ne ob zagonu poljubne funkcije, ampak šele ob prvem klicu
+`MailApp`. Web app tedaj pade z „Nimate dovoljenja", napako pa `doPost`
+namenoma pogoltne — vrstice se pišejo, pošte ni in vzroka od zunaj ni videti.
+Zato: v urejevalniku izberite funkcijo **`preizkusPoste`** in kliknite *Zaženi*.
+Tedaj se pojavi vprašanje za dovoljenje (*Napredno → Pojdi na projekt → Dovoli*),
+v nabiralnik pa pride preizkusno sporočilo. Šele nato razmestite novo različico.
+
+**Ko pošte ni, ne brskajte po dnevniku** — odprite naslov `/exec` v brskalniku.
+`doGet` izpiše, ali so obvestila vklopljena, kdaj je nazadnje odšla pošta in kaj
+je bila zadnja napaka (naslovi so v izpisu zakriti, ker je odgovor javen). Te tri
+vrstice ločijo „naslov ni nastavljen" od „razmeščena je stara različica" od
+„pošiljanje je vrglo napako".
+
 Pošta gre **za** zapisom vrstice in v svojem `try/catch`: izčrpana kvota ali
 napačen naslov ne smeta pomeniti, da aplikacija dostavo razume kot neuspelo in
 prodajno pripravo prenese stranki. Dnevna kvota je 100 prejemnikov pri navadnem
 Google računu in 1500 pri Workspacu.
+
+**Naslov se ob lepljenju nove različice povozi.** Datoteka v repozitoriju ima
+`E_NASLOV_ZA_OBVESTILA: ''`, zato ga je treba po vsakem prilepljanju vpisati
+znova. `preizkusPoste` na to opozori z jasno napako namesto tihega neuspeha.
 
 Vgrajena obvestila preglednice (*Orodja → Nastavitve obvestil*) tu **ne
 delujejo** — sprožijo se ob človeškem urejanju, ne ob vpisu iz skripte.
