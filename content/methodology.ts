@@ -68,11 +68,23 @@ export const MODULE_METHODOLOGY: Record<string, ModuleMethodology> = {
   },
 
   // --- Logistika in transport -----------------------------------------------
-  odprema: {
+  obracun_logistika: {
     formula:
-      'prazni km/mesec × strošek km × 12; (ure čakanja × strošek operativne ure + ure razporejanja × strošek administrativne ure) × 12',
+      'nezaračunani dodatki + (letni prihodek ÷ 365 × dni do izdaje računa × strošek financiranja) + napačno zaračunani prevozi; ure obračuna × strošek administrativne ure × 12',
     rationale:
-      'Gorivo in cestnine praznih voženj so že porabljen denar, čakanje voznika pa plačan čas, ki ne premakne ničesar — zato sta ločena. Da bi bil vsak prazen kilometer odpravljiv, izračun ne trdi: to omeji naslovljivi delež glavnega vzroka.',
+      'Nezaračunan dodatek je neposredna izguba in ne nezaslužena marža: delo je opravljeno in strošek zanj že nastal, manjka samo račun. Dnevi do izdaje računa se merijo od dostave, ne do plačila — zamude naročnikov so ločeno področje, sicer bi bil isti dan štet dvakrat.',
+  },
+  vozniki: {
+    formula:
+      '(potni nalogi in dnevnice + evidence delovnega časa + priprava plač) × strošek administrativne ure × 12; + letni stroški napačnih obračunov',
+    rationale:
+      'Vsaka od treh vrst dela je prikazana posebej, ker nastaja na različnih mestih. To področje v logistiki nadomešča horizontalo Kadri in plače — pri prevozniku so potni nalogi največji del kadrovske administracije in bi se ure sicer štele dvakrat.',
+  },
+  terjatve_logistika: {
+    formula:
+      'letni prihodek ÷ 365 × dni prekoračitve roka × strošek financiranja; ure opominjanja × strošek administrativne ure × 12; + odpisane terjatve',
+    rationale:
+      'Šteje se samo prekoračitev NAD dogovorjenim rokom — financiranje dogovorjenega roka je normalno poslovanje in ne strošek napake. Brez odgovora o prihodku ostane postavka neocenjena: prometa si ne izmišljamo.',
   },
   napake: {
     formula:
@@ -87,20 +99,15 @@ export const MODULE_METHODOLOGY: Record<string, ModuleMethodology> = {
       'Področje meri lastno zalogo, ne tuje: kdor skladišči izključno tuje blago, tega kapitala ne sprošča on. Sprostljiv kapital je enkraten učinek in se z letnimi zneski nikoli ne sešteva.',
   },
   dokumentacija: {
-    formula: '(priprava listin + prepisovanje + popravki podatkov) × strošek administrativne ure × 12',
-    rationale:
-      'Vsaka od treh vrst dela je prikazana posebej, da je vidno, kje ročno delo dejansko nastaja. Rezultat je vrednost izgubljene kapacitete, ne prihranek pri plačah — zaposleni ostane, njegov čas pa se preusmeri.',
-  },
-  roki: {
     formula:
-      'nujni podnajemi + penali in stojnine + izgubljena prispevna marža; komunikacija s strankami × strošek administrativne ure × 12',
+      '(priprava listin + prepisovanje + popravki podatkov + obveščanje o statusih) × strošek administrativne ure × 12',
     rationale:
-      'Štejemo samo neposredne posledice zamud in samo stojnine, ki jih plačate vi — tiste, ki jih zaračunate stranki, so prihodek. Ure razporejanja ostanejo v področju Planiranje prevozov, vpisuje pa se izgubljena marža, ne celotna vrednost posla.',
+      'Vsaka od štirih vrst dela je prikazana posebej, da je vidno, kje ročno delo dejansko nastaja. Poizvedbe „kje je pošiljka" so tu in ne pri zamudah: zamude same so stvar prevoza, poizvedba pa nastane, ker naročnik statusa ne vidi sam.',
   },
   diagnostika_logistika: {
     formula: 'ocena tveganja iz štirih odgovorov — brez zneska',
     rationale:
-      'Kjer podjetje ne pozna lastne cene vožnje ali ne more zanesljivo povedati, kje je pošiljka, natančnega zneska ni mogoče izračunati — prav to je težava. Navidezno natančna številka bi jo skrila, zato prikazujemo stopnjo tveganja in ne evrov.',
+      'Kjer podjetje ne pozna lastne cene vožnje ali ne najde dokazila o dostavi, natančnega zneska ni mogoče izračunati — prav to je težava. Navidezno natančna številka bi jo skrila, zato prikazujemo stopnjo tveganja in ne evrov.',
   },
 
   // --- Veleprodaja in distribucija ------------------------------------------

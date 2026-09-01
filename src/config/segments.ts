@@ -91,25 +91,33 @@ export const SEGMENTS: Record<SegmentId, SegmentConfig> = {
     // ure — vprašanje bi se bralo skoraj enako in ure bi se štele dvakrat.
     // Brez servisHz: modul 'napake' že meri ure reševanja reklamacij in stroške
     // napačnih dostav, prevoznik pa garancijskega servisa praviloma nima.
+    // Brez kadriHz: modul 'vozniki' meri iste ure — horizontala v vprašanju
+    // hrAdminHoursPerMonth izrecno našteva potne naloge, ki so pri prevozniku
+    // največji del kadrovske administracije.
     moduleIds: [
-      'odprema',
+      'obracun_logistika',
+      'vozniki',
+      'terjatve_logistika',
+      'dokumentacija',
       'napake',
       'skladisce',
-      'dokumentacija',
-      'roki',
       'analitikaHz',
       'financeHz',
-      'kadriHz',
       'diagnostika_logistika',
       'E',
     ],
-    // Skladišča nima vsak prevoznik, stojnine in nujni prevozi pa so univerzalni —
-    // zato namesto tretjega po vrstnem redu (skladisce) privzeto merimo roke.
-    triage: { recommendedCount: 3, defaultIds: ['odprema', 'napake', 'roki'] },
-    // Logistika ima nižjo maržo na prihodek kot proizvodnja, absolutne izgube pa
-    // so pri isti velikosti podjetja višje (gorivo, podnajemi, penali) — zato prag
-    // ni enak proizvodnji. KALIBRACIJA: začetna ocena, preveriti po prvih ~50 vnosih.
-    highLossThresholdEUR: 20000,
+    // Prva tri po vrstnem redu so hkrati edina, ki jih ima VSAK naslovnik te
+    // dejavnosti: prevoznik z vozili, špediter brez njih in skladiščnik tujega
+    // blaga vsi obračunavajo, vsi imajo plačilne roke, vsi vodijo ljudi.
+    // Skladišče privzeto ni, ker ga špediter nima.
+    triage: { recommendedCount: 3, defaultIds: ['obracun_logistika', 'vozniki', 'terjatve_logistika'] },
+    // Znižano z 20.000 avgusta 2026: prag je bil postavljen, ko sta področji merili
+    // gorivo praznih voženj, nujne podnajeme in penale — postavke, ki so odšle iz
+    // izračuna, ker jih PANTHEON ne naslavlja. Kar ostane (nezaračunani dodatki,
+    // vezan denar, administracija), je pri isti velikosti podjetja manjše, zato je
+    // prag zdaj enak proizvodnji in storitvam.
+    // KALIBRACIJA: začetna ocena, preveriti po prvih ~50 vnosih.
+    highLossThresholdEUR: 15000,
   },
   trgovina: {
     id: 'trgovina',

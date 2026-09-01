@@ -2,6 +2,7 @@ import {
   ADMIN_HOUR_BANDS,
   ADMIN_HOUR_EXPLAINER,
   ANNUAL_REVENUE_EXPLAINER,
+  CAPITAL_COST_EXPLAINER,
   CONTRIBUTION_MARGIN_EXPLAINER,
   HOURLY_COST_EXPLAINER,
 } from './shared';
@@ -87,7 +88,10 @@ export const LOGISTIKA_CONTEXT: SegmentContext = {
 
   operationalHour: {
     label: 'Približen polni strošek operativne ure',
-    help: 'Voznik, skladiščnik, komisionar — kdor pošiljko dejansko premakne.',
+    // Skladiščnik je naveden prvi, odkar operativno uro bere samo še modul
+    // skladisce (iskanje in prekladanje blaga). Dokler je bil prvi voznik, je
+    // prevoznik po njem umeril postavko, ki nato vrednoti delo v skladišču.
+    help: 'Skladiščnik, komisionar, voznik — kdor blago dejansko premakne.',
     explainer: HOURLY_COST_EXPLAINER,
     bands: OPERATIONAL_HOUR_BANDS,
     fallbackEUR: 20,
@@ -142,6 +146,29 @@ export const LOGISTIKA_CONTEXT: SegmentContext = {
     // pri 31,8 %, špediter pri 12 %; uteženo po prometu 25,7 %.
     // Izpeljava: docs/prispevne-marze-raziskava-2026-08.md
     fallback: 0.26,
+    unit: '%',
+    asPercent: true,
+  },
+
+  /**
+   * Vprašan, odkar logistika meri prepozno izdane račune in zamude pri plačilih
+   * (modula obracun_logistika in terjatve_logistika). Brez njega bi oba zneska
+   * padla na privzetek in obiskovalec ne bi mogel popraviti številke, ki ju množi.
+   *
+   * Pasovi in sidro so isti kot pri trgovini — strošek financiranja je lastnost
+   * kapitalskega trga in ne panoge. Izpeljava: docs/erp-koristi-benchmarki-2026-08.md, B.
+   */
+  capitalCostRate: {
+    label: 'Letni strošek financiranja obratnega kapitala',
+    help: 'Obrestna mera posojila oziroma donos, ki bi ga denar prinesel drugje. Množi denar, vezan v neizdanih in neplačanih računih.',
+    explainer: CAPITAL_COST_EXPLAINER,
+    bands: [
+      { id: 'do5', label: 'Do 5 %', midpoint: 0.04, min: 0.03, max: 0.05 },
+      { id: '5do8', label: '5–8 %', midpoint: 0.065, min: 0.05, max: 0.08 },
+      { id: '8do12', label: '8–12 %', midpoint: 0.1, min: 0.08, max: 0.12 },
+      { id: 'nad12', label: 'Več kot 12 %', midpoint: 0.15, min: 0.12, max: 0.18 },
+    ],
+    fallback: 0.085,
     unit: '%',
     asPercent: true,
   },

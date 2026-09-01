@@ -130,9 +130,8 @@ export const STORITVE_CONTEXT: SegmentContext = {
     // Edino pojasnilo, ki ni skupno: cena ure je pojem, ki ga pozna samo dejavnost,
     // ki ure prodaja — drugod je vprašanja sploh ni.
     explainer:
-      'Cena in ne strošek: koliko naročniku zaračunate za uro dela — po ceniku ali v povprečju čez projekte. ' +
-      'Hiter izračun: letne prihodke od storitev delite z zaračunanimi urami. Primer: 600.000 EUR / 12.000 ur = 50 EUR/h. ' +
-      'Po tej postavki ovrednotimo ure, ki ste jih opravili, a jih niste zaračunali.',
+      'Cena in ne strošek: koliko za uro dela zaračunate naročniku. Hiter izračun: letne prihodke od ' +
+      'storitev delite z zaračunanimi urami — 600.000 EUR / 12.000 ur = 50 EUR/h.',
     bands: CHARGE_OUT_BANDS,
     fallbackEUR: 55,
   },

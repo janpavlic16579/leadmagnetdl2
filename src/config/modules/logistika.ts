@@ -13,7 +13,7 @@ import {
 } from './shared';
 
 /**
- * Pet medsebojno izključujočih se stroškovnih področij za logistiko in transport.
+ * Šest medsebojno izključujočih se stroškovnih področij za logistiko in transport.
  *
  * Zgrajeno po istih dveh načelih kot proizvodnja (glej proizvodnja.ts):
  *
@@ -27,151 +27,529 @@ import {
  * Dejavnost je bolj raznolika od proizvodnje: prevoznik z lastnim voznim parkom,
  * špediter brez vozil in 3PL skladiščnik odgovarjajo na isti vprašalnik. Zato
  * ima vsako področje vsaj eno vprašanje, ki sme ostati 0, ne da bi izračun
- * razpadel — kdor nima voznega parka, vpiše 0 praznih kilometrov in področje
- * zanj meri samo čakanje in razporejanje.
+ * razpadel — špediter brez vozil vpiše 0 voznikov, skladiščnik tujega blaga 0
+ * vrednosti zaloge, in izračun kljub temu ostane smiseln.
  *
- * Strošek operativne (voznik, skladiščnik) in administrativne (disponent,
- * prodaja) ure prideta iz konteksta: sta lastnost podjetja, ne področja.
+ * Strošek operativne (skladiščnik, komisionar) in administrativne (disponent,
+ * obračun, prodaja) ure prideta iz konteksta: sta lastnost podjetja, ne področja.
  *
- * PANTHEON: seznami funkcionalnosti spodaj ostajajo znotraj objavljenega
- * slovenskega cenika. Datalab nima ločene logistične licence — logistiko
- * pokrivata licenci SE in ME (modula LT in LT3) na ravni financ, naročil,
- * dokumentacije, stroškov in obračunavanja (glej config/industries.ts). Nobena
- * postavka zato ne obljublja namenskega TMS ali WMS.
+ * PANTHEON — ZAKAJ TA NABOR IN NE PREJŠNJI. Do avgusta 2026 sta dve od petih
+ * področij merili prazne kilometre, izkoriščenost voznega parka in razporejanje
+ * voženj. To je delo transportnega sistema (TMS), ki ga Datalab NE ponuja — niti
+ * kot licenco niti kot vertikalo (te so samo Farming, Vet in Public Service).
+ * Izračun je torej obljubljal prihranek, ki ga produkt ne more dostaviti; da smo
+ * pri tistem področju kot edinem v content/actions/actions.ts znali ponuditi le
+ * procesni nasvet ("poiščite povratni tovor"), je bil simptom iste napake.
+ *
+ * Odslej merijo področja tisto, kar PANTHEON res pokriva: obračun in izdajo
+ * računov, potne naloge z dnevnicami, saldakonte in opomine, dokumente in
+ * e-izmenjavo, sledljivost serij ter zaloge po lokacijah. Stroški, ki jih
+ * PANTHEON ne zniža (penali, stojnine, obseg voznega parka), ostanejo VPRAŠANI
+ * kot contextOnly — prodajnik obseg težave vidi, poročilo pa zanj ne obljublja
+ * prihranka.
  */
 
-// --- 1. Planiranje prevozov in izkoriščenost --------------------------------
+// --- 1. Obračun prevozov in nezaračunane storitve ---------------------------
 
-const ODPREMA_CAUSES: CauseOption[] = [
-  { label: 'Razpored voženj ni ažuren oziroma ni viden sproti', category: 'planning' },
-  { label: 'Naročila prihajajo prepozno ali nepopolna', category: 'data' },
-  { label: 'Podatki o pošiljkah so raztreseni po orodjih', category: 'data' },
-  { label: 'Stranke pogosto spreminjajo termine in količine', category: 'external' },
-  { label: 'Okvare vozil ali pomanjkanje voznikov', category: 'physical' },
+const OBRACUN_CAUSES: CauseOption[] = [
+  { label: 'Dokazila o dostavi pridejo z zamikom', category: 'data' },
+  { label: 'Dodatki in čakanja se nikjer sproti ne evidentirajo', category: 'data' },
+  { label: 'Ceniki in pogodbeni pogoji niso na enem mestu', category: 'data' },
+  { label: 'Obračun je odvisen od ene osebe', category: 'planning' },
+  { label: 'Naročniki spornih postavk ne priznajo', category: 'external' },
 ];
 
-export const odprema: ModuleDefinition = {
-  id: 'odprema',
-  title: 'Planiranje prevozov in izkoriščenost',
+export const obracun: ModuleDefinition = {
+  id: 'obracun_logistika',
+  usesRevenue: true,
+  title: 'Obračun prevozov in nezaračunane storitve',
   summary:
-    'Prazne in slabo izkoriščene vožnje, čakanje vozil in voznikov ter čas, porabljen za razporejanje.',
+    'Dodatki, ki jih ne zaračunate, računi, ki čakajo na dokazilo, napačno zaračunani prevozi in čas za pripravo obračuna.',
   triage: {
-    prompt: 'Kako pogosto se razpored prevozov podre — prazne vožnje, čakanje, ponovno razporejanje?',
+    prompt: 'Kako pogosto opravljeno storitev zaračunate pozneje, kot bi lahko, ali je sploh ne zaračunate?',
     options: [
-      { value: 0, label: 'Razpored drži' },
-      { value: 1, label: 'Občasno' },
-      { value: 2, label: 'Redno, z vplivom' },
-      { value: 3, label: 'Skoraj vsak dan' },
+      { value: 0, label: 'Zaračunamo sproti in v celoti' },
+      { value: 1, label: 'Občasno kaj uide' },
+      { value: 2, label: 'Redno, opazno' },
+      { value: 3, label: 'To je stalna težava' },
     ],
   },
   fields: [
     {
-      key: 'dispatchMethod',
-      label: 'Kako danes razporejate prevoze?',
-      kind: 'choice',
-      default: UNANSWERED_CHOICE,
+      key: 'unbilledExtrasEUR',
+      label:
+        'Kolikšno vrednost opravljenih dodatkov v letu dni ne zaračunate — čakanje, dodatne postaje, ležarine, doplačila?',
+      kind: 'number',
+      unit: 'EUR/leto',
+      default: 0,
+      allowUnknown: true,
+      help: 'Samo delo, ki ste ga opravili in bi ga smeli zaračunati, pa ga niste. Stojnine, ki jih plačate vi, vpišite spodaj.',
+      explainer:
+        'Opravljeni dodatki, ki jih niste zaračunali: čakanje, dodatne postaje, ležarine. Ocena: 15 ' +
+        'čakanj × 40 EUR × 12 ≈ 7.200 EUR na leto.',
+    },
+    {
+      key: 'invoiceLagDays',
+      label: 'Koliko dni po opravljeni dostavi v povprečju izdate račun?',
+      kind: 'number',
+      unit: 'dni',
+      default: 0,
+      help: 'Če račun izdate isti ali naslednji dan, vpišite 0. Zamude naročnikov pri plačilu merimo v področju Plačilni roki.',
+      explainer:
+        'Dnevi od opravljene dostave do izdaje računa, ne do plačila — najpogosteje zamuja dokazilo o ' +
+        'dostavi. Primer: dostava v ponedeljek, račun čez enajst dni → 11.',
+    },
+    {
+      key: 'pricingErrorEUR',
+      label:
+        'Kolikšna je bila v zadnjih 12 mesecih vrednost napačno zaračunanih prevozov — napačna cena, pozabljen rabat, izdani dobropisi?',
+      kind: 'number',
+      unit: 'EUR/leto',
+      default: 0,
+      allowUnknown: true,
+      help: 'Samo napake v ceni. Dobropisi zaradi napačne ali poškodovane pošiljke sodijo v področje Napačne dostave.',
+      explainer:
+        'Samo dobropisi in popravki zaradi napačne cene, ne zaradi napake v izvedbi. Ocena: 18 dobropisov ' +
+        '× 250 EUR ≈ 4.500 EUR na leto.',
+    },
+    {
+      key: 'billingHoursPerMonth',
+      label:
+        'Koliko ur mesečno porabite za pripravo obračuna prevozov — zbiranje dokazil, preverjanje cen, izstavljanje računov?',
+      kind: 'number',
+      unit: 'h/mesec',
+      default: 0,
+      help: 'Knjiženje prejetih računov sodi v področje Računovodstvo in finance, ne sem.',
+      explainer:
+        'Delo od zaključene vožnje do izdanega računa: zbiranje CMR in dokazil, preverjanje cene, vnos ' +
+        'dodatkov. Ocena: 1 oseba × 8 h na teden ≈ 34 ur na mesec.',
+    },
+    {
+      /*
+       * contextOnly NAMENOMA. Penali in stojnine so resničen strošek, a nastanejo,
+       * ker prevoz zamuja — tega PANTHEON ne prepreči. Znesek bi torej v poročilu
+       * obljubljal prihranek, ki ga ne moremo dostaviti. Vprašanje ostane, ker
+       * prodajniku pove velikost težave; enak vzorec kot lateDeliveriesPerMonth prej.
+       */
+      key: 'penaltyStojnineEUR',
+      label: 'Kolikšni so bili letni penali in stojnine, ki ste jih plačali vi?',
+      kind: 'number',
+      unit: 'EUR/leto',
+      default: 0,
       contextOnly: true,
-      choices: [
-        { value: 0, label: 'Namenski sistem za razporejanje' },
-        { value: 1, label: 'ERP brez zanesljivega razporejanja' },
-        { value: 2, label: 'Excel' },
-        { value: 3, label: 'Telefon oziroma sprotni dogovor' },
-      ],
-    },
-    {
-      key: 'emptyKmPerMonth',
-      label:
-        'Koliko kilometrov mesečno vozila prevozijo prazna ali z manj kot polovično izkoriščenostjo?',
-      kind: 'number',
-      unit: 'km/mesec',
-      default: 0,
-      help: 'Če voznega parka nimate, vpišite 0. Nujne podnajeme prevoznikov meri področje Zamude.',
+      help: 'Podatek ne vstopa v izračun — služi za oceno obsega težave.',
       explainer:
-        'Kilometri brez tovora — vračanje praznega vozila, vožnja do naslednjega nakladalnega mesta. Če ' +
-        'deleža ne vodite, ocenite: skupni kilometri × ocenjen delež praznih voženj. Primer: 20.000 km × ' +
-        '20 % = 4.000 km na mesec.',
+        'Penali, stojnine (demurrage, detention) in popusti kot odškodnina, ki ste jih plačali vi — ne ' +
+        'tisti, ki jih zaračunate naročniku. Seštejte zadnjih 12 mesecev.',
     },
-    {
-      key: 'costPerKmEUR',
-      label: 'Kolikšen je vaš povprečen variabilen strošek kilometra (gorivo, cestnine, obraba, gume)?',
-      kind: 'slider',
-      min: 0.2,
-      max: 1.6,
-      step: 0.05,
-      unit: 'EUR/km',
-      default: 0.75,
-      help: 'Brez stroška voznika — njegove ure so zajete v naslednjem vprašanju.',
-      explainer:
-        'Samo stroški, ki nastanejo z vožnjo: gorivo, cestnine, gume, obraba, olja. Brez plače voznika, ' +
-        'zavarovanja in leasinga. Hiter izračun: letni strošek goriva in cestnin delite s prevoženimi ' +
-        'kilometri. Primer: 0,45 EUR/km.',
-    },
-    {
-      key: 'waitingHoursPerMonth',
-      label:
-        'Koliko skupnih ur mesečno vozniki in vozila čakajo na nakladu, razkladu ali zaradi nejasnega razporeda?',
-      kind: 'number',
-      unit: 'h/mesec',
-      default: 0,
-      help: 'Čakanja, ki ga stranki zaračunate kot stojnino, ne štejte — tega ne plačujete vi.',
-      explainer:
-        'Ure, ko vozilo in voznik stojita, ne da bi to kdo plačal — čakanje na rampi, na dokumente, na ' +
-        'nakladanje. Ocenite: koliko voženj na mesec × povprečno čakanje. Primer: 120 voženj × 30 min ≈ ' +
-        '60 ur.',
-    },
-    {
-      key: 'dispatchHoursPerMonth',
-      label:
-        'Koliko ur mesečno porabite za razporejanje, prerazporejanje in iskanje informacij o vožnjah?',
-      kind: 'number',
-      unit: 'h/mesec',
-      default: 0,
-    },
-    mainCauseField(ODPREMA_CAUSES),
+    mainCauseField(OBRACUN_CAUSES),
   ],
   compute: (input, context) => {
-    const addressableShare = addressableShareOf(ODPREMA_CAUSES, input.mainCause);
+    const addressableShare = addressableShareOf(OBRACUN_CAUSES, input.mainCause);
+    const dailyRevenue = context.annualRevenueEUR / 365;
 
     return [
       {
-        // Gorivo in cestnine so že porabljen denar, ne izgubljen čas — zato
-        // neposredna izguba. Da je vsak prazen kilometer odpravljiv, izračun ne
-        // trdi: to omeji naslovljiv delež iz glavnega vzroka.
+        // Delo je opravljeno in strošek zanj že nastal, zato je nezaračunan
+        // dodatek neposredna izguba in ne nezaslužena marža: manjka samo račun.
         bucket: 'directLoss',
-        label: 'Prazni in slabo izkoriščeni kilometri',
-        valueEUR: input.emptyKmPerMonth * input.costPerKmEUR * MONTHS_PER_YEAR,
-        addressableShare,
-        // Geografsko dno: vozilo se mora nekako vrniti, tovor v obe smeri pa ne
-        // obstaja na vsaki relaciji. Boljše planiranje delež praznih kilometrov
-        // zniža, ne odpravi. Doslej je komentar nad to postavko to že trdil,
-        // koda pa tega ni izvajala — postavka je dobila isti delež kot ure
-        // razporejanja.
-        addressableCap: 0.5,
-      },
-      {
-        bucket: 'capacity',
-        label: 'Čakanje vozil in voznikov',
-        valueEUR: input.waitingHoursPerMonth * context.operationalHourCostEUR * MONTHS_PER_YEAR,
-        hoursPerMonth: input.waitingHoursPerMonth,
+        label: 'Nezaračunani dodatki in čakanja',
+        valueEUR: input.unbilledExtrasEUR,
         addressableShare,
       },
       {
+        // Brez odgovora o prihodku je to 0 — prometa si ne izmišljamo (glej
+        // annualRevenue.fallback v contexts/logistika.ts).
+        bucket: 'directLoss',
+        label: 'Denar, vezan v prepozno izdanih računih',
+        valueEUR: dailyRevenue * input.invoiceLagDays * context.capitalCostRate,
+        addressableShare,
+      },
+      {
+        bucket: 'directLoss',
+        label: 'Napačno zaračunani prevozi',
+        valueEUR: input.pricingErrorEUR,
+        addressableShare,
+      },
+      {
         bucket: 'capacity',
-        label: 'Razporejanje in usklajevanje voženj',
-        valueEUR: input.dispatchHoursPerMonth * context.adminHourCostEUR * MONTHS_PER_YEAR,
-        hoursPerMonth: input.dispatchHoursPerMonth,
+        label: 'Priprava obračuna prevozov',
+        valueEUR: input.billingHoursPerMonth * context.adminHourCostEUR * MONTHS_PER_YEAR,
+        hoursPerMonth: input.billingHoursPerMonth,
         addressableShare,
       },
     ];
   },
   pantheon: [
-    'Naročila in odpreme na enem mestu, brez vzporednih preglednic',
-    'Statusi dokumentov, vidni sproti',
-    'Stroški prevoza, vezani na dokument in stranko',
+    'Cenik s pogodbenimi cenami, rabati in doplačili po naročniku',
+    'Dokazilo o dostavi vezano na dokument, račun brez ponovnega vnosa',
+    'Kalkulacije lastne cene po dokumentu in stranki',
   ],
 };
 
-// --- 2. Napačne dostave, poškodbe in reklamacije ----------------------------
+// --- 2. Vozniki, potni nalogi in dnevnice -----------------------------------
+
+const VOZNIKI_CAUSES: CauseOption[] = [
+  { label: 'Potni nalogi se izpolnjujejo na papirju ali v preglednicah', category: 'data' },
+  { label: 'Podatki za obračun pridejo iz več virov', category: 'data' },
+  { label: 'Pravila za dnevnice in dodatke so zapletena', category: 'planning' },
+  { label: 'Zunanji obračun plač zahteva ročno pripravo podatkov', category: 'external' },
+  // Ostaja people: gre za disciplino oddaje in ne za obliko zapisa — težava
+  // ostane tudi ob dobro postavljenem sistemu, le manjša.
+  { label: 'Vozniki dokumentacijo oddajo z zamudo', category: 'people' },
+];
+
+/**
+ * To področje v tem segmentu NADOMEŠČA horizontalo kadriHz.
+ *
+ * Razlog je isti kot pri izključitvi dokumentiHz: horizontala v vprašanju
+ * hrAdminHoursPerMonth izrecno našteva potne naloge, zato bi obe področji merili
+ * iste ure. Pri prevozniku je to hkrati največji del kadrovske administracije —
+ * mednarodni voznik ima potni nalog za vsako vožnjo — zato panožno področje
+ * horizontalo pokrije, ne obratno.
+ */
+export const vozniki: ModuleDefinition = {
+  id: 'vozniki',
+  title: 'Vozniki, potni nalogi in dnevnice',
+  summary:
+    'Izdaja in obračun potnih nalogov, dnevnice in kilometrine, evidence delovnega časa voznikov ter priprava plač.',
+  triage: {
+    prompt: 'Koliko dela zahtevajo potni nalogi, dnevnice in evidence delovnega časa voznikov?',
+    options: [
+      { value: 0, label: 'Večina poteka samodejno' },
+      { value: 1, label: 'Nekaj ur na mesec' },
+      { value: 2, label: 'Nekaj dni vsak mesec' },
+      { value: 3, label: 'Vsak mesec je to velik projekt' },
+    ],
+  },
+  fields: [
+    {
+      key: 'travelOrderHoursPerMonth',
+      label: 'Koliko ur mesečno porabite za izdajo, obračun in popravke potnih nalogov ter dnevnic?',
+      kind: 'number',
+      unit: 'h/mesec',
+      default: 0,
+      help: 'Šteje pisarniško delo, ne čas voznika na poti.',
+      explainer:
+        'Izdaja naloga pred potjo, obračun dnevnic in kilometrine po njej, popravki pred plačami. Ocena: ' +
+        '300 nalogov × 6 min ≈ 30 ur na mesec.',
+    },
+    {
+      key: 'driverTimesheetHoursPerMonth',
+      label:
+        'Koliko ur mesečno gre za zbiranje in urejanje evidenc delovnega časa, odsotnosti in dopustov voznikov?',
+      kind: 'number',
+      unit: 'h/mesec',
+      default: 0,
+      help: 'Evidenca za plačo. Analize tahografa in nadzora voznih časov sem ne štejte.',
+      explainer:
+        'Prepisovanje evidenc, lovljenje manjkajočih vnosov, usklajevanje odsotnosti pred obračunom plač. ' +
+        'Ocena: 2 osebi × 6 h ob koncu meseca ≈ 12 ur.',
+    },
+    {
+      key: 'payrollHoursPerMonth',
+      label: 'Koliko ur mesečno vzame priprava podatkov za obračun plač in popravki po obračunu?',
+      kind: 'number',
+      unit: 'h/mesec',
+      default: 0,
+    },
+    {
+      key: 'annualPayrollCorrectionEUR',
+      label:
+        'Koliko so v zadnjih 12 mesecih stali napačni obračuni dnevnic in plač (poračuni, zamudne obresti, zunanja pomoč)?',
+      kind: 'number',
+      unit: 'EUR/leto',
+      default: 0,
+      allowUnknown: true,
+    },
+    {
+      key: 'driverCount',
+      label: 'Koliko voznikov zaposlujete?',
+      kind: 'number',
+      unit: 'voznikov',
+      default: 0,
+      contextOnly: true,
+      help: 'Podatek ne vstopa v izračun — pove, kako velik je obseg potnih nalogov.',
+      explainer:
+        'Štejte vse, za katere izdajate potne naloge — tudi občasne in tiste s krajšim delovnim časom. Če ' +
+        'prevoze samo organizirate, vpišite 0.',
+    },
+    mainCauseField(VOZNIKI_CAUSES),
+  ],
+  compute: (input, context) => {
+    const addressableShare = addressableShareOf(VOZNIKI_CAUSES, input.mainCause);
+    const rate = context.adminHourCostEUR;
+
+    return [
+      {
+        bucket: 'capacity',
+        label: 'Potni nalogi in obračun dnevnic',
+        valueEUR: input.travelOrderHoursPerMonth * rate * MONTHS_PER_YEAR,
+        hoursPerMonth: input.travelOrderHoursPerMonth,
+        addressableShare,
+      },
+      {
+        bucket: 'capacity',
+        label: 'Evidence delovnega časa voznikov',
+        valueEUR: input.driverTimesheetHoursPerMonth * rate * MONTHS_PER_YEAR,
+        hoursPerMonth: input.driverTimesheetHoursPerMonth,
+        addressableShare,
+      },
+      {
+        bucket: 'capacity',
+        label: 'Priprava in popravki obračuna plač',
+        valueEUR: input.payrollHoursPerMonth * rate * MONTHS_PER_YEAR,
+        hoursPerMonth: input.payrollHoursPerMonth,
+        addressableShare,
+      },
+      {
+        bucket: 'directLoss',
+        label: 'Stroški napačnih obračunov dnevnic in plač',
+        valueEUR: input.annualPayrollCorrectionEUR,
+        addressableShare,
+      },
+    ];
+  },
+  pantheon: [
+    'Samodejni izračun domačih in tujih dnevnic z znižanjem za obroke',
+    'Kilometrine in potni stroški s foto-zajemom računov na terenu',
+    'Obračun po stroškovnih mestih in izplačilo prek plače, brez prepisovanja',
+  ],
+};
+
+// --- 3. Plačilni roki in terjatve -------------------------------------------
+
+const TERJATVE_CAUSES: CauseOption[] = [
+  { label: 'Računi gredo ven z zamikom', category: 'data' },
+  { label: 'Odprtih postavk ne vidimo sproti', category: 'data' },
+  { label: 'Ena sporna postavka zadrži celoten račun', category: 'data' },
+  { label: 'Opominjanje ni nikogaršnja glavna naloga', category: 'planning' },
+  { label: 'Naročniki plačujejo po svojem ritmu', category: 'external' },
+];
+
+export const terjatve: ModuleDefinition = {
+  id: 'terjatve_logistika',
+  usesRevenue: true,
+  title: 'Plačilni roki in terjatve',
+  summary:
+    'Strošek denarja, ki predolgo čaka na naročnika, čas za opominjanje in izterjavo ter odpisane terjatve.',
+  triage: {
+    prompt: 'Kako pogosto naročniki plačajo po dogovorjenem roku?',
+    options: [
+      { value: 0, label: 'Roke večinoma držijo' },
+      { value: 1, label: 'Nekaj zamud mesečno' },
+      { value: 2, label: 'Redno zamujajo' },
+      { value: 3, label: 'Zamude so pravilo' },
+    ],
+  },
+  fields: [
+    {
+      key: 'currentDSODays',
+      label: 'Kolikšen je povprečen dejanski plačilni rok vaših naročnikov (DSO)?',
+      kind: 'number',
+      unit: 'dni',
+      default: 0,
+      contextOnly: true,
+      help: 'Podatek ne vstopa v izračun — služi za primerjavo z dogovorjenim rokom.',
+      explainer:
+        'Povprečno število dni od izdaje računa do plačila. Izračun: odprte terjatve ÷ letni prihodek × ' +
+        '365.',
+    },
+    {
+      key: 'overdueDaysAverage',
+      label: 'Za koliko dni povprečno naročniki prekoračijo dogovorjeni plačilni rok?',
+      kind: 'number',
+      unit: 'dni',
+      default: 0,
+      help: 'Samo prekoračitev NAD dogovorjenim rokom. Financiranje dogovorjenega roka je normalno poslovanje in ni strošek napake.',
+      explainer:
+        'Samo dnevi nad dogovorjenim rokom. Primer: dogovorjeno 60 dni, naročniki plačajo v 75 → vpišite ' +
+        '15.',
+    },
+    {
+      key: 'dunningHoursPerMonth',
+      label: 'Koliko ur mesečno porabite za opominjanje, usklajevanje odprtih postavk in izterjavo?',
+      kind: 'number',
+      unit: 'h/mesec',
+      default: 0,
+      help: 'Ne vključujte priprave obračuna in izstavljanja računov — te ure meri področje Obračun prevozov.',
+      explainer:
+        'Ure za opominjanje, usklajevanje odprtih postavk in izterjavo. Ocena: 1 oseba × 4 h na teden ≈ ' +
+        '17 ur na mesec.',
+    },
+    {
+      key: 'annualBadDebtEUR',
+      label: 'Kolikšna je bila v zadnjih 12 mesecih vrednost odpisanih ali neizterljivih terjatev?',
+      kind: 'number',
+      unit: 'EUR/leto',
+      default: 0,
+      allowUnknown: true,
+    },
+    mainCauseField(TERJATVE_CAUSES),
+  ],
+  compute: (input, context) => {
+    const addressableShare = addressableShareOf(TERJATVE_CAUSES, input.mainCause);
+    const dailyRevenue = context.annualRevenueEUR / 365;
+
+    return [
+      {
+        bucket: 'directLoss',
+        label: 'Strošek zamud pri plačilih',
+        valueEUR: dailyRevenue * input.overdueDaysAverage * context.capitalCostRate,
+        addressableShare,
+      },
+      {
+        bucket: 'capacity',
+        label: 'Opominjanje in izterjava',
+        valueEUR: input.dunningHoursPerMonth * context.adminHourCostEUR * MONTHS_PER_YEAR,
+        hoursPerMonth: input.dunningHoursPerMonth,
+        addressableShare,
+      },
+      {
+        bucket: 'directLoss',
+        label: 'Odpisane terjatve',
+        valueEUR: input.annualBadDebtEUR,
+        addressableShare,
+      },
+    ];
+  },
+  pantheon: [
+    'Samodejni opomini in lestvica opominjanja po zapadlosti',
+    'Odprte postavke in limit naročnika vidni že ob vnosu naročila',
+    'Izdaja e-računov skladno z ZIERDED, brez ročnega pošiljanja',
+  ],
+};
+
+// --- 4. Prevozna dokumentacija, podatki in statusi --------------------------
+
+const DOKUMENTACIJA_CAUSES: CauseOption[] = [
+  { label: 'Podatke vodimo v več različnih orodjih', category: 'data' },
+  { label: 'Listine so večinoma papirne', category: 'data' },
+  { label: 'Vsaka stranka zahteva svoj portal oziroma obrazec', category: 'external' },
+  { label: 'Podatki se ne vnašajo sproti', category: 'data' },
+  { label: 'Odgovornosti niso jasne', category: 'planning' },
+];
+
+export const dokumentacija: ModuleDefinition = {
+  id: 'dokumentacija',
+  title: 'Prevozna dokumentacija, podatki in statusi',
+  summary:
+    'Priprava in zbiranje listin, prepisovanje med orodji, popravljanje napačnih podatkov in odgovarjanje na vprašanja o pošiljkah.',
+  triage: {
+    prompt: 'Koliko ročnega dela imate z listinami, dokazili o dostavi in prepisovanjem?',
+    options: [
+      { value: 0, label: 'Večina poteka digitalno' },
+      { value: 1, label: 'Nekaj ur tedensko' },
+      { value: 2, label: 'Vsak dan' },
+      { value: 3, label: 'Za to je potreben skoraj cel človek' },
+    ],
+  },
+  fields: [
+    {
+      key: 'documentHoursPerMonth',
+      label:
+        'Koliko ur mesečno porabite za pripravo, tiskanje in zbiranje prevoznih listin (CMR, dobavnice, dokazila o dostavi)?',
+      kind: 'number',
+      unit: 'h/mesec',
+      default: 0,
+    },
+    {
+      key: 'retypingHoursPerMonth',
+      label:
+        'Koliko ur mesečno porabite samo za prepisovanje podatkov med ERP-jem, Excelom, portali strank in papirjem?',
+      kind: 'number',
+      unit: 'h/mesec',
+      default: 0,
+      help: 'Ne vključujte priprave listin iz prvega vprašanja.',
+      explainer:
+        'Isti podatek, vpisan drugič: iz naročila v prevozni nalog, iz naloga v Excel, s papirja v ' +
+        'sistem. Ocena: 2 osebi × 40 min na dan ≈ 28 ur na mesec.',
+    },
+    {
+      key: 'dataFixHoursPerMonth',
+      label:
+        'Koliko ur mesečno porabite za popravljanje napačnih ali manjkajočih podatkov (naslovi, teže, cene prevoza)?',
+      kind: 'number',
+      unit: 'h/mesec',
+      default: 0,
+    },
+    {
+      /*
+       * Preseljeno iz ukinjenega področja Zamude. Same zamude PANTHEON ne odpravi —
+       * to je delo TMS. Poizvedbe "kje je pošiljka" pa nastanejo, ker naročnik
+       * statusa ne vidi sam, in prav to je dokumentna težava, ki jo ERP naslovi.
+       */
+      key: 'statusHoursPerMonth',
+      label:
+        'Koliko ur mesečno porabite za odgovarjanje na vprašanja, kje je pošiljka, in za obveščanje o zamudah?',
+      kind: 'number',
+      unit: 'h/mesec',
+      default: 0,
+      help: 'Reševanje reklamacij zaradi napačnih ali poškodovanih pošiljk sodi v področje Napačne dostave.',
+      explainer:
+        'Klici in e-pošta, ki jih ne bi bilo, če bi naročnik status videl sam. Ocena: 12 poizvedb × 5 min ' +
+        '× 21 dni ≈ 21 ur na mesec.',
+    },
+    {
+      key: 'podTiming',
+      label: 'Kdaj dokazilo o dostavi (POD) pride v vaš sistem?',
+      kind: 'choice',
+      default: UNANSWERED_CHOICE,
+      contextOnly: true,
+      choices: [
+        { value: 0, label: 'Sproti, elektronsko' },
+        { value: 1, label: 'Isti dan' },
+        { value: 2, label: 'V nekaj dneh' },
+        { value: 3, label: 'Šele ob obračunu' },
+      ],
+    },
+    mainCauseField(DOKUMENTACIJA_CAUSES),
+  ],
+  compute: (input, context) => {
+    const addressableShare = addressableShareOf(DOKUMENTACIJA_CAUSES, input.mainCause);
+    const rate = context.adminHourCostEUR;
+
+    // Štiri ločene postavke namesto ene vsote: razčlenitev pokaže, kje ročno delo
+    // dejansko nastaja, in obiskovalec vidi, da vprašanja niso podvojena.
+    return [
+      {
+        bucket: 'capacity',
+        label: 'Priprava in zbiranje listin',
+        valueEUR: input.documentHoursPerMonth * rate * MONTHS_PER_YEAR,
+        hoursPerMonth: input.documentHoursPerMonth,
+        addressableShare,
+      },
+      {
+        bucket: 'capacity',
+        label: 'Prepisovanje podatkov med orodji',
+        valueEUR: input.retypingHoursPerMonth * rate * MONTHS_PER_YEAR,
+        hoursPerMonth: input.retypingHoursPerMonth,
+        addressableShare,
+      },
+      {
+        bucket: 'capacity',
+        label: 'Popravljanje napačnih podatkov',
+        valueEUR: input.dataFixHoursPerMonth * rate * MONTHS_PER_YEAR,
+        hoursPerMonth: input.dataFixHoursPerMonth,
+        addressableShare,
+      },
+      {
+        bucket: 'capacity',
+        label: 'Obveščanje o statusih in zamudah',
+        valueEUR: input.statusHoursPerMonth * rate * MONTHS_PER_YEAR,
+        hoursPerMonth: input.statusHoursPerMonth,
+        addressableShare,
+      },
+    ];
+  },
+  pantheon: [
+    'Naročilo, dobavnica in račun brez ponovnega vnosa',
+    'E-računi in elektronska izmenjava dokumentov (eSlog)',
+    'Statusi dokumentov in zgodovina po naročniku, vidni sproti',
+  ],
+};
+
+// --- 5. Napačne dostave, poškodbe in reklamacije ----------------------------
 
 const NAPAKE_CAUSES: CauseOption[] = [
   { label: 'Podatki o pošiljki so nepopolni ali napačni', category: 'data' },
@@ -219,10 +597,10 @@ export const napake: ModuleDefinition = {
       default: 0,
       help:
         'Samo pošiljke, ki so terjale popravek — ponovno dostavo, prepakiranje ali vračilo. ' +
-        'Zamude brez napake v vsebini sodijo v področje Roki.',
+        'Zamuda brez napake v vsebini sem ne sodi.',
       explainer:
-        'Če deleža ne vodite, ga ocenite iz reklamacij: koliko primerov na mesec delite s ' +
-        'številom pošiljk. Primer: 60 reklamacij pri 5.000 pošiljkah je 1,2 %.',
+        'Če deleža ne vodite, ga ocenite iz reklamacij: primere na mesec delite s številom pošiljk. ' +
+        'Primer: 60 reklamacij pri 5.000 pošiljkah je 1,2 %.',
     },
     {
       key: 'costPerErrorEUR',
@@ -235,8 +613,8 @@ export const napake: ModuleDefinition = {
       default: 40,
       help: 'Ponovna dostava, prepakiranje, vračilo. Vrednost samega blaga vpišite v naslednje vprašanje.',
       explainer:
-        'Kaj vas stane ena napaka brez vrednosti blaga: ponovna dostava, prepakiranje, dodatna ' +
-        'manipulacija, čas disponenta. Primer: ponovna dostava 60 EUR + 1 ura dela ≈ 90 EUR.',
+        'Kaj vas stane ena napaka brez vrednosti blaga: ponovna dostava, prepakiranje, čas disponenta. ' +
+        'Primer: 60 EUR prevoza + 1 ura dela ≈ 90 EUR.',
     },
     {
       key: 'annualDamageCostEUR',
@@ -248,8 +626,8 @@ export const napake: ModuleDefinition = {
       allowUnknown: true,
       help: 'Samo del, ki ga ni pokrilo zavarovanje.',
       explainer:
-        'Vrednost poškodovanega ali izgubljenega blaga, ki ste jo nosili vi — nad odbitno franšizo ' +
-        'oziroma tisto, česar zavarovalnica ni pokrila. Seštejte primere zadnjih 12 mesecev.',
+        'Vrednost poškodovanega ali izgubljenega blaga, ki ste jo nosili vi — nad franšizo oziroma tisto, ' +
+        'česar zavarovalnica ni pokrila. Seštejte primere zadnjih 12 mesecev.',
     },
     {
       key: 'claimHoursPerMonth',
@@ -257,10 +635,10 @@ export const napake: ModuleDefinition = {
       kind: 'number',
       unit: 'h/mesec',
       default: 0,
-      help: 'Obveščanje strank o zamudah sodi v področje Zamude, ne sem.',
+      help: 'Obveščanje naročnikov o statusih in zamudah sodi v področje Prevozna dokumentacija, ne sem.',
       explainer:
-        'Pisarniško reševanje: sprejem reklamacije, iskanje pošiljke, usklajevanje z voznikom in ' +
-        'stranko, papirologija. Primer: 15 primerov na mesec × 1 h ≈ 15 ur.',
+        'Pisarniško reševanje: sprejem reklamacije, iskanje pošiljke, usklajevanje z voznikom in stranko. ' +
+        'Ocena: 15 primerov × 1 h ≈ 15 ur na mesec.',
     },
     mainCauseField(NAPAKE_CAUSES),
   ],
@@ -294,11 +672,11 @@ export const napake: ModuleDefinition = {
   pantheon: [
     'Dobavnice in prevzemi neposredno iz naročil',
     'Serije in loti s sledljivostjo do posamezne pošiljke',
-    'Zgodovina dokumentov po stranki in artiklu',
+    'Reklamacije od kupcev in do dobaviteljev v enem postopku, z zgodovino dokumentov',
   ],
 };
 
-// --- 3. Skladiščne operacije in zaloga --------------------------------------
+// --- 6. Skladiščne operacije in zaloga --------------------------------------
 
 const SKLADISCE_CAUSES: CauseOption[] = [
   { label: 'Lokacije blaga niso vodene oziroma niso ažurne', category: 'data' },
@@ -329,10 +707,10 @@ export const skladisce: ModuleDefinition = {
       kind: 'number',
       unit: 'h/mesec',
       default: 0,
-      help: 'Čakanje vozil na rampi štejte v področju Planiranje prevozov, ne tukaj.',
+      help: 'Iskanje listin in dokazil sodi v področje Prevozna dokumentacija, ne sem.',
       explainer:
-        'Ure iskanja blaga, ki jih ne bi bilo, če bi sistem vedel, kje kaj leži. Ocenite: koliko ljudi × ' +
-        'koliko minut na izmeno × 21 dni. Primer: 4 ljudje × 15 min ≈ 21 ur na mesec.',
+        'Ure iskanja blaga, ki jih ne bi bilo, če bi sistem vedel, kje kaj leži. Ocena: 4 ljudje × 15 min ' +
+        'na izmeno ≈ 21 ur na mesec.',
     },
     {
       key: 'inventoryValueEUR',
@@ -342,8 +720,8 @@ export const skladisce: ModuleDefinition = {
       default: 0,
       help: 'Če skladiščite izključno tuje blago, vpišite 0 — tujega kapitala ne sproščate vi.',
       explainer:
-        'Povprečna vrednost blaga, ki je VAŠA last, po nabavni vrednosti — ne vrednost tujega blaga v ' +
-        'hrambi. Vzemite postavko zaloge iz bilance ali povprečje nekaj mesečnih stanj.',
+        'Samo blago, ki je vaša last, po nabavni vrednosti — ne tuje blago v hrambi. Vzemite postavko iz ' +
+        'bilance ali povprečje nekaj mesečnih stanj.',
     },
     {
       key: 'annualWriteOffEUR',
@@ -399,266 +777,42 @@ export const skladisce: ModuleDefinition = {
       },
     ];
   },
+  // Namenoma brez tasking, slotting in waves: to je delo naprednega WMS, ki ga
+  // Datalab ne ponuja. Komisijsko skladišče in inventura s čitalci sta v ponudbi.
   pantheon: [
-    'Skladišča, lokacije, serije in loti',
-    'Sproten pregled nad zalogo po skladiščih',
+    'Skladišča, lokacije, serije in loti — tudi komisijsko skladišče za tuje blago',
+    'Inventura s čitalci črtnih kod in sproten pregled zaloge po skladiščih',
     'Minimalne zaloge in točke naročanja',
-  ],
-};
-
-// --- 4. Prevozna dokumentacija in podatki -----------------------------------
-
-const DOKUMENTACIJA_CAUSES: CauseOption[] = [
-  { label: 'Podatke vodimo v več različnih orodjih', category: 'data' },
-  { label: 'Listine so večinoma papirne', category: 'data' },
-  { label: 'Vsaka stranka zahteva svoj portal oziroma obrazec', category: 'external' },
-  { label: 'Podatki se ne vnašajo sproti', category: 'data' },
-  { label: 'Odgovornosti niso jasne', category: 'planning' },
-];
-
-export const dokumentacija: ModuleDefinition = {
-  id: 'dokumentacija',
-  title: 'Prevozna dokumentacija in podatki',
-  summary: 'Priprava in zbiranje listin, prepisovanje med orodji in popravljanje napačnih podatkov.',
-  triage: {
-    prompt: 'Koliko ročnega dela imate z listinami, dokazili o dostavi in prepisovanjem?',
-    options: [
-      { value: 0, label: 'Večina poteka digitalno' },
-      { value: 1, label: 'Nekaj ur tedensko' },
-      { value: 2, label: 'Vsak dan' },
-      { value: 3, label: 'Za to je potreben skoraj cel človek' },
-    ],
-  },
-  fields: [
-    {
-      key: 'documentHoursPerMonth',
-      label:
-        'Koliko ur mesečno porabite za pripravo, tiskanje in zbiranje prevoznih listin (CMR, dobavnice, dokazila o dostavi)?',
-      kind: 'number',
-      unit: 'h/mesec',
-      default: 0,
-    },
-    {
-      key: 'retypingHoursPerMonth',
-      label:
-        'Koliko ur mesečno porabite samo za prepisovanje podatkov med ERP-jem, Excelom, portali strank in papirjem?',
-      kind: 'number',
-      unit: 'h/mesec',
-      default: 0,
-      help: 'Ne vključujte priprave listin iz prvega vprašanja.',
-      explainer:
-        'Isti podatek, vpisan drugič: iz naročila v prevozni nalog, iz naloga v Excel, s papirja v ' +
-        'sistem. Ocenite: koliko ljudi × koliko minut na dan × 21 dni. Primer: 2 osebi × 40 min ≈ 28 ur.',
-    },
-    {
-      key: 'dataFixHoursPerMonth',
-      label:
-        'Koliko ur mesečno porabite za popravljanje napačnih ali manjkajočih podatkov (naslovi, teže, cene prevoza)?',
-      kind: 'number',
-      unit: 'h/mesec',
-      default: 0,
-    },
-    {
-      key: 'podTiming',
-      label: 'Kdaj dokazilo o dostavi (POD) pride v vaš sistem?',
-      kind: 'choice',
-      default: UNANSWERED_CHOICE,
-      contextOnly: true,
-      choices: [
-        { value: 0, label: 'Sproti, elektronsko' },
-        { value: 1, label: 'Isti dan' },
-        { value: 2, label: 'V nekaj dneh' },
-        { value: 3, label: 'Šele ob obračunu' },
-      ],
-    },
-    mainCauseField(DOKUMENTACIJA_CAUSES),
-  ],
-  compute: (input, context) => {
-    const addressableShare = addressableShareOf(DOKUMENTACIJA_CAUSES, input.mainCause);
-    const rate = context.adminHourCostEUR;
-
-    // Tri ločene postavke namesto ene vsote: razčlenitev pokaže, kje ročno delo
-    // dejansko nastaja, in obiskovalec vidi, da vprašanja niso podvojena.
-    return [
-      {
-        bucket: 'capacity',
-        label: 'Priprava in zbiranje listin',
-        valueEUR: input.documentHoursPerMonth * rate * MONTHS_PER_YEAR,
-        hoursPerMonth: input.documentHoursPerMonth,
-        addressableShare,
-      },
-      {
-        bucket: 'capacity',
-        label: 'Prepisovanje podatkov med orodji',
-        valueEUR: input.retypingHoursPerMonth * rate * MONTHS_PER_YEAR,
-        hoursPerMonth: input.retypingHoursPerMonth,
-        addressableShare,
-      },
-      {
-        bucket: 'capacity',
-        label: 'Popravljanje napačnih podatkov',
-        valueEUR: input.dataFixHoursPerMonth * rate * MONTHS_PER_YEAR,
-        hoursPerMonth: input.dataFixHoursPerMonth,
-        addressableShare,
-      },
-    ];
-  },
-  pantheon: [
-    'Naročilo, dobavnica in račun brez ponovnega vnosa',
-    'E-računi in elektronska izmenjava dokumentov',
-    'Enoten vir podatkov namesto Excela ob ERP-ju',
-  ],
-};
-
-// --- 5. Zamude, stojnine in nujni prevozi -----------------------------------
-
-const ZAMUDE_CAUSES: CauseOption[] = [
-  { label: 'Razpored in status pošiljk nista pravočasno vidna', category: 'planning' },
-  { label: 'Naročila oziroma podatki pridejo prepozno', category: 'data' },
-  { label: 'Prenos podatkov med prodajo, skladiščem in prevozom je ročen', category: 'data' },
-  { label: 'Stranke, podizvajalci ali carina', category: 'external' },
-  { label: 'Vozila, vozniki ali zastoji na cesti', category: 'physical' },
-];
-
-export const roki: ModuleDefinition = {
-  id: 'roki',
-  title: 'Zamude, stojnine in nujni prevozi',
-  summary:
-    'Nujni podnajemi prevoznikov, penali in stojnine, izgubljena marža in čas za pojasnjevanje zamud.',
-  triage: {
-    prompt: 'Kako pogosto zamujate z dostavo ali morate prevoz reševati nujno?',
-    options: [
-      { value: 0, label: 'Roke držimo' },
-      { value: 1, label: 'Nekajkrat mesečno' },
-      { value: 2, label: 'Tedensko' },
-      { value: 3, label: 'Zamude so pogoste' },
-    ],
-  },
-  fields: [
-    {
-      key: 'lateDeliveriesPerMonth',
-      label: 'Koliko dostav mesečno opravite z zamudo?',
-      kind: 'number',
-      unit: 'dostav/mesec',
-      default: 0,
-      contextOnly: true,
-      help: 'Podatek ne vstopa v izračun — služi za oceno obsega težave.',
-      explainer: 'Groba ocena zadostuje: koliko dostav na mesec ne pride v dogovorjenem terminu.',
-    },
-    {
-      key: 'expediteCostEUR',
-      label:
-        'Koliko ste v zadnjih 12 mesecih porabili za nujne podnajeme prevoznikov ali ekspresne prevoze?',
-      kind: 'number',
-      unit: 'EUR/leto',
-      default: 0,
-      allowUnknown: true,
-      help: 'Samo dodatni strošek nad ceno običajnega prevoza.',
-      explainer:
-        'Samo doplačilo nad redno ceno: podizvajalec v zadnjem hipu, ekspresni prevoz, dodatna vožnja. ' +
-        'Primer: nujni prevoz 700 EUR namesto rednih 400 EUR → vpišite 300 EUR. Seštejte zadnjih 12 ' +
-        'mesecev.',
-    },
-    {
-      key: 'penaltyCostEUR',
-      label: 'Kolikšni so bili letni penali, stojnine in popusti zaradi zamud?',
-      kind: 'number',
-      unit: 'EUR/leto',
-      default: 0,
-      allowUnknown: true,
-      help: 'Stojnine, ki jih plačate vi (demurrage, detention), ne tiste, ki jih zaračunate stranki.',
-      explainer:
-        'Denar, ki ste ga plačali ali vam je bil odbit zaradi zamude: pogodbeni penali, stojnine ' +
-        '(demurrage, detention), popusti kot odškodnina. Seštejte zadnjih 12 mesecev iz računov in ' +
-        'dobropisov.',
-    },
-    {
-      key: 'lostMarginEUR',
-      label: 'Kolikšno izgubljeno prispevno maržo ocenjujete zaradi odpovedanih ali izgubljenih poslov?',
-      kind: 'number',
-      unit: 'EUR/leto',
-      default: 0,
-      allowUnknown: true,
-      help: 'Ne vpisujte celotne vrednosti izgubljenega posla.',
-      explainer:
-        'Ne vrednost izgubljenega posla, ampak samo marža, ki bi vam ostala. Primer: izgubljena pogodba ' +
-        'za 80.000 EUR na leto pri 20 % marži → 16.000 EUR.',
-    },
-    {
-      key: 'customerCommsHoursPerMonth',
-      label: 'Koliko ur mesečno porabite za obveščanje strank in usklajevanje zaradi zamud?',
-      kind: 'number',
-      unit: 'h/mesec',
-      default: 0,
-      help: 'Reklamacije zaradi napačnih ali poškodovanih pošiljk sodijo v področje Napačne dostave.',
-      explainer:
-        'Klici in e-pošta, ki jih ne bi bilo, če bi prevoz tekel po načrtu — obveščanje o zamudi, ' +
-        'iskanje novega termina, pojasnjevanje. Primer: 20 zamud × 45 min ≈ 15 ur na mesec.',
-    },
-    mainCauseField(ZAMUDE_CAUSES),
-  ],
-  compute: (input, context) => {
-    const addressableShare = addressableShareOf(ZAMUDE_CAUSES, input.mainCause);
-
-    return [
-      {
-        bucket: 'directLoss',
-        label: 'Nujni podnajemi in ekspresni prevozi',
-        valueEUR: input.expediteCostEUR,
-        addressableShare,
-      },
-      {
-        bucket: 'directLoss',
-        label: 'Penali, stojnine in popusti',
-        valueEUR: input.penaltyCostEUR,
-        addressableShare,
-      },
-      {
-        // Koš 'lostMargin' in ne 'directLoss' — glej razlago pri istem polju v proizvodnji:
-        // izgubljen posel je denar, ki ni nikoli prišel, in ga ni mogoče pokazati na kontu.
-        bucket: 'lostMargin',
-        label: 'Izgubljena prispevna marža',
-        valueEUR: input.lostMarginEUR,
-        addressableShare,
-      },
-      {
-        bucket: 'capacity',
-        label: 'Obveščanje in usklajevanje s strankami',
-        valueEUR: input.customerCommsHoursPerMonth * context.adminHourCostEUR * MONTHS_PER_YEAR,
-        hoursPerMonth: input.customerCommsHoursPerMonth,
-        addressableShare,
-      },
-    ];
-  },
-  pantheon: [
-    'Statusi naročil in obveščanje strank iz ERP-ja',
-    'Pogodbeni pogoji in zapadlosti na enem mestu',
-    'Povezava naročil s planom odprem',
   ],
 };
 
 // --- Kratka diagnostika -----------------------------------------------------
 
 const DATA_RISK_NOTE: Record<RiskLevel, string> = {
-  low: 'Poraba in statusi se evidentirajo sproti, lastna cena vožnje je znana. Odstopanje opazite, dokler ga je še mogoče popraviti.',
+  low: 'Poraba, dodatki in statusi se evidentirajo sproti, lastna cena vožnje je znana. Odstopanje opazite, dokler ga je še mogoče popraviti.',
   medium:
     'Podatki so delni. Da je bila vožnja ali pošiljka nedonosna, praviloma ugotovite šele ob obračunu, ko cene ni več mogoče popraviti.',
   high: 'Dejanske lastne cene vožnje ne poznate. Dokler je ne, natančnega zneska izgubljene marže ni mogoče izračunati — in prav to je težava.',
 };
 
 const PROCESS_RISK_NOTE: Record<RiskLevel, string> = {
-  low: 'Pošiljka je sledljiva in razporejanje ni odvisno od posameznika.',
-  medium: 'Sledljivost je delna. Ob resnejši reklamaciji je odgovornost težko dokazati.',
-  high: 'Sledljivosti praktično ni, znanje o strankah in relacijah pa je v glavah posameznikov. Ena izgubljena pošiljka ali odsotnost disponenta ustavi dan.',
+  low: 'Dokazila so vezana na dokument in obračun ni odvisen od posameznika.',
+  medium: 'Sledljivost dokumentov je delna. Ob resnejši reklamaciji je odgovornost težko dokazati.',
+  high: 'Dokazila se iščejo po mapah in e-pošti, znanje o naročnikih in cenah pa je v glavah posameznikov. Ena izgubljena listina ali odsotnost ključne osebe ustavi obračun.',
 };
 
 /**
  * Štiri vprašanja, ki se prikažejo vedno in NE prispevajo nobenega evra.
  *
- * Namenoma brez zneska: kjer podjetje ne pozna lastne cene vožnje ali nima
- * sledljivosti pošiljke, natančnega zneska ni mogoče izračunati, navidezno
- * natančna številka pa bi prav to težavo skrila. Modul zato nima triaže in ne
- * more biti "največja postavka".
+ * Namenoma brez zneska: kjer podjetje ne pozna lastne cene vožnje ali ne najde
+ * dokazila o dostavi, natančnega zneska ni mogoče izračunati, navidezno natančna
+ * številka pa bi prav to težavo skrila. Modul zato nima triaže in ne more biti
+ * "največja postavka".
+ *
+ * Vprašanji 3 in 4 sta avgusta 2026 spremenjeni: prej sta merili, ali podjetje ve,
+ * KJE je pošiljka, in ali razporejanje deluje brez ključne osebe. Oboje je delo
+ * telematike in TMS. Odslej merita sledljivost DOKUMENTA in odpornost OBRAČUNA —
+ * eno in drugo je v dosegu PANTHEON.
  */
 export const diagnostikaLogistika: ModuleDefinition = {
   id: 'diagnostika_logistika',
@@ -667,7 +821,7 @@ export const diagnostikaLogistika: ModuleDefinition = {
   fields: [
     {
       key: 'realtimeRecording',
-      label: 'Ali se opravljene vožnje, kilometri in ure evidentirajo sproti?',
+      label: 'Ali se opravljene vožnje, dodatki in ure evidentirajo sproti?',
       kind: 'choice',
       default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
@@ -680,15 +834,15 @@ export const diagnostikaLogistika: ModuleDefinition = {
       choices: ASSURANCE_CHOICES,
     },
     {
-      key: 'shipmentTraceability',
-      label: 'Ali lahko kadar koli zanesljivo poveste, kje je posamezna pošiljka?',
+      key: 'documentTraceability',
+      label: 'Ali za vsako opravljeno storitev takoj najdete dokazilo o dostavi in pripadajoči dokument?',
       kind: 'choice',
       default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
     },
     {
       key: 'keyPersonIndependence',
-      label: 'Ali razporejanje prevozov deluje normalno tudi brez ključne osebe?',
+      label: 'Ali obračun prevozov in plač deluje normalno tudi brez ključne osebe?',
       kind: 'choice',
       default: ASSURANCE_UNANSWERED,
       choices: ASSURANCE_CHOICES,
@@ -696,7 +850,7 @@ export const diagnostikaLogistika: ModuleDefinition = {
   ],
   compute: (input) => {
     const dataLevel = assuranceRiskLevel(input.realtimeRecording, input.knowsTripCost);
-    const processLevel = assuranceRiskLevel(input.shipmentTraceability, input.keyPersonIndependence);
+    const processLevel = assuranceRiskLevel(input.documentTraceability, input.keyPersonIndependence);
 
     return [
       {
@@ -717,17 +871,18 @@ export const diagnostikaLogistika: ModuleDefinition = {
   },
   pantheon: [
     'Kalkulacije lastne cene po dokumentu in stranki',
-    'Serije in loti s popolno sledljivostjo',
+    'Dokumentni arhiv z dokazili, vezanimi na knjižbo',
     'Dokumentiran proces namesto znanja v glavah',
   ],
 };
 
 /** Vrstni red je hkrati prioriteta — odloči ob izenačenju v triaži. */
 export const LOGISTIKA_MODULES: ModuleDefinition[] = [
-  odprema,
+  obracun,
+  vozniki,
+  terjatve,
+  dokumentacija,
   napake,
   skladisce,
-  dokumentacija,
-  roki,
   diagnostikaLogistika,
 ];

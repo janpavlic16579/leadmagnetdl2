@@ -77,9 +77,8 @@ export const planiranje: ModuleDefinition = {
       default: 0,
       help: 'Ne vključujte čakanja na material ali okvar strojev — čakanje na material sodi v področje Zaloge.',
       explainer:
-        'Ure, ko ljudje ali stroji stojijo, ker ni jasno, kaj delati naprej — čakanje na plan, navodilo, ' +
-        'risbo ali potrditev. Ocenite: koliko ljudi × koliko minut na izmeno × število delovnih dni. ' +
-        'Primer: 5 ljudi × 20 min × 21 dni ≈ 35 ur na mesec.',
+        'Ure, ko delo stoji, ker ni jasno, kaj naprej — čakanje na plan, navodilo, risbo ali potrditev. ' +
+        'Ocena: 5 ljudi × 20 min × 21 dni ≈ 35 ur na mesec.',
     },
     {
       key: 'overtimeHoursPerMonth',
@@ -175,9 +174,8 @@ export const material: ModuleDefinition = {
         'Samo material, ki konča kot odpadek — ne to, kar predelate ali prodate kot drugo kakovost. ' +
         'Ure dodelav merimo posebej v naslednjem vprašanju.',
       explainer:
-        'Delež vrednosti, ne kosov. Če deleža ne vodite, ga ocenite iz enega meseca: vrednost ' +
-        'odpisanega materiala delite z vrednostjo porabljenega. Primer: 6.000 EUR izmeta pri ' +
-        '200.000 EUR porabljenega materiala je 3 %.',
+        'Delež vrednosti, ne kosov: vrednost odpisanega materiala delite z vrednostjo porabljenega. ' +
+        'Primer: 6.000 EUR izmeta pri 200.000 EUR porabe je 3 %.',
     },
     {
       key: 'reworkHoursPerMonth',
@@ -196,8 +194,7 @@ export const material: ModuleDefinition = {
       help: 'Vnesite samo stroške, ki še niso vključeni v izmet ali dodelave.',
       explainer:
         'Denar, ki je odtekel zaradi reklamacij kupcev: prevozi, nadomestna dobava, odškodnine, ' +
-        'dobropisi. Če jih ne vodite ločeno, vzemite nekaj primerov in jih pomnožite s številom ' +
-        'reklamacij. Primer: 12 reklamacij × 400 EUR ≈ 4.800 EUR na leto.',
+        'dobropisi. Ocena: 12 reklamacij × 400 EUR ≈ 4.800 EUR na leto.',
     },
     mainCauseField(MATERIAL_CAUSES),
   ],
@@ -273,9 +270,8 @@ export const zaloge: ModuleDefinition = {
       default: 0,
       help: 'Vključite surovine, nedokončano proizvodnjo in končne izdelke.',
       explainer:
-        'Povprečno stanje med letom, ne stanje na današnji dan in ne letna poraba materiala. Vzemite ' +
-        'postavko zaloge iz bilance ali povprečje nekaj mesečnih stanj, po nabavni vrednosti. Primer: če ' +
-        'zaloga niha med 300.000 in 500.000 EUR, vpišite okoli 400.000.',
+        'Povprečno stanje med letom po nabavni vrednosti — ne stanje na današnji dan in ne letna poraba. ' +
+        'Vzemite postavko iz bilance ali povprečje nekaj mesečnih stanj.',
     },
     {
       key: 'annualWriteOffEUR',
@@ -294,8 +290,8 @@ export const zaloge: ModuleDefinition = {
       default: 0,
       help: 'Zastoje zaradi nejasnega plana štejte v področju Plan, ne tukaj.',
       explainer:
-        'Samo zastoji, ko delo stoji, ker materiala ni na voljo. Ocenite: koliko takih zastojev na mesec ' +
-        '× koliko ljudi stoji × koliko ur. Primer: 4 zastoji × 3 ljudje × 2 h ≈ 24 ur na mesec.',
+        'Samo zastoji, ko delo stoji zaradi manjkajočega materiala. Ocena: 4 zastoji × 3 ljudje × 2 h ≈ ' +
+        '24 ur na mesec.',
     },
     reducibleShareField(
       'Kolikšen delež zalog bi po vaši oceni lahko zmanjšali brez večjega tveganja za oskrbo?',
@@ -394,9 +390,8 @@ export const nalogi: ModuleDefinition = {
       default: 0,
       help: 'Ne vključujte priprave in zaključevanja nalogov iz prvega vprašanja.',
       explainer:
-        'Isti podatek, vpisan drugič: z naloga v Excel, iz Excela v ERP, s papirja v sistem. Ocenite: ' +
-        'koliko ljudi × koliko minut na dan × 21 delovnih dni. Primer: 3 ljudje × 30 min ≈ 32 ur na ' +
-        'mesec.',
+        'Isti podatek, vpisan drugič: z naloga v Excel, iz Excela v ERP, s papirja v sistem. Ocena: 3 ' +
+        'ljudje × 30 min na dan ≈ 32 ur na mesec.',
     },
     {
       key: 'dataFixHoursPerMonth',
@@ -492,8 +487,8 @@ export const zamude: ModuleDefinition = {
       contextOnly: true,
       help: 'Podatek ne vstopa v izračun — služi za oceno obsega težave.',
       explainer:
-        'Groba ocena zadostuje: koliko naročil na mesec ne odide v roku, ki ste ga potrdili kupcu. Če ' +
-        'vodite dobavno točnost, vzemite delež zamud × število naročil.',
+        'Koliko naročil na mesec ne odide v roku, ki ste ga potrdili kupcu. Če vodite dobavno točnost: ' +
+        'delež zamud × število naročil.',
     },
     {
       key: 'expediteCostEUR',
@@ -504,9 +499,8 @@ export const zamude: ModuleDefinition = {
       allowUnknown: true,
       help: 'Samo dodatni strošek nad običajno nabavo oziroma dostavo.',
       explainer:
-        'Samo doplačilo, ne celotna cena: razlika med tem, kar ste plačali v naglici, in tem, kar bi ' +
-        'stalo redno. Primer: nujna dostava 900 EUR namesto rednih 300 EUR → vpišite 600 EUR. Seštejte ' +
-        'take primere zadnjih 12 mesecev.',
+        'Samo doplačilo, ne celotna cena: razlika med nujno in redno izvedbo. Primer: nujna dostava 900 ' +
+        'EUR namesto 300 EUR → vpišite 600 EUR.',
     },
     {
       key: 'penaltyCostEUR',
@@ -526,7 +520,7 @@ export const zamude: ModuleDefinition = {
       help: 'Ne vpisujte celotne vrednosti izgubljenega naročila.',
       explainer:
         'Ne vrednost naročila, ampak samo marža, ki bi vam od njega ostala. Primer: odpovedano naročilo ' +
-        'za 50.000 EUR pri 25 % marži → 12.500 EUR. Če ocene nimate, raje vpišite manj kot več.',
+        'za 50.000 EUR pri 25 % marži → 12.500 EUR.',
     },
     {
       key: 'customerCommsHoursPerMonth',
@@ -536,9 +530,8 @@ export const zamude: ModuleDefinition = {
       default: 0,
       help: 'Ne vključujte ponovnega planiranja proizvodnje iz področja Plan.',
       explainer:
-        'Klici, e-pošta in sestanki, ki jih ne bi bilo, če bi rok držal — obveščanje kupca, iskanje ' +
-        'novega termina, pojasnjevanje. Ocenite: koliko zamud na mesec × koliko ur na primer. Primer: 8 ' +
-        'zamud × 1,5 h ≈ 12 ur.',
+        'Klici, e-pošta in sestanki, ki jih ne bi bilo, če bi rok držal. Ocena: 8 zamud × 1,5 h ≈ 12 ur ' +
+        'na mesec.',
     },
     mainCauseField(ZAMUDE_CAUSES),
   ],

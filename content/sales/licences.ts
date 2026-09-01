@@ -11,10 +11,16 @@ import type { SegmentId } from '../../src/config/segmentTypes';
  * `note` ni okras. Pri dveh segmentih je edino, kar poročilo loči od obljube, ki je
  * Datalab ne more izpolniti:
  *
- * - LOGISTIKA nima svoje licence. To trikrat izrecno pove obstoječa koda
- *   (config/industries.ts, config/contexts/logistika.ts, config/modules/logistika.ts):
- *   pokrivata jo SE in ME z moduloma LT in LT3, namenskega WMS ali TMS pa PANTHEON
- *   nima. Priporočilo, ki bi zamolčalo to, bi prodajalo produkt, ki ne obstaja.
+ * - LOGISTIKA nima svoje licence in ne vertikale. Vertikale so samo Farming, Vet in
+ *   Public Service; logistiko pokrivata Enterprise izdaji SE in ME, namenskega WMS
+ *   ali TMS pa PANTHEON nima. Priporočilo, ki bi zamolčalo to, bi prodajalo produkt,
+ *   ki ne obstaja.
+ *
+ *   POPRAVEK, avgust 2026: ta zapisnik je do zdaj trdil, da logistiko pokrivata "SE
+ *   in ME (modula LT in LT3)". LT in LT3 NISTA modula — sta samostojni izdaji skupine
+ *   Small Business (LT za enega uporabnika, LT3 mrežna za tri) in po ceniku ležita
+ *   POD SE, ne v njem. Trditev je bila torej hkrati napačna in cenovno zavajajoča;
+ *   ponovljena je bila na petih mestih in je odstranjena povsod.
  * - STORITVE nimajo svoje znamke. `pantheonLogos.ts` nosi ob njih oznako ZAČASNO —
  *   Enterprise je zasilna izbira do odločitve marketinga, ne uradna umestitev.
  *
@@ -45,7 +51,7 @@ export const SEGMENT_LICENCE: Record<SegmentId, LicenceFit> = {
   },
   logistika: {
     name: 'PANTHEON SE ali ME',
-    note: 'Datalab za logistiko nima ločene licence — pokrivata jo SE in ME (modula LT in LT3). Namenskega skladiščnega (WMS) ali transportnega (TMS) sistema PANTHEON ne ponuja, zato tega ne obljubljajte.',
+    note: 'Datalab za logistiko nima ne ločene licence ne vertikale — pokrivata jo Enterprise izdaji SE in ME. Namenskega skladiščnega (WMS) ali transportnega (TMS) sistema PANTHEON ne ponuja, zato tega ne obljubljajte.',
   },
   storitve: {
     name: 'PANTHEON Enterprise',

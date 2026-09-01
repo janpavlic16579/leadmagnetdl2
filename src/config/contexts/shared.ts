@@ -43,32 +43,27 @@ export const ADMIN_HOUR_BANDS: CostBand[] = [
  * ni bila pri nikomer (docs/urne-postavke.md).
  */
 export const HOURLY_COST_EXPLAINER =
-  'Ni neto izplačilo in ne le bruto plača, ni pa tudi režija (prostor, oprema, vodenje) — ta teče naprej, ' +
-  'tudi ko uro sprostite. Bruto plači prištejte prispevke delodajalca (17,1 %) ter regres, malico in prevoz, ' +
-  'nato delite s približno 140 opravljenimi urami na mesec — leto ima okoli 1.700 produktivnih ur, ne 2.088 ' +
-  'plačanih. Primer: bruto 2.100 EUR → približno 20 EUR na uro. Če postavke ne poznate, izberite razpon spodaj.';
+  'Bruto plača + prispevki delodajalca + regres, malica in prevoz, deljeno s približno 140 opravljenimi ' +
+  'urami na mesec — brez režije, ta teče naprej tudi brez te ure. Primer: bruto 2.100 EUR → okoli 20 EUR ' +
+  'na uro.';
 
 /** Administrativna ura: isti izračun, druga vrsta dela — in pogosta zamenjava obeh. */
 export const ADMIN_HOUR_EXPLAINER =
-  'Isti izračun kot pri prejšnji postavki, le za pisarniško in vodstveno delo: bruto plača + prispevki ' +
-  'delodajalca + regres, malica in prevoz, deljeno s približno 140 opravljenimi urami na mesec. Ta ura ni ' +
-  'nujno dražja od operativne — pomembno je le, da ju ne zamenjate, ker vsaka vrednoti svojo vrsto dela. ' +
-  'Če je ne poznate, izberite razpon.';
+  'Isti izračun kot pri prejšnji postavki, le za pisarniško in vodstveno delo. Ni nujno dražja — ' +
+  'pomembno je le, da postavk ne zamenjate, ker vsaka vrednoti svojo vrsto dela.';
 
 /** Letni prihodek — številka iz zaključnega računa, ne promet na računu. */
 export const ANNUAL_REVENUE_EXPLAINER =
-  'Vzemite čiste prihodke od prodaje iz zadnjega zaključenega leta (izkaz poslovnega izida), brez DDV. ' +
-  'Ni to promet z DDV in ni vsota prilivov na bančnem računu. Kadar razpona ne izberete, ostanejo postavke, ' +
-  'ki se računajo kot odstotek prometa, neocenjene — prihodka si ne izmišljamo.';
+  'Čisti prihodki od prodaje iz zadnjega zaključenega leta, brez DDV — ne promet z DDV in ne prilivi na ' +
+  'račun. Brez tega podatka postavk, ki se računajo kot odstotek prometa, ne ocenimo.';
 
 /** Prispevna marža — najpogosteje zamenjana s pribitkom na nabavno ceno. */
 export const CONTRIBUTION_MARGIN_EXPLAINER =
-  'Ni pribitek na nabavno ceno in ni dobiček po vseh stroških. Od 100 EUR prodaje odštejte neposredne ' +
-  'stroške prav te prodaje (našteti so zgoraj) — kar ostane, je prispevna marža. Primer: prodaja 100 EUR, ' +
-  'neposredni stroški 75 EUR → marža 25 %. Če je ne veste, izberite razpon spodaj.';
+  'Kar od 100 EUR prodaje ostane po neposrednih stroških prav te prodaje — ne pribitek na nabavno ceno in ' +
+  'ne dobiček po vseh stroških. Primer: prodaja 100 EUR, neposredni stroški 75 EUR → 25 %.';
 
 /** Strošek financiranja — vprašan povsod, kjer moduli množijo denar v terjatvah ali zalogah. */
 export const CAPITAL_COST_EXPLAINER =
-  'Koliko vas stane, da je denar vezan v terjatvah in zalogah namesto na računu. Če imate posojilo ali ' +
-  'limit, vpišite njegovo obrestno mero; sicer tisto, kar bi denar prinesel drugje. Primer: 8 % pomeni, ' +
-  'da 100.000 EUR, vezanih v zalogi, stane 8.000 EUR na leto. Če niste prepričani, izberite razpon.';
+  'Koliko vas stane, da je denar vezan v terjatvah in zalogah namesto na računu: obrestna mera vašega ' +
+  'posojila ali donos, ki bi ga denar prinesel drugje. Primer: pri 8 % vas 100.000 EUR zaloge stane 8.000 ' +
+  'EUR na leto.';

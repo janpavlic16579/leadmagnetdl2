@@ -31,8 +31,9 @@ export const INDUSTRIES: IndustryOption[] = [
   // pošiljki, plačilnemu roku in komisioniranju. Skupen segment bi enega od obeh
   // spraševal po številkah, ki jih sploh ne vodi.
   { id: 'maloprodaja', label: 'Maloprodaja', segment: 'maloprodaja' },
-  // PANTHEON nima posebne logistične licence — licenci SE in ME (moduli LT, LT3)
-  // pokrivata finance, naročila, dokumentacijo, stroške in obračunavanje. To je
+  // PANTHEON nima posebne logistične licence ne vertikale — vertikale so samo
+  // Farming, Vet in Public Service. Logistiko pokrivata Enterprise izdaji SE in ME
+  // na ravni financ, naročil, dokumentacije, stroškov in obračunavanja. To je
   // omejitev PONUDBE, ne vprašalnika: prevozniku in skladiščniku veleprodajna
   // vprašanja o pošiljkah in plačilnih rokih niso merila njegovih stroškov, zato
   // ima logistika svoj segment z lastnimi moduli (config/modules/logistika.ts).

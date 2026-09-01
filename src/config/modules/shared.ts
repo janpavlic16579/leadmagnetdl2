@@ -138,9 +138,8 @@ export const REDUCIBLE_SHARE_KEY = 'reducibleShare';
  * Terjatvena različica (storitve) ima svoje — tam ne gre za blago.
  */
 export const REDUCIBLE_STOCK_EXPLAINER =
-  'Ne gre za to, koliko zaloge imate, ampak koliko bi je lahko trajno bilo manj, ne da bi kdaj zmanjkalo. ' +
-  'Mišljena je zaloga, ki leži zaradi previdnosti, podvojenih naročil ali slabega pregleda. ' +
-  'Groba ocena zadostuje; če niste prepričani, izberite nižji razpon.';
+  'Ne koliko zaloge imate, ampak koliko bi je lahko trajno bilo manj, ne da bi kdaj zmanjkalo — tiste, ki ' +
+  'leži zaradi previdnosti ali slabega pregleda. Groba ocena zadostuje.';
 
 export function reducibleShareField(
   label: string,

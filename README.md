@@ -155,25 +155,38 @@ Področje, ki ga obiskovalec izbere in pusti prazno, prispeva 0 EUR, zato ne št
 zanesljivosti ne med izmerjena — pokaže se po imenu v razdelku "Česa nismo izmerili". Brez tega bi
 ista številka dobila slabšo oznako samo zato, ker je obiskovalec obkljukal več področij.
 
-### Logistika in transport — pet izključujočih se stroškovnih področij
+### Logistika in transport — šest izključujočih se stroškovnih področij
 
 Zgrajena po istem vzorcu (`src/config/modules/logistika.ts`), z isto disciplino košev in naslovljivih
-deležev. Vsako področje ima vsaj eno vprašanje, ki sme ostati 0: špediter brez vozil vpiše 0 praznih
-kilometrov, skladiščnik tujega blaga 0 vrednosti zaloge — in izračun kljub temu ostane smiseln.
+deležev. Vsako področje ima vsaj eno vprašanje, ki sme ostati 0: špediter brez vozil vpiše 0 voznikov,
+skladiščnik tujega blaga 0 vrednosti zaloge — in izračun kljub temu ostane smiseln.
 
 | Modul | Meri |
 |---|---|
-| `odprema` | Planiranje prevozov in izkoriščenost (prazni km, čakanje, razporejanje) |
+| `obracun_logistika` | Obračun prevozov in nezaračunane storitve (dodatki, dnevi do računa, napačne cene) |
+| `vozniki` | Vozniki, potni nalogi in dnevnice (izdaja in obračun nalogov, evidence, plače) |
+| `terjatve_logistika` | Plačilni roki in terjatve (prekoračitev roka, opominjanje, odpisi) |
+| `dokumentacija` | Prevozna dokumentacija, podatki in statusi (CMR, POD, prepisovanje, poizvedbe) |
 | `napake` | Napačne dostave, poškodbe in reklamacije |
 | `skladisce` | Skladiščne operacije in zaloga (iskanje, popisne razlike, vezan kapital) |
-| `dokumentacija` | Prevozna dokumentacija in podatki (CMR, POD, prepisovanje) |
-| `roki` | Zamude, stojnine in nujni prevozi |
 | `diagnostika_logistika` | Štiri vprašanja o podatkih in odpornosti procesa — brez evrov, vedno vidna |
 | `E` | Kot pri proizvodnji — samo obstoječim uporabnikom PANTHEON |
 
-Meje med področji so zapisane v besedilih `help`, ker jih upošteva samo obiskovalec: čakanje na rampi je
-`odprema`, iskanje v skladišču `skladisce`; reklamacija zaradi poškodbe je `napake`, obveščanje o zamudi
-`roki`; stojnina, ki jo plačate vi, je strošek, tista, ki jo zaračunate, pa ni.
+Meje med področji so zapisane v besedilih `help`, ker jih upošteva samo obiskovalec: dnevi **pred**
+izdajo računa so `obracun_logistika`, dnevi **po** zapadlosti `terjatve_logistika`; iskanje blaga je
+`skladisce`, iskanje listin `dokumentacija`; reklamacija zaradi poškodbe je `napake`, poizvedba „kje je
+pošiljka" pa `dokumentacija`.
+
+**Zakaj ta nabor in ne prejšnji (avgust 2026).** Do te spremembe sta dve od petih področij merili prazne
+kilometre, izkoriščenost voznega parka in razporejanje voženj (`odprema`, `roki`). To je delo
+transportnega sistema (TMS), ki ga Datalab **ne ponuja** — niti kot licenco niti kot vertikalo (te so
+samo Farming, Vet in Public Service). Izračun je torej obljubljal prihranek, ki ga produkt ne more
+dostaviti; da smo pri `odprema` kot edinem modulu v `content/actions/actions.ts` znali ponuditi le
+procesni nasvet („poiščite povratni tovor"), je bil simptom iste napake.
+
+Stroški, ki jih PANTHEON ne zniža, so **ostali vprašani** kot `contextOnly` — penali in stojnine
+(`obracun_logistika`), število voznikov (`vozniki`), dejanski DSO (`terjatve_logistika`). Prodajnik
+obseg težave vidi, poročilo pa zanj ne obljublja prihranka.
 
 ### Veleprodaja in distribucija — pet izključujočih se stroškovnih področij
 
@@ -332,14 +345,15 @@ akcijskega načrta.
 | Veleprodaja in distribucija | ✓ | ✓ | ✓ | ✓ | ✓ | 10 |
 | Maloprodaja | ✓ | ✓ | ✓ | ✓ | ✓ | 10 |
 | Storitve in projekti | ✓ | ✓ | ✓ | ✓ | ✓ | 10 |
-| Logistika in transport | ✓ | ✓ | ✓ | — | — | 8 |
+| Logistika in transport | ✓ | ✓ | — | — | — | 8 |
 | Računovodski servis | ✓ | — | ✓ | — | — | 7 |
 | Splošno | — | ✓ | ✓ | ✓ | — | 8 |
 
 Izključitve niso okus, ampak **zaščita pred dvojnim štetjem ur**: računovodski servis nima
 `financeHz`, ker so knjiženje in obračuni njegov produkt (merijo jih `zajemRs`, `obracuniRs`,
 `popravkiRs`), in nima `dokumentiHz`, ker zajem listin meri `zajemRs`; logistika nima `dokumentiHz`,
-ker isto merijo prevozne listine v `dokumentacija`; splošni segment nima `analitikaHz`, ker ure
+ker isto merijo prevozne listine v `dokumentacija`, in nima `kadriHz`, ker potne naloge — pri prevozniku
+največji del kadrovske administracije — meri panožni modul `vozniki`; splošni segment nima `analitikaHz`, ker ure
 poročanja že šteje `podatkiSp`. Kjer se področji le dotikata, razmejitev opravi napotek pod
 vprašanjem („Ure, ki ste jih že vpisali v drugem področju, tu ne ponavljajte.").
 
@@ -353,7 +367,9 @@ edina horizontala z **dvema urnima postavkama**: servisni poseg opravi izvajalec
 neposredni uri, vodenje postopka pa je pisarniško delo po administrativni.
 
 `kadriHz` je pri računovodskem servisu vključen namenoma: meri **njegove lastne** kadre in plače, ne
-obračunov, ki jih dela za stranke.
+obračunov, ki jih dela za stranke. V logistiki ga po istem načelu **ni**: horizontala v vprašanju
+`hrAdminHoursPerMonth` izrecno našteva potne naloge, ki so pri prevozniku največja postavka kadrovske
+administracije, zato jih meri panožni modul `vozniki`.
 
 V `moduleIds` so horizontale vedno **za panožnimi in pred diagnostiko**. Vrstni red odloča ob
 izenačenju — prikaz v razčlenitvi, izbor v triaži in „največja postavka" tako favorizirajo panožno
@@ -669,8 +685,8 @@ nobenega novega vprašanja:
 - **Licenca se imenuje, moduli pa opišejo.** `content/sales/licences.ts` preslika segment v znamko
   (Manufacture / Retail / Accounting / Enterprise) — prepisano iz `src/config/pantheonLogos.ts`, ki je
   edini zapisani vir znamk, zato ju varuje test. Dve opozorili sta del vsebine in ne opomba:
-  **logistika nima svoje licence** (pokrivata jo SE in ME z moduloma LT in LT3; namenskega WMS ali TMS
-  PANTHEON ne ponuja) in **storitve nimajo svoje znamke** (Enterprise je označen kot ZAČASNO). Cen ni
+  **logistika nima svoje licence ne vertikale** (pokrivata jo Enterprise izdaji SE in ME; namenskega WMS
+  ali TMS PANTHEON ne ponuja) in **storitve nimajo svoje znamke** (Enterprise je označen kot ZAČASNO). Cen ni
   nikjer — točen obseg potrdi svetovalec po veljavnem ceniku.
 
 ### ICP ocena
