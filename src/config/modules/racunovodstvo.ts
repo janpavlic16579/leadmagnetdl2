@@ -74,8 +74,7 @@ export const zajemRs: ModuleDefinition = {
       default: 0,
       help: 'Prejeti in izdani računi, bančne postavke, potni nalogi, pogodbe — vse, kar se knjiži.',
       explainer:
-        'Vse listine vseh strank skupaj. Hitra ocena: število strank × povprečno listin na stranko. ' +
-        'Primer: 60 strank × 80 listin ≈ 4.800 listin na mesec.',
+        'Vse listine vseh strank skupaj. Ocena: 60 strank × 80 listin ≈ 4.800 listin na mesec.',
     },
     {
       key: 'manualSharePercent',
@@ -95,9 +94,8 @@ export const zajemRs: ModuleDefinition = {
         'Delež listin, ki jih nekdo dejansko odtipka ali postavko za postavko prekontrolira. ' +
         'E-računi in uvoženi bančni izpiski, ki gredo skozi brez posega, sem ne sodijo.',
       explainer:
-        'Vzemite en teden: koliko listin je šlo v knjiženje brez posega in koliko jih je nekdo ' +
-        'vnašal ročno. Primer: od 1.200 tedenskih listin je 700 e-računov in izpiskov, 500 ' +
-        'ročnih — to je približno 40 %.',
+        'Vzemite en teden in preštejte, koliko listin je nekdo vnašal ročno. Primer: od 1.200 listin je ' +
+        '500 ročnih → približno 40 %.',
     },
     {
       key: 'minutesPerManualDocument',
@@ -110,9 +108,8 @@ export const zajemRs: ModuleDefinition = {
       default: 3,
       help: 'Od prejema do knjižene listine. Iskanje manjkajočih listin sem ne sodi — to meri področje Listine strank.',
       explainer:
-        'Od trenutka, ko listina pride, do knjižene postavke: odpiranje, branje, vnos, kontiranje. ' +
-        'Izmerite na desetih listinah in vzemite povprečje. Primer: 3 minute pri skeniranem računu, 6 ' +
-        'pri papirnem.',
+        'Od prejema listine do knjižene postavke: odpiranje, branje, vnos, kontiranje. Izmerite na ' +
+        'desetih listinah — običajno 3 minute pri skeniranem računu, 6 pri papirnem.',
     },
     {
       key: 'retypingHoursPerMonth',
@@ -123,9 +120,8 @@ export const zajemRs: ModuleDefinition = {
       default: 0,
       help: 'Ne vključujte vnosa listin iz zgornjih vprašanj.',
       explainer:
-        'Isti podatek, vpisan drugič: iz enega programa v drugega, iz Excela v knjigovodstvo, iz e-pošte ' +
-        'v evidenco. Vnos listin je že v zgornjih vprašanjih. Primer: 2 osebi × 3 h na teden ≈ 26 ur na ' +
-        'mesec.',
+        'Isti podatek, vpisan drugič: iz enega programa v drugega, iz Excela v knjigovodstvo. Ocena: 2 ' +
+        'osebi × 3 h na teden ≈ 26 ur na mesec.',
     },
     {
       key: 'filingHoursPerMonth',
@@ -216,8 +212,8 @@ export const strankeRs: ModuleDefinition = {
       default: 0,
       help: 'Svetovanje sem ne sodi — neobračunano svetovanje meri področje Neobračunano delo.',
       explainer:
-        'Ure za lovljenje manjkajočih listin in pojasnil: klici, e-pošta, opomniki strankam. Primer: pri ' +
-        '15 strankah od 60 je treba mesečno posredovati × 30 min ≈ 8 ur.',
+        'Ure za lovljenje manjkajočih listin in pojasnil: klici, e-pošta, opomniki strankam. Ocena: 15 ' +
+        'strank × 30 min ≈ 8 ur na mesec.',
     },
     {
       key: 'lateClientsSharePercent',
@@ -229,7 +225,7 @@ export const strankeRs: ModuleDefinition = {
       default: 0.3,
       contextOnly: true,
       help: 'Podatek ne vstopa v izračun — služi za oceno obsega težave.',
-      explainer: 'Groba ocena zadostuje: delež strank, ki listine redno odda po dogovorjenem roku.',
+      explainer: 'Delež strank, ki listine redno odda po dogovorjenem roku; groba ocena zadostuje.',
     },
     {
       key: 'deliveryMethod',
@@ -325,8 +321,8 @@ export const obracuniRs: ModuleDefinition = {
         'Samo obračuni in poročila za stranke in državo. Vnos listin meri področje Zajem, ' +
         'poročila za vaše lastno vodstvo pa področje Analitika in poročanje.',
       explainer:
-        'Ure za obračune in poročila strank: DDV, plače, medletna poročila, priprava podatkov za ' +
-        'oddajo. Vnos listin je že v področju Zajem. Primer: 2 osebi × 8 h ob koncu meseca ≈ 16 ur.',
+        'Ure za obračune in poročila strank: DDV, plače, medletna poročila, priprava za oddajo. Ocena: 2 ' +
+        'osebi × 8 h ob koncu meseca ≈ 16 ur.',
     },
     {
       key: 'externalHelpCostEUR',
@@ -347,8 +343,8 @@ export const obracuniRs: ModuleDefinition = {
       allowUnknown: true,
       help: 'Samo posledice ZAMUDE. Doplačila zaradi napačne vsebine meri področje Napake in popravki.',
       explainer:
-        'Samo posledice ZAMUDE pri oddaji: globe, zamudne obresti, doplačila za nujno urejanje. Seštejte ' +
-        'zadnjih 12 mesecev; če jih ni bilo, vpišite 0.',
+        'Samo posledice zamude pri oddaji: globe, zamudne obresti, doplačila za nujno urejanje. Če jih ni ' +
+        'bilo, vpišite 0.',
     },
     {
       key: 'closingProcess',
@@ -447,8 +443,8 @@ export const popravkiRs: ModuleDefinition = {
       default: 0,
       help: 'Samo kontrole zaradi negotovosti v podatke, ne rednega strokovnega pregleda in podpisa.',
       explainer:
-        'Dodatne kontrole, ki jih delate SAMO zato, ker podatkom ne morete povsem zaupati — ne reden ' +
-        'strokovni pregled in podpis. Primer: vodja 3 h na teden ≈ 13 ur na mesec.',
+        'Kontrole, ki jih delate samo zato, ker podatkom ne morete zaupati — ne reden strokovni pregled. ' +
+        'Ocena: vodja 3 h na teden ≈ 13 ur na mesec.',
     },
     {
       key: 'selfReportCostEUR',
@@ -461,7 +457,7 @@ export const popravkiRs: ModuleDefinition = {
       help: 'Globe zaradi prepozne oddaje meri področje Obračuni, ne to.',
       explainer:
         'Stroški popravkov vsebinskih napak: samoprijave, popravki obračunov, zamudne obresti, doplačan ' +
-        'davek. Seštejte zadnjih 12 mesecev.',
+        'davek; seštevek zadnjih 12 mesecev.',
     },
     {
       key: 'creditNoteCostEUR',
@@ -548,8 +544,8 @@ export const donosnostRs: ModuleDefinition = {
       default: 0,
       help: 'Vrednotimo po vašem strošku ure, ne po ceniku — izračun ne predpostavlja, da bi stranka to uro plačala.',
       explainer:
-        'Ure, opravljene za stranko, ki nikoli ne pridejo na račun: dodatna vprašanja, svetovanje med ' +
-        'letom, urejanje nereda pred obračunom. Primer: 40 strank × 1 h na mesec ≈ 40 ur.',
+        'Ure za stranko, ki nikoli ne pridejo na račun: dodatna vprašanja, svetovanje, urejanje nereda ' +
+        'pred obračunom. Ocena: 40 strank × 1 h ≈ 40 ur na mesec.',
     },
     {
       key: 'belowCostClients',
@@ -566,8 +562,8 @@ export const donosnostRs: ModuleDefinition = {
       default: 0,
       help: 'Razlika med tem, kar stranka plača, in tem, kar vas dejansko stane.',
       explainer:
-        'Koliko na mesec izgubite pri eni taki stranki: kar plača, minus vaše ure × strošek ure. Primer: ' +
-        'plača 150 EUR, porabite 12 ur × 26 EUR = 312 EUR → primanjkljaj 162 EUR.',
+        'Kar stranka plača, minus vaše ure × strošek ure. Primer: plača 150 EUR, porabite 12 ur × 26 EUR ' +
+        '= 312 EUR → primanjkljaj 162 EUR.',
     },
     {
       /**
@@ -585,8 +581,8 @@ export const donosnostRs: ModuleDefinition = {
       contextOnly: true,
       help: 'Iz te številke izpeljemo, koliko dodatnih strank bi sprejeli s sproščenim časom.',
       explainer:
-        'Povprečje čez vse stranke: skupne mesečne ure vseh zaposlenih delite s številom strank. Primer: ' +
-        '600 ur / 60 strank = 10 ur na stranko.',
+        'Skupne mesečne ure vseh zaposlenih delite s številom strank. Primer: 600 ur / 60 strank = 10 ur ' +
+        'na stranko.',
     },
     {
       key: 'declinedClientsPerYear',
@@ -597,7 +593,7 @@ export const donosnostRs: ModuleDefinition = {
       contextOnly: true,
       help: 'Podatek ne vstopa v izračun — pokaže, koliko rasti danes ni mogoče sprejeti.',
       explainer:
-        'Koliko strank ste v zadnjih 12 mesecih zavrnili ali odsvetovali, ker niste imeli kapacitete.',
+        'Koliko strank ste zavrnili ali odsvetovali, ker niste imeli kapacitete; groba ocena zadostuje.',
     },
     mainCauseField(DONOSNOST_CAUSES),
   ],

@@ -64,8 +64,7 @@ export const analitikaHz: ModuleDefinition = {
       help: 'Samo poročila, po katerih vodite svoje podjetje. Ure, ki ste jih že vpisali v drugem področju, tu ne ponavljajte.',
       explainer:
         'Ročno sestavljanje poročil: izvoz v Excel, lepljenje, oblikovanje, usklajevanje številk pred ' +
-        'sestankom. Ocenite: koliko poročil na mesec × koliko ur na poročilo. Primer: 4 poročila × 3 h ≈ ' +
-        '12 ur na mesec.',
+        'sestankom. Ocena: 4 poročila × 3 h ≈ 12 ur na mesec.',
     },
     {
       key: 'adHocAnalysisHoursPerMonth',
@@ -169,9 +168,8 @@ export const financeHz: ModuleDefinition = {
       default: 0,
       help: 'Ure, ki ste jih že vpisali v drugem področju, tu ne ponavljajte.',
       explainer:
-        'Ročno knjiženje in priprava dokumentov zanj — vnos računov, priprava plačil, urejanje prilog. ' +
-        'Ocenite: koliko ljudi × koliko ur na teden × 4,3. Primer: 1 oseba × 6 h na teden ≈ 26 ur na ' +
-        'mesec.',
+        'Ročno knjiženje in priprava dokumentov zanj: vnos računov, priprava plačil, urejanje prilog. ' +
+        'Ocena: 1 oseba × 6 h na teden ≈ 26 ur na mesec.',
     },
     {
       key: 'reconciliationHoursPerMonth',
@@ -182,9 +180,8 @@ export const financeHz: ModuleDefinition = {
       default: 0,
       help: 'Štejte samo usklajevanje evidenc, ne opominjanja kupcev.',
       explainer:
-        'Ure, ko primerjate dve evidenci, ki se ne ujemata: banka proti odprtim postavkam, saldakonti ' +
-        'proti dobaviteljem, zaloga proti knjigovodstvu. Primer: 2 osebi × 3 h ob koncu meseca + 4 h med ' +
-        'mesecem ≈ 10 ur.',
+        'Ure, ko primerjate dve evidenci, ki se ne ujemata: banka proti odprtim postavkam, zaloga proti ' +
+        'knjigovodstvu. Ocena: 2 osebi × 5 h ≈ 10 ur na mesec.',
     },
     {
       key: 'closingHoursPerMonth',
@@ -207,9 +204,8 @@ export const financeHz: ModuleDefinition = {
       allowUnknown: true,
       help: 'Samo posledice napačnega ali prepoznega obračuna. Stroške prepozno potrjenih dokumentov merimo posebej.',
       explainer:
-        'Seštejte zadnjih 12 mesecev: zamudne obresti na davčne obveznosti, globe zaradi ' +
-        'prepozne oddaje, stroški popravkov in samoprijav. Primer: 2 samoprijavi × 400 EUR + ' +
-        '600 EUR obresti ≈ 1.400 EUR.',
+        'Zamudne obresti, globe zaradi prepozne oddaje in stroški popravkov. Ocena: 2 samoprijavi × 400 ' +
+        'EUR + 600 EUR obresti ≈ 1.400 EUR na leto.',
     },
     mainCauseField(FINANCE_CAUSES),
   ],
@@ -293,8 +289,7 @@ export const kadriHz: ModuleDefinition = {
       help: 'Evidenca za plačo, ne za račun naročniku. Ure, ki ste jih že vpisali v drugem področju, tu ne ponavljajte.',
       explainer:
         'Zbiranje in urejanje evidenc: prepisovanje listov, lovljenje manjkajočih vnosov, popravki pred ' +
-        'obračunom plač. Ocenite: koliko ur ob koncu meseca × koliko oseb to dela. Primer: 2 osebi × 5 h ' +
-        '≈ 10 ur.',
+        'plačami. Ocena: 2 osebi × 5 h ≈ 10 ur na mesec.',
     },
     {
       key: 'payrollPrepHoursPerMonth',
@@ -403,9 +398,8 @@ export const dokumentiHz: ModuleDefinition = {
       default: 0,
       help: 'Ure, ki ste jih že vpisali v drugem področju, tu ne ponavljajte.',
       explainer:
-        'Čas za lovljenje podpisov in potrditev: pošiljanje v podpis, opominjanje, iskanje, kje se je ' +
-        'dokument ustavil. Ocenite: koliko dokumentov na mesec × koliko minut na dokument. Primer: 60 ' +
-        'dokumentov × 10 min ≈ 10 ur.',
+        'Čas za lovljenje podpisov: pošiljanje v podpis, opominjanje, iskanje, kje se je dokument ' +
+        'ustavil. Ocena: 60 dokumentov × 10 min ≈ 10 ur na mesec.',
     },
     {
       key: 'searchArchiveHoursPerMonth',
@@ -435,9 +429,8 @@ export const dokumentiHz: ModuleDefinition = {
       allowUnknown: true,
       help: 'Samo posledice poti dokumenta. Obresti in globe zaradi davčnih obračunov merimo posebej.',
       explainer:
-        'Seštejte zadnjih 12 mesecev: zamujeni skonti za predčasno plačilo, stroški ponovne ' +
-        'izstavitve izgubljenih dokumentov, opomini zaradi računa, ki je obtičal v potrjevanju. ' +
-        'Primer: 20 zamujenih skontov × 80 EUR ≈ 1.600 EUR.',
+        'Zamujeni skonti, ponovna izstavitev izgubljenih dokumentov, opomini zaradi računa, ki je obtičal ' +
+        'v potrjevanju. Ocena: 20 skontov × 80 EUR ≈ 1.600 EUR na leto.',
     },
     mainCauseField(DOKUMENTI_CAUSES),
   ],
@@ -522,8 +515,8 @@ export const servisHz: ModuleDefinition = {
       default: 0,
       help: 'Ure, ki ste jih že vpisali v drugem področju, tu ne ponavljajte.',
       explainer:
-        'Ure tehnikov in serviserjev za garancijske ter servisne posege po predaji. Ocenite: koliko ' +
-        'primerov na mesec × koliko ur na primer. Primer: 10 primerov × 2,5 h ≈ 25 ur.',
+        'Ure tehnikov in serviserjev za garancijske in servisne posege po predaji. Ocena: 10 primerov × ' +
+        '2,5 h ≈ 25 ur na mesec.',
     },
     {
       key: 'rmaAdminHoursPerMonth',
@@ -534,8 +527,8 @@ export const servisHz: ModuleDefinition = {
       default: 0,
       help: 'Štejte samo garancijske in servisne primere, ne urejanja običajnih vračil in dobropisov.',
       explainer:
-        'Pisarniški del reklamacije: sprejem prijave, dokumentacija, usklajevanje z dobaviteljem, ' +
-        'obveščanje stranke. Primer: 20 primerov × 45 min ≈ 15 ur na mesec.',
+        'Pisarniški del reklamacije: sprejem prijave, dokumentacija, usklajevanje z dobaviteljem. Ocena: ' +
+        '20 primerov × 45 min ≈ 15 ur na mesec.',
     },
     {
       key: 'annualServiceCostEUR',
@@ -547,8 +540,8 @@ export const servisHz: ModuleDefinition = {
       allowUnknown: true,
       help: 'Samo stroški, ki še niso zajeti drugje — dobropisi, vračila kupnine in poškodovano blago sem ne sodijo.',
       explainer:
-        'Denar, ki odteče poleg porabljenih ur: nadomestni deli, prevozi na teren, zunanji servis, ' +
-        'odškodnine. Če tega ne vodite ločeno, vzemite povprečen primer × število primerov na leto.',
+        'Denar, ki odteče poleg porabljenih ur: nadomestni deli, prevozi na teren, zunanji servis. Ocena: ' +
+        'povprečen primer × število primerov na leto.',
     },
     {
       key: 'caseTracking',

@@ -99,9 +99,8 @@ const substitutionField: ModuleField = {
   default: 3,
   help: 'Ta del prodaje ni izgubljen, zato ga od izgubljene marže odštejemo.',
   explainer:
-    'Del kupcev, ki ob prazni polici vzame drug artikel ali se vrne pozneje — ta prodaja ni ' +
-    'izgubljena. Ocenite po občutku: pri osnovnih živilih je delež visok (70–80 %), pri modnih in ' +
-    'specifičnih artiklih nizek (20–30 %).',
+    'Del kupcev, ki ob prazni polici vzame drug artikel ali se vrne pozneje — ta prodaja ni izgubljena. ' +
+    'Pri osnovnih živilih je delež visok (70–80 %), pri modnih artiklih nizek (20–30 %).',
   choices: [
     { value: 0, label: 'Skoraj vsi — nad 60 %' },
     { value: 1, label: 'Približno polovica' },
@@ -134,10 +133,8 @@ export const razpolozljivostMp: ModuleDefinition = {
       default: 4,
       help: 'Delež iskanj, ne izgubljene prodaje — koliko od tega je res izgubljeno, odšteje naslednje vprašanje.',
       explainer:
-        'Meritve razpoložljivosti v trgovini na drobno kažejo, da povprečno manjka vsak trinajsti ' +
-        'iskani artikel — 8,3 % svetovno in 8,6 % v Evropi (Gruen & Corsten, 72.000 kupcev). ' +
-        'Če svoje številke nimate, izberite povprečje panoge; koliko od tega je res izgubljena ' +
-        'prodaja, se odšteje pri naslednjem vprašanju.',
+        'Delež iskanj, ki zadenejo ob prazno polico. Meritve v trgovini na drobno kažejo povprečno 8,3 % ' +
+        'svetovno in 8,6 % v Evropi (Gruen & Corsten) — če svojega podatka nimate, vzemite povprečje.',
       choices: [
         { value: 0, label: 'Redko — pod 2 %' },
         { value: 1, label: '2–5 %' },
@@ -165,8 +162,8 @@ export const razpolozljivostMp: ModuleDefinition = {
       default: 0,
       help: 'Klici med enotami, iskanje po skladišču, obljube kupcu. Prenos blaga sam po sebi šteje področje Prevzem.',
       explainer:
-        'Ure za preverjanje, ali je artikel kje drugje: klici med enotami, iskanje po skladišču, obljube ' +
-        'kupcu. Primer: 3 zaposleni × 15 min na dan × 26 dni ≈ 20 ur na mesec.',
+        'Ure za preverjanje, ali je artikel kje drugje: klici med enotami, iskanje po skladišču. Ocena: 3 ' +
+        'zaposleni × 15 min na dan ≈ 20 ur na mesec.',
     },
     {
       key: 'replenishmentMethod',
@@ -260,8 +257,8 @@ export const zalogeMp: ModuleDefinition = {
       allowUnknown: true,
       help: 'Po nabavni vrednosti in samo ZNANA izguba. Neznano razliko, ki jo ugotovite šele ob inventuri, vpišite v področju Blagajna — sicer bo ista izguba šteta dvakrat.',
       explainer:
-        'Po nabavni vrednosti in samo ZNANA izguba: poteklo, poškodovano, odpisano blago. Seštejte ' +
-        'odpise zadnjih 12 mesecev iz knjigovodstva.',
+        'Samo znana izguba po nabavni vrednosti: poteklo, poškodovano, odpisano blago. Seštejte odpise ' +
+        'zadnjih 12 mesecev iz knjigovodstva.',
     },
     {
       key: 'forcedMarkdownMarginEUR',
@@ -273,9 +270,8 @@ export const zalogeMp: ModuleDefinition = {
       allowUnknown: true,
       help: 'Samo razlika do marže, ki ste jo načrtovali, ne celoten popust. Načrtovane sezonske razprodaje sem ne sodijo — te bi bile tudi z boljšim sistemom.',
       explainer:
-        'Samo izpad do načrtovane marže, ne celoten popust. Primer: artikel z načrtovano maržo 10 EUR ' +
-        'ste prodali z 2 EUR marže → izpad 8 EUR × število kosov. Načrtovane sezonske razprodaje ne ' +
-        'štejejo.',
+        'Samo izpad do načrtovane marže, ne celoten popust. Primer: artikel z načrtovano maržo 10 EUR ste ' +
+        'prodali z 2 EUR → izpad 8 EUR × število kosov.',
     },
     {
       key: 'inventoryValueEUR',
@@ -286,8 +282,8 @@ export const zalogeMp: ModuleDefinition = {
       allowUnknown: true,
       help: 'Vnesite nabavno vrednost, ne prodajne.',
       explainer:
-        'Povprečna vrednost zaloge po NABAVNI vrednosti, vse poslovalnice in skladišče skupaj. Vzemite ' +
-        'postavko zaloge iz bilance ali povprečje nekaj mesečnih stanj.',
+        'Povprečna zaloga po nabavni vrednosti, vse poslovalnice in skladišče skupaj. Vzemite postavko iz ' +
+        'bilance ali povprečje nekaj mesečnih stanj.',
     },
     reducibleShareField(
       'Kolikšen delež zalog bi po vaši oceni lahko zmanjšali, ne da bi se police spraznile?',
@@ -394,8 +390,8 @@ export const marzeMp: ModuleDefinition = {
       default: 0,
       help: 'Delež prodaje, ki je napake dejansko prizadela — ne celotnega prometa in ne celotne nabavne vrednosti.',
       explainer:
-        'Delež prodaje, ki je stekel po napačni ceni — ne celoten promet. Primer: če od 100 računov 3 ' +
-        'nosijo napačno ali pozabljeno akcijsko ceno, vpišite 3 %.',
+        'Delež prodaje, ki je stekel po napačni ceni — ne celoten promet. Primer: 3 od 100 računov nosijo ' +
+        'napačno ceno → 3 %.',
     },
     {
       key: 'marginGapPercent',
@@ -407,8 +403,8 @@ export const marzeMp: ModuleDefinition = {
       default: 0,
       help: 'Primer: načrtovanih 30 %, dosežene 22 % — razlika je 8 odstotnih točk.',
       explainer:
-        'Odstotne točke, ne odstotki. Če razlike ne veste, vzemite tipičen popust, ki ga taka napaka ' +
-        'prinese, in ga izrazite v odstotnih točkah marže.',
+        'Odstotne točke, ne odstotki. Če razlike ne veste, vzemite tipičen popust take napake in ga ' +
+        'izrazite v odstotnih točkah marže.',
     },
     {
       key: 'unclaimedRebatesEUR',
@@ -420,9 +416,9 @@ export const marzeMp: ModuleDefinition = {
       allowUnknown: true,
       help: 'Če tega ne vodite, odkljukajte "Tega podatka ne vodimo" — nižja zanesljivost rezultata je boljša od izmišljene številke.',
       explainer:
-        'Bonusi, rabati in vračila od dobaviteljev, do katerih ste po pogodbi upravičeni, a jih niste ' +
-        'zahtevali ali dokazali. Primer: dogovorjen letni bonus 2 % na 500.000 EUR nabave = 10.000 EUR; ' +
-        'če ste uveljavili polovico, vpišite 5.000 EUR.',
+        'Bonusi in rabati, do katerih ste po pogodbi upravičeni, a jih niste zahtevali ali dokazali. ' +
+        'Primer: dogovorjen bonus 2 % na 500.000 EUR nabave = 10.000 EUR; uveljavili ste polovico → 5.000 ' +
+        'EUR.',
     },
     {
       key: 'priceMaintenanceHoursPerMonth',
@@ -432,8 +428,8 @@ export const marzeMp: ModuleDefinition = {
       default: 0,
       help: 'Ne vključujte prevzema blaga in usklajevanja dokumentov — to meri področje Prevzem.',
       explainer:
-        'Ure za vnos cen in akcij, tiskanje in menjavo etiket, urejanje oznak na policah. Primer: 2 ' +
-        'osebi × 5 h na teden ≈ 43 ure na mesec.',
+        'Ure za vnos cen in akcij, tiskanje in menjavo etiket, oznake na policah. Ocena: 2 osebi × 5 h na ' +
+        'teden ≈ 43 ure na mesec.',
     },
     {
       key: 'previousPriceProof',
@@ -444,9 +440,8 @@ export const marzeMp: ModuleDefinition = {
       contextOnly: true,
       help: 'Zakon o varstvu potrošnikov zahteva, da je ob znižanju navedena najnižja cena zadnjih 30 dni.',
       explainer:
-        'Vprašanje ni, ali pravilo poznate, ampak ali ga danes lahko DOKAŽETE za posamezen artikel in ' +
-        'poslovalnico. Kjer se cene vodijo ročno ali v Excelu, zgodovine praviloma ni — ob inšpekcijskem ' +
-        'pregledu je to tveganje, ne administrativna podrobnost.',
+        'Vprašanje ni, ali pravilo poznate, ampak ali ga danes lahko dokažete za posamezen artikel in ' +
+        'poslovalnico. Kjer se cene vodijo ročno ali v Excelu, zgodovine praviloma ni.',
       choices: [
         { value: 0, label: 'Da, neposredno iz sistema' },
         { value: 1, label: 'Da, z ročnim iskanjem po evidencah' },
@@ -539,7 +534,7 @@ export const blagajnaMp: ModuleDefinition = {
       help: 'Najbolj dokazljiva številka v trgovini — izmerite jo v enem dnevu.',
       explainer:
         'Minute na ENO blagajno na dan: odprtje, zaključek, štetje in oddaja izkupička. Izmerite jih v ' +
-        'enem dnevu — je najbolj dokazljiva številka v trgovini. Primer: 12 minut na blagajno.',
+        'enem dnevu — običajno okoli 12 minut.',
     },
     {
       // Fiksnih 305 dni je 7-dnevno živilsko trgovino podcenilo in specializirano
@@ -563,9 +558,8 @@ export const blagajnaMp: ModuleDefinition = {
       allowUnknown: true,
       help: 'Samo NEZNANA razlika, skupaj z nepojasnjenimi blagajniškimi razlikami. Znano odpisano, poteklo ali znižano blago sodi v področje Presežna zaloga. Če inventura ni letna, vrednost preračunajte na leto.',
       explainer:
-        'Manko je razlika, ki je ne znate pojasniti: kraja, napake na blagajni, neevidentiran izmet. ' +
-        'Vzemite jo iz zapisnika zadnje inventure, po nabavni vrednosti. Če inventura ni letna, vrednost ' +
-        'preračunajte na leto.',
+        'Razlika, ki je ne znate pojasniti: kraja, napake na blagajni, neevidentiran izmet. Vzemite jo iz ' +
+        'zapisnika zadnje inventure, po nabavni vrednosti.',
     },
     {
       key: 'stocktakeHoursPerYear',
@@ -670,8 +664,8 @@ export const prevzemMp: ModuleDefinition = {
       default: 0,
       help: 'Ne vključujte samega prevzema iz prvega vprašanja.',
       explainer:
-        'Ure za usklajevanje dobavnic, računov in cen z dobavitelji: iskanje razlik, klici, popravki. ' +
-        'Primer: 1 oseba × 6 h na teden ≈ 26 ur na mesec.',
+        'Ure za iskanje razlik med dobavnico, računom in ceno: klici dobavitelju, popravki. Ocena: 1 ' +
+        'oseba × 6 h na teden ≈ 26 ur na mesec.',
     },
     {
       key: 'transferHoursPerMonth',
@@ -682,8 +676,8 @@ export const prevzemMp: ModuleDefinition = {
       default: 0,
       help: 'Šteje samo administrativni del prenosa, ne prevoza.',
       explainer:
-        'Samo administrativni del prenosa med enotami: dokumenti, knjiženje, usklajevanje zalog. Prevoz ' +
-        'sam ne šteje. Primer: 30 prenosov × 20 min ≈ 10 ur na mesec.',
+        'Samo administrativni del prenosa med enotami: dokumenti, knjiženje, usklajevanje zalog. Ocena: ' +
+        '30 prenosov × 20 min ≈ 10 ur na mesec.',
     },
     {
       key: 'receiptMethod',
@@ -776,8 +770,8 @@ export const kanaliMp: ModuleDefinition = {
       allowUnknown: true,
       help: 'Vrednost naročil, ne marže — maržo izračunamo sami. Izgubljeno prodajo v poslovalnici šteje področje Prazne police.',
       explainer:
-        'Vrednost spletnih naročil, ki ste jih morali odpovedati, ker artikla ni bilo — vrednost ' +
-        'naročil, ne marže. Primer: 15 odpovedi na mesec × 60 EUR × 12 ≈ 10.800 EUR na leto.',
+        'Vrednost spletnih naročil, ki ste jih morali odpovedati, ker artikla ni bilo — vrednost, ne ' +
+        'marža. Ocena: 15 odpovedi × 60 EUR × 12 ≈ 10.800 EUR na leto.',
     },
     {
       key: 'returnsPerMonth',
@@ -794,8 +788,8 @@ export const kanaliMp: ModuleDefinition = {
       default: 0,
       help: 'Delo, povratna dostava, nevrnjene provizije in znižanje vrnjenega artikla. BREZ vrnjene kupnine — artikel se večinoma proda znova, zato kupnina sama po sebi ni strošek.',
       explainer:
-        'Kaj vas stane ENO vračilo brez vrnjene kupnine: delo, povratna dostava, nevrnjena provizija, ' +
-        'znižanje artikla. Primer: 4 EUR dela + 5 EUR prevoza + 3 EUR provizije ≈ 12 EUR.',
+        'Kaj vas stane ENO vračilo brez vrnjene kupnine: delo, povratna dostava, provizija, znižanje ' +
+        'artikla. Primer: 4 + 5 + 3 EUR ≈ 12 EUR.',
     },
     {
       key: 'catalogSyncHoursPerMonth',
@@ -805,8 +799,8 @@ export const kanaliMp: ModuleDefinition = {
       default: 0,
       help: 'Vzdrževanje cenikov za poslovalnice šteje področje Cene — tu samo delo, ki nastane zaradi drugega kanala.',
       explainer:
-        'Ure za ročno usklajevanje artiklov, opisov, cen in zalog med spletno trgovino in ' +
-        'poslovalnicami. Primer: 1 oseba × 5 h na teden ≈ 21 ur na mesec.',
+        'Ure za ročno usklajevanje artiklov, cen in zalog med spletno trgovino in poslovalnicami. Ocena: ' +
+        '1 oseba × 5 h na teden ≈ 21 ur na mesec.',
     },
     {
       key: 'orderProcessingHoursPerMonth',

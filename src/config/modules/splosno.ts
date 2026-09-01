@@ -68,9 +68,8 @@ export const podatkiSp: ModuleDefinition = {
       default: 0,
       help: 'Iskanje podatkov, ki jih ne najdete, sem ne sodi — to meri področje Iskanje informacij.',
       explainer:
-        'Ure za vnašanje in prepisovanje istih podatkov med orodji: iz e-pošte v Excel, iz Excela v ERP, ' +
-        's papirja v sistem. Ocenite: koliko ljudi × koliko ur na teden × 4,3. Primer: 3 ljudje × 3 h na ' +
-        'teden ≈ 39 ur.',
+        'Ure za vnašanje in prepisovanje istih podatkov med orodji: iz e-pošte v Excel, iz Excela v ERP. ' +
+        'Ocena: 3 ljudje × 3 h na teden ≈ 39 ur na mesec.',
     },
     {
       key: 'dataFixHoursPerMonth',
@@ -80,8 +79,8 @@ export const podatkiSp: ModuleDefinition = {
       default: 0,
       help: 'Popravljanje PODATKA, ne popravljanje izdelka ali storitve — to meri področje Napake.',
       explainer:
-        'Ure za popravljanje podatkov, ki so napačni, manjkajo ali se med sistemi ne ujemajo. Primer: 2 ' +
-        'osebi × 2 h na teden ≈ 17 ur na mesec.',
+        'Ure za popravljanje napačnih, manjkajočih ali neusklajenih podatkov. Ocena: 2 osebi × 2 h na ' +
+        'teden ≈ 17 ur na mesec.',
     },
     {
       key: 'reportingHoursPerMonth',
@@ -174,8 +173,8 @@ export const usklajevanjeSp: ModuleDefinition = {
       default: 0,
       help: 'Čakanje na plačilo kupca sem ne sodi — to meri področje Plačilni roki in terjatve.',
       explainer:
-        'Ure, ko delo stoji, ker čakate na odločitev, potrditev ali informacijo od nekoga drugega. ' +
-        'Ocenite: koliko ljudi × koliko ur na teden × 4,3. Primer: 4 ljudje × 2 h na teden ≈ 34 ure.',
+        'Ure, ko delo stoji, ker čakate na odločitev, potrditev ali informacijo. Ocena: 4 ljudje × 2 h na ' +
+        'teden ≈ 34 ure na mesec.',
     },
     {
       key: 'searchHoursPerMonth',
@@ -185,8 +184,8 @@ export const usklajevanjeSp: ModuleDefinition = {
       default: 0,
       help: 'Iskanje podatka, ne vnašanje ali popravljanje — to meri področje Ročno delo s podatki.',
       explainer:
-        'Ure za iskanje dokumentov, podatkov in prave različice: brskanje po mapah, po e-pošti, ' +
-        'spraševanje sodelavcev. Primer: 5 ljudi × 20 min na dan × 21 dni ≈ 35 ur.',
+        'Ure za iskanje dokumentov in prave različice: brskanje po mapah, po e-pošti, spraševanje ' +
+        'sodelavcev. Ocena: 5 ljudi × 20 min na dan ≈ 35 ur na mesec.',
     },
     {
       key: 'statusHoursPerMonth',
@@ -277,8 +276,8 @@ export const napakeSp: ModuleDefinition = {
       default: 0,
       help: 'Popravljanje izdelka, storitve ali posla. Popravljanje samih podatkov meri področje Ročno delo s podatki.',
       explainer:
-        'Ure za ponavljanje ali popravljanje že opravljenega dela — izdelka, storitve ali posla. Primer: ' +
-        '6 primerov na mesec × 4 h ≈ 24 ure.',
+        'Ure za ponavljanje ali popravljanje že opravljenega dela. Ocena: 6 primerov na mesec × 4 h ≈ 24 ' +
+        'ure.',
     },
     {
       key: 'annualClaimCostEUR',
@@ -290,8 +289,8 @@ export const napakeSp: ModuleDefinition = {
       allowUnknown: true,
       help: 'Vpišite samo stroške, ki še niso zajeti v urah ponovnega dela.',
       explainer:
-        'Denar, ki je odtekel zaradi napak: dobropisi, odškodnine, nadomestne dobave, dodatni prevozi. ' +
-        'Seštejte zadnjih 12 mesecev.',
+        'Denar, ki je odtekel zaradi napak: dobropisi, odškodnine, nadomestne dobave, dodatni prevozi; ' +
+        'seštevek zadnjih 12 mesecev.',
     },
     {
       key: 'annualLostMarginEUR',
@@ -302,8 +301,8 @@ export const napakeSp: ModuleDefinition = {
       allowUnknown: true,
       help: 'Ne vpisujte celotne vrednosti izgubljenega posla.',
       explainer:
-        'Ne vrednost izgubljenega posla, ampak samo marža, ki bi vam ostala. Primer: izgubljena stranka ' +
-        'za 60.000 EUR na leto pri 20 % marži → 12.000 EUR.',
+        'Ne vrednost izgubljenega posla, ampak samo marža, ki bi vam ostala. Primer: stranka za 60.000 ' +
+        'EUR na leto pri 20 % marži → 12.000 EUR.',
     },
     {
       key: 'errorDetection',
@@ -395,8 +394,7 @@ export const denarSp: ModuleDefinition = {
       default: 0,
       help: 'Samo prekoračitev NAD dogovorjenim rokom. Financiranje dogovorjenega roka je normalno poslovanje in ni strošek napake.',
       explainer:
-        'Samo dnevi NAD dogovorjenim rokom. Primer: dogovorjeno 30 dni, kupci plačajo v 45 → vpišite 15. ' +
-        'Če poznate DSO, od njega odštejte povprečen dogovorjen rok.',
+        'Samo dnevi NAD dogovorjenim rokom. Primer: dogovorjeno 30 dni, kupci plačajo v 45 → vpišite 15.',
     },
     {
       key: 'dunningHoursPerMonth',
@@ -422,8 +420,8 @@ export const denarSp: ModuleDefinition = {
       contextOnly: true,
       help: 'Podatek ne vstopa v izračun — služi za primerjavo z dogovorjenim rokom.',
       explainer:
-        'Povprečno število dni od izdaje računa do plačila. Hiter izračun: odprte terjatve ÷ letni ' +
-        'prihodek × 365. Primer: 900.000 ÷ 6.000.000 × 365 ≈ 55 dni.',
+        'Povprečno število dni od izdaje računa do plačila. Izračun: odprte terjatve ÷ letni prihodek × ' +
+        '365.',
     },
     mainCauseField(DENAR_CAUSES),
   ],
@@ -494,7 +492,7 @@ export const zalogeSp: ModuleDefinition = {
       help: 'Če zalog nimate, vpišite 0 — področje se v izračunu ne bo pojavilo.',
       explainer:
         'Povprečna vrednost zalog po nabavni vrednosti — material, blago in izdelki skupaj. Vzemite ' +
-        'postavko zaloge iz bilance ali povprečje nekaj mesečnih stanj.',
+        'postavko iz bilance ali povprečje nekaj mesečnih stanj.',
     },
     {
       key: 'annualWriteOffEUR',

@@ -85,9 +85,8 @@ export const obracun: ModuleDefinition = {
       allowUnknown: true,
       help: 'Samo delo, ki ste ga opravili in bi ga smeli zaračunati, pa ga niste. Stojnine, ki jih plačate vi, vpišite spodaj.',
       explainer:
-        'Ocenite iz nekaj mesecev: koliko primerov na mesec × povprečen znesek × 12. Primer: 15 čakanj ' +
-        'nad prosto uro × 40 EUR × 12 ≈ 7.200 EUR. Če dodatkov sploh ne beležite, je to samo po sebi ' +
-        'odgovor — ocenite grobo in raje navzdol.',
+        'Opravljeni dodatki, ki jih niste zaračunali: čakanje, dodatne postaje, ležarine. Ocena: 15 ' +
+        'čakanj × 40 EUR × 12 ≈ 7.200 EUR na leto.',
     },
     {
       key: 'invoiceLagDays',
@@ -97,9 +96,8 @@ export const obracun: ModuleDefinition = {
       default: 0,
       help: 'Če račun izdate isti ali naslednji dan, vpišite 0. Zamude naročnikov pri plačilu merimo v področju Plačilni roki.',
       explainer:
-        'Šteje se čas od opravljene dostave do izdaje računa, ne do plačila. Najpogostejši vzrok zamika ' +
-        'je dokazilo o dostavi, ki se vrne šele čez nekaj dni. Primer: dostava v ponedeljek, račun izdan ' +
-        'v petek naslednjega tedna → 11 dni.',
+        'Dnevi od opravljene dostave do izdaje računa, ne do plačila — najpogosteje zamuja dokazilo o ' +
+        'dostavi. Primer: dostava v ponedeljek, račun čez enajst dni → 11.',
     },
     {
       key: 'pricingErrorEUR',
@@ -111,8 +109,8 @@ export const obracun: ModuleDefinition = {
       allowUnknown: true,
       help: 'Samo napake v ceni. Dobropisi zaradi napačne ali poškodovane pošiljke sodijo v področje Napačne dostave.',
       explainer:
-        'Vzemite izdane dobropise in popravke računov zadnjih 12 mesecev ter med njimi tiste, ki so ' +
-        'nastali zaradi cene, ne zaradi napake v izvedbi. Primer: 18 dobropisov × 250 EUR ≈ 4.500 EUR.',
+        'Samo dobropisi in popravki zaradi napačne cene, ne zaradi napake v izvedbi. Ocena: 18 dobropisov ' +
+        '× 250 EUR ≈ 4.500 EUR na leto.',
     },
     {
       key: 'billingHoursPerMonth',
@@ -123,9 +121,8 @@ export const obracun: ModuleDefinition = {
       default: 0,
       help: 'Knjiženje prejetih računov sodi v področje Računovodstvo in finance, ne sem.',
       explainer:
-        'Delo od zaključene vožnje do izdanega računa: zbiranje CMR in dokazil, preverjanje cene po ' +
-        'pogodbi, vnos dodatkov, izstavljanje. Ocenite: koliko oseb × koliko ur na teden × 4,3. Primer: 1 ' +
-        'oseba × 8 h na teden ≈ 34 ur.',
+        'Delo od zaključene vožnje do izdanega računa: zbiranje CMR in dokazil, preverjanje cene, vnos ' +
+        'dodatkov. Ocena: 1 oseba × 8 h na teden ≈ 34 ur na mesec.',
     },
     {
       /*
@@ -142,9 +139,8 @@ export const obracun: ModuleDefinition = {
       contextOnly: true,
       help: 'Podatek ne vstopa v izračun — služi za oceno obsega težave.',
       explainer:
-        'Pogodbeni penali, stojnine (demurrage, detention) in popusti kot odškodnina — samo tisti, ki ste ' +
-        'jih plačali vi, ne tisti, ki jih zaračunate naročniku. Seštejte zadnjih 12 mesecev iz računov in ' +
-        'dobropisov.',
+        'Penali, stojnine (demurrage, detention) in popusti kot odškodnina, ki ste jih plačali vi — ne ' +
+        'tisti, ki jih zaračunate naročniku. Seštejte zadnjih 12 mesecev.',
     },
     mainCauseField(OBRACUN_CAUSES),
   ],
@@ -235,9 +231,8 @@ export const vozniki: ModuleDefinition = {
       default: 0,
       help: 'Šteje pisarniško delo, ne čas voznika na poti.',
       explainer:
-        'Izdaja naloga pred potjo, obračun dnevnic in kilometrine po njej, iskanje manjkajočih računov, ' +
-        'popravki pred plačami. Ocenite: koliko nalogov na mesec × koliko minut na nalog. Primer: 300 ' +
-        'nalogov × 6 min ≈ 30 ur.',
+        'Izdaja naloga pred potjo, obračun dnevnic in kilometrine po njej, popravki pred plačami. Ocena: ' +
+        '300 nalogov × 6 min ≈ 30 ur na mesec.',
     },
     {
       key: 'driverTimesheetHoursPerMonth',
@@ -248,9 +243,8 @@ export const vozniki: ModuleDefinition = {
       default: 0,
       help: 'Evidenca za plačo. Analize tahografa in nadzora voznih časov sem ne štejte.',
       explainer:
-        'Prepisovanje evidenc, lovljenje manjkajočih vnosov, usklajevanje odsotnosti in dopustov pred ' +
-        'obračunom. Ocenite: koliko oseb to dela × koliko ur ob koncu meseca. Primer: 2 osebi × 6 h ≈ 12 ' +
-        'ur.',
+        'Prepisovanje evidenc, lovljenje manjkajočih vnosov, usklajevanje odsotnosti pred obračunom plač. ' +
+        'Ocena: 2 osebi × 6 h ob koncu meseca ≈ 12 ur.',
     },
     {
       key: 'payrollHoursPerMonth',
@@ -277,8 +271,8 @@ export const vozniki: ModuleDefinition = {
       contextOnly: true,
       help: 'Podatek ne vstopa v izračun — pove, kako velik je obseg potnih nalogov.',
       explainer:
-        'Štejte vse, za katere izdajate potne naloge — tudi tiste s krajšim delovnim časom in tiste, ki ' +
-        'vozijo občasno. Če voznikov nimate, ker prevoze samo organizirate, vpišite 0.',
+        'Štejte vse, za katere izdajate potne naloge — tudi občasne in tiste s krajšim delovnim časom. Če ' +
+        'prevoze samo organizirate, vpišite 0.',
     },
     mainCauseField(VOZNIKI_CAUSES),
   ],
@@ -358,8 +352,8 @@ export const terjatve: ModuleDefinition = {
       contextOnly: true,
       help: 'Podatek ne vstopa v izračun — služi za primerjavo z dogovorjenim rokom.',
       explainer:
-        'Povprečno število dni od izdaje računa do plačila. Hiter izračun: odprte terjatve ÷ letni ' +
-        'prihodek × 365. Primer: 900.000 ÷ 6.000.000 × 365 ≈ 55 dni.',
+        'Povprečno število dni od izdaje računa do plačila. Izračun: odprte terjatve ÷ letni prihodek × ' +
+        '365.',
     },
     {
       key: 'overdueDaysAverage',
@@ -370,7 +364,7 @@ export const terjatve: ModuleDefinition = {
       help: 'Samo prekoračitev NAD dogovorjenim rokom. Financiranje dogovorjenega roka je normalno poslovanje in ni strošek napake.',
       explainer:
         'Samo dnevi nad dogovorjenim rokom. Primer: dogovorjeno 60 dni, naročniki plačajo v 75 → vpišite ' +
-        '15. Če poznate DSO, od njega odštejte povprečen dogovorjen rok.',
+        '15.',
     },
     {
       key: 'dunningHoursPerMonth',
@@ -380,8 +374,8 @@ export const terjatve: ModuleDefinition = {
       default: 0,
       help: 'Ne vključujte priprave obračuna in izstavljanja računov — te ure meri področje Obračun prevozov.',
       explainer:
-        'Ure za opominjanje, usklajevanje odprtih postavk in izterjavo. Ocenite: koliko oseb × koliko ur ' +
-        'na teden × 4,3. Primer: 1 oseba × 4 h na teden ≈ 17 ur na mesec.',
+        'Ure za opominjanje, usklajevanje odprtih postavk in izterjavo. Ocena: 1 oseba × 4 h na teden ≈ ' +
+        '17 ur na mesec.',
     },
     {
       key: 'annualBadDebtEUR',
@@ -469,7 +463,7 @@ export const dokumentacija: ModuleDefinition = {
       help: 'Ne vključujte priprave listin iz prvega vprašanja.',
       explainer:
         'Isti podatek, vpisan drugič: iz naročila v prevozni nalog, iz naloga v Excel, s papirja v ' +
-        'sistem. Ocenite: koliko ljudi × koliko minut na dan × 21 dni. Primer: 2 osebi × 40 min ≈ 28 ur.',
+        'sistem. Ocena: 2 osebi × 40 min na dan ≈ 28 ur na mesec.',
     },
     {
       key: 'dataFixHoursPerMonth',
@@ -493,9 +487,8 @@ export const dokumentacija: ModuleDefinition = {
       default: 0,
       help: 'Reševanje reklamacij zaradi napačnih ali poškodovanih pošiljk sodi v področje Napačne dostave.',
       explainer:
-        'Klici in e-pošta, ki jih ne bi bilo, če bi naročnik status videl sam — kje je pošiljka, kdaj ' +
-        'pride, zakaj zamuja. Ocenite: koliko poizvedb na dan × povprečen čas × 21 dni. Primer: 12 ' +
-        'poizvedb × 5 min ≈ 21 ur.',
+        'Klici in e-pošta, ki jih ne bi bilo, če bi naročnik status videl sam. Ocena: 12 poizvedb × 5 min ' +
+        '× 21 dni ≈ 21 ur na mesec.',
     },
     {
       key: 'podTiming',
@@ -606,8 +599,8 @@ export const napake: ModuleDefinition = {
         'Samo pošiljke, ki so terjale popravek — ponovno dostavo, prepakiranje ali vračilo. ' +
         'Zamuda brez napake v vsebini sem ne sodi.',
       explainer:
-        'Če deleža ne vodite, ga ocenite iz reklamacij: koliko primerov na mesec delite s številom ' +
-        'pošiljk. Primer: 60 reklamacij pri 5.000 pošiljkah je 1,2 %.',
+        'Če deleža ne vodite, ga ocenite iz reklamacij: primere na mesec delite s številom pošiljk. ' +
+        'Primer: 60 reklamacij pri 5.000 pošiljkah je 1,2 %.',
     },
     {
       key: 'costPerErrorEUR',
@@ -620,8 +613,8 @@ export const napake: ModuleDefinition = {
       default: 40,
       help: 'Ponovna dostava, prepakiranje, vračilo. Vrednost samega blaga vpišite v naslednje vprašanje.',
       explainer:
-        'Kaj vas stane ena napaka brez vrednosti blaga: ponovna dostava, prepakiranje, dodatna ' +
-        'manipulacija, čas disponenta. Primer: ponovna dostava 60 EUR + 1 ura dela ≈ 90 EUR.',
+        'Kaj vas stane ena napaka brez vrednosti blaga: ponovna dostava, prepakiranje, čas disponenta. ' +
+        'Primer: 60 EUR prevoza + 1 ura dela ≈ 90 EUR.',
     },
     {
       key: 'annualDamageCostEUR',
@@ -633,8 +626,8 @@ export const napake: ModuleDefinition = {
       allowUnknown: true,
       help: 'Samo del, ki ga ni pokrilo zavarovanje.',
       explainer:
-        'Vrednost poškodovanega ali izgubljenega blaga, ki ste jo nosili vi — nad odbitno franšizo ' +
-        'oziroma tisto, česar zavarovalnica ni pokrila. Seštejte primere zadnjih 12 mesecev.',
+        'Vrednost poškodovanega ali izgubljenega blaga, ki ste jo nosili vi — nad franšizo oziroma tisto, ' +
+        'česar zavarovalnica ni pokrila. Seštejte primere zadnjih 12 mesecev.',
     },
     {
       key: 'claimHoursPerMonth',
@@ -644,8 +637,8 @@ export const napake: ModuleDefinition = {
       default: 0,
       help: 'Obveščanje naročnikov o statusih in zamudah sodi v področje Prevozna dokumentacija, ne sem.',
       explainer:
-        'Pisarniško reševanje: sprejem reklamacije, iskanje pošiljke, usklajevanje z voznikom in stranko, ' +
-        'papirologija. Primer: 15 primerov na mesec × 1 h ≈ 15 ur.',
+        'Pisarniško reševanje: sprejem reklamacije, iskanje pošiljke, usklajevanje z voznikom in stranko. ' +
+        'Ocena: 15 primerov × 1 h ≈ 15 ur na mesec.',
     },
     mainCauseField(NAPAKE_CAUSES),
   ],
@@ -716,8 +709,8 @@ export const skladisce: ModuleDefinition = {
       default: 0,
       help: 'Iskanje listin in dokazil sodi v področje Prevozna dokumentacija, ne sem.',
       explainer:
-        'Ure iskanja blaga, ki jih ne bi bilo, če bi sistem vedel, kje kaj leži. Ocenite: koliko ljudi × ' +
-        'koliko minut na izmeno × 21 dni. Primer: 4 ljudje × 15 min ≈ 21 ur na mesec.',
+        'Ure iskanja blaga, ki jih ne bi bilo, če bi sistem vedel, kje kaj leži. Ocena: 4 ljudje × 15 min ' +
+        'na izmeno ≈ 21 ur na mesec.',
     },
     {
       key: 'inventoryValueEUR',
@@ -727,8 +720,8 @@ export const skladisce: ModuleDefinition = {
       default: 0,
       help: 'Če skladiščite izključno tuje blago, vpišite 0 — tujega kapitala ne sproščate vi.',
       explainer:
-        'Povprečna vrednost blaga, ki je VAŠA last, po nabavni vrednosti — ne vrednost tujega blaga v ' +
-        'hrambi. Vzemite postavko zaloge iz bilance ali povprečje nekaj mesečnih stanj.',
+        'Samo blago, ki je vaša last, po nabavni vrednosti — ne tuje blago v hrambi. Vzemite postavko iz ' +
+        'bilance ali povprečje nekaj mesečnih stanj.',
     },
     {
       key: 'annualWriteOffEUR',
