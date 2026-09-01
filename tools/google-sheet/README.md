@@ -78,6 +78,78 @@ znova. `preizkusPoste` na to opozori z jasno napako namesto tihega neuspeha.
 Vgrajena obvestila preglednice (*Orodja → Nastavitve obvestil*) tu **ne
 delujejo** — sprožijo se ob človeškem urejanju, ne ob vpisu iz skripte.
 
+## Vrstni red stolpcev na listu
+
+Zaporedje določa `VRSTNI_RED` v `Koda.gs` in sledi klicateljevi zanki — **kdaj,
+kdo, kje dela, kako velik je, kako ga dosežem, o čem govoriti, kaj se je iz tega
+izcimilo** — šele nato številke:
+
+```
+prejeto · firstName · lastName · companyName · industryLabel · employeeCount
+phone · kliciTakoj · email · letno · risks
+poklicano · sestanek · opombe
+… nato zneski, področja, privolitve, kontekst, urne postavke
+```
+
+To ni isto kot `CSV_COLUMNS` v aplikaciji in ne sme biti: tam je zaporedje
+zamrznjeno, ker so preslikave v CRM pozicijske. Tu tega tveganja ni, ker se
+vrstica piše po **imenih** stolpcev — zato je vrstni red na listu prosto
+premakljiv, ne da bi se aplikacije sploh dotaknili.
+
+`SKRIJ` skrije (ne izbriše) stolpce, ki so bodisi strojni dvojniki nečesa
+berljivega (`industry` proti `industryLabel`, `timestampISO` proti `prejeto`),
+bodisi za vsak lead enaki (`gdprConsent`), bodisi surov JSON za analizo
+(`moduleInputsJson`, `triageScores`). Med njimi je tudi `sizeClass`: velikost se
+bere iz števila zaposlenih, razred pa isto podvaja. Skrit stolpec se kadarkoli
+vrne z desnim klikom med sosednjima stolpcema.
+
+### Izpeljana stolpca in stolpci za klicatelja
+
+Štirih stolpcev aplikacija ne pošlje — nastanejo tu:
+
+| Stolpec | Kaj je |
+|---|---|
+| `kliciTakoj` | `DA`, kadar je obiskovalec prosil za posvet. Isto pove `consentConsulting`, le strojno; ta ostane skrit za filtre. |
+| `letno` | Odliv + nezaslužena marža + vrednost časa. Ista številka kot v e-obvestilu; doslej je klicatelj moral seštevati tri stolpce. |
+| `poklicano` | Potrditveno polje. Prazno = klic še ni opravljen. |
+| `sestanek` | Spustni seznam: `sestanek`, `ne želi`, `drugič`. |
+| `opombe` | Prosto besedilo, oblikovano kot navadno besedilo, da vpisani datum ali `=` ostaneta, kar sta. |
+
+Zadnji trije so **klicateljevi** in jih oddaja ne more povoziti: vrstica se piše
+po imenih stolpcev, teh imen pa v oddaji ni. Nova oddaja jih v svoji vrstici
+pusti prazne in se že vpisanih vrstic sploh ne dotakne.
+
+**IMEN NE PREIMENUJTE.** Vezava je po imenu; preimenovan stolpec skripta razume
+kot tuj in ob naslednji oddaji nastane nov, prazen zraven. Če je glava
+nerazumljiva, se z miško ustavite nad njo — pojasnila so pripeta kot opombe.
+
+**Za že zapisane vrstice** je treba enkrat pognati funkcijo **`urediStolpce`**
+(v urejevalniku izberite ime funkcije in kliknite *Zaženi*). Preuredi obstoječe
+stolpce, skrije naštete, zamrzne glavo, nastavi širine in datumsko obliko. Varno
+jo je pognati večkrat — drugič ne spremeni ničesar. Nove oddaje po tem posegu
+same padejo v prave stolpce, ker se pišejo po imenih.
+
+**Vrstni red je pomemben: najprej razmestite novo različico, šele nato poženite
+`urediStolpce`.** `urediStolpce` teče iz kode v urejevalniku, `doPost` pa iz
+razmeščene — v obratnem vrstnem redu bi list dobil nove stolpce, webhook pa bi
+jih še naprej puščal prazne.
+
+Pred prvim zagonom naredite *Datoteka → Ustvari kopijo*. Pravi „razveljavi" za
+skriptni zapis je sicer *Datoteka → Zgodovina različic*, a kopija je cenejša od
+ugotavljanja, katera različica je bila prava.
+
+Preurejanja **ne** počne `doPost`, in to je namerno: prepisovanje celega lista ob
+vsaki oddaji bi pomenilo, da ena prekinjena izvedba premeša vse leade. Poseg je
+zato reden, zaveden in ročen.
+
+`urediStolpce` in `doPost` si delita isto skriptno ključavnico, zato oddaja med
+preurejanjem počaka (do 30 s) in ne more pristati v listu po starem zaporedju
+stolpcev — taka vrstica bi bila tiho zamaknjena in videti povsem pravilna.
+
+Česar prepis **ne** ohrani: formule in datumov, ki bi ju kdo natipkal v celico.
+`opombe` so pred tem zaščitene z obliko „navadno besedilo"; drugod v list ne
+pišite ročno.
+
 ### Ko skripto spremenite
 
 Google poganja **razmeščeno različico**, ne tiste v urejevalniku. Po vsaki
