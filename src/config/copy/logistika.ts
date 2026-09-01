@@ -5,12 +5,13 @@ export const LOGISTIKA_COPY: SegmentCopy = {
   displayName: 'Logistika in transport',
 
   landing: {
-    heroTitle: 'Koliko vas letno stanejo prazni kilometri in stojnine?',
-    // Postavke prevoznika se razpršijo med gorivo, delo in penale, zato v izkazu
-    // ni vrstice, ki bi jih seštela. Naštete so tiste, ki jih merijo moduli te
-    // dejavnosti (odprema, napake, skladisce, dokumentacija, roki).
+    heroTitle: 'Koliko vas letno stanejo nezaračunani dodatki in pozni računi?',
+    // Naštete so postavke, ki jih merijo moduli te dejavnosti (obracun_logistika,
+    // vozniki, terjatve_logistika, dokumentacija, napake, skladisce). Prazni
+    // kilometri in stojnine so bili tu do avgusta 2026 — odšli so skupaj z
+    // modulom, ki jih je meril: PANTHEON nima TMS in tega ne more znižati.
     heroSubtitle:
-      'Slabo izkoriščene vožnje, napačne dostave, poškodovano blago in nujni podnajemi se razpršijo med gorivo, delo in penale. Nobena od teh postavk nima svoje vrstice.',
+      'Čakanja, ki jih pozabite zaračunati, računi, ki čakajo na dokazilo, potni nalogi in dnevnice ter denar, ki predolgo stoji pri naročniku. Nobena od teh postavk nima svoje vrstice.',
   },
 
   context: {
@@ -22,12 +23,12 @@ export const LOGISTIKA_COPY: SegmentCopy = {
   triage: {
     title: 'Kje v logistiki vas najbolj tišči?',
     intro:
-      'Na hitro ocenite vsako področje — od planiranja prevozov in napačnih dostav do skladišča in stojnin. Podrobna vprašanja zastavimo samo za največje težave, zato vprašalnik ostane kratek, izračun pa vezan na vaš vozni park in vaše stranke.',
+      'Na hitro ocenite vsako področje — od obračuna prevozov in potnih nalogov do dokumentacije, reklamacij in skladišča. Podrobna vprašanja zastavimo samo za največje težave, zato vprašalnik ostane kratek, izračun pa vezan na vaše naročnike in vašo ekipo.',
   },
 
   costBasis: {
     intro:
-      'Štiri številke, ki veljajo za vsa področja. Polni strošek ure pomeni bruto plačo s prispevki delodajalca ter regresom, malico in prevozom — ne neto izplačila in ne režije. Prihodek in maržo vprašamo enkrat — sta lastnost podjetja, ne posameznega področja.',
+      'Pet številk, ki veljajo za vsa področja. Polni strošek ure pomeni bruto plačo s prispevki delodajalca ter regresom, malico in prevozom — ne neto izplačila in ne režije. Prihodek, maržo in strošek financiranja vprašamo enkrat — so lastnost podjetja, ne posameznega področja.',
   },
 
   results: {
@@ -36,14 +37,14 @@ export const LOGISTIKA_COPY: SegmentCopy = {
 
   figures: {
     directLoss: {
-      note: 'Denar, ki dejansko odteka: prazni kilometri, poškodovano blago, nujni podnajemi, penali in stojnine.',
+      note: 'Denar, ki dejansko odteka: nezaračunani dodatki, napačno zaračunani prevozi, odpisane terjatve in poračuni dnevnic.',
     },
   },
 
   emailGate: {
     title: 'PDF poročilo in trije ukrepi za vašo logistiko',
     subtitle:
-      'Isti izračun v dokumentu za upravo ali lastnika — razčlenjen po področjih, s formulo pod vsako postavko in tremi ukrepi, ki jih je v prevozu in skladišču mogoče začeti ta teden.',
+      'Isti izračun v dokumentu za upravo ali lastnika — razčlenjen po področjih, s formulo pod vsako postavko in tremi ukrepi, ki jih je v obračunu, dokumentaciji in skladišču mogoče začeti ta teden.',
   },
 
   pdf: { documentTitle: 'Analiza skritih stroškov v logistiki' },

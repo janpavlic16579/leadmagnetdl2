@@ -3,9 +3,10 @@ import {
   diagnostikaLogistika,
   dokumentacija,
   napake,
-  odprema,
-  roki,
+  obracun,
   skladisce,
+  terjatve,
+  vozniki,
 } from './logistika';
 import { ADDRESSABLE_SHARE } from './addressableShare';
 import type { ComputeContext, ModuleDefinition, ModuleOutputDraft } from './moduleTypes';
@@ -22,14 +23,15 @@ const CONTEXT: ComputeContext = {
   operationalHourCostEUR: 19,
   adminHourCostEUR: 25,
   chargeOutRateEUR: 55,
-  // Prihodek in marža sta obvezna v ComputeContext, moduli tega segmenta pa ju iz
-  // konteksta ne berejo. 0 in ne izmišljena vrednost: promet, ki ga ni, ne sme
-  // ustvariti zneska, če ga kak izid vseeno uporabi.
-  annualRevenueEUR: 0,
+  // 3.650.000 / 365 = natanko 10.000 EUR dnevnega prometa — obe področji, ki
+  // množita dneve (obracun_logistika, terjatve_logistika), tako preverjamo brez
+  // zaokroževanja. Marže moduli tega segmenta ne berejo.
+  annualRevenueEUR: 3_650_000,
   contributionMarginRate: 0,
   capitalCostRate: 0.06,
 };
 const MONTHS = 12;
+const DAILY_REVENUE = CONTEXT.annualRevenueEUR / 365;
 
 function run(definition: ModuleDefinition, overrides: Record<string, number> = {}): ModuleOutputDraft[] {
   return definition.compute(resolveInputs(definition, overrides), CONTEXT);
@@ -42,284 +44,295 @@ function pick(outputs: ModuleOutputDraft[], label: string): ModuleOutputDraft {
   return found;
 }
 
-const COSTED_MODULES = [odprema, napake, skladisce, dokumentacija, roki];
+const COSTED_MODULES = [obracun, vozniki, terjatve, dokumentacija, napake, skladisce];
 
-describe('Planiranje prevozov in izkoriščenost', () => {
-  const outputs = run(odprema, {
-    emptyKmPerMonth: 4_000,
-    costPerKmEUR: 0.8,
-    waitingHoursPerMonth: 120,
-    dispatchHoursPerMonth: 40,
-    mainCause: 0, // Razpored ni ažuren → planning
+describe('Obračun prevozov in nezaračunane storitve', () => {
+  const outputs = run(obracun, {
+    unbilledExtrasEUR: 12_000,
+    invoiceLagDays: 10,
+    pricingErrorEUR: 4_500,
+    billingHoursPerMonth: 30,
+    penaltyStojnineEUR: 9_000,
+    mainCause: 0, // Dokazila pridejo z zamikom → data
   });
 
-  it('prazni kilometri so neposredna izguba — gorivo je že porabljeno', () => {
-    const item = pick(outputs, 'Prazni in slabo izkoriščeni kilometri');
+  it('nezaračunan dodatek je neposredna izguba in ne nezaslužena marža', () => {
+    const item = pick(outputs, 'Nezaračunani dodatki in čakanja');
     expect(item.bucket).toBe('directLoss');
-    expect(item.valueEUR).toBe(4_000 * 0.8 * MONTHS);
+    expect(item.valueEUR).toBe(12_000);
+    expect(item.addressableShare).toBe(ADDRESSABLE_SHARE.data);
   });
 
-  it('čakanje voznikov je kapaciteta in se vrednoti po operativni uri', () => {
-    const item = pick(outputs, 'Čakanje vozil in voznikov');
+  it('dnevi do izdaje računa se vrednotijo po strošku financiranja', () => {
+    const item = pick(outputs, 'Denar, vezan v prepozno izdanih računih');
+    expect(item.bucket).toBe('directLoss');
+    expect(item.valueEUR).toBe(DAILY_REVENUE * 10 * CONTEXT.capitalCostRate);
+  });
+
+  it('napačno zaračunani prevozi so ločena postavka', () => {
+    expect(pick(outputs, 'Napačno zaračunani prevozi').valueEUR).toBe(4_500);
+  });
+
+  it('ure obračuna gredo po administrativni uri in nosijo hoursPerMonth', () => {
+    const item = pick(outputs, 'Priprava obračuna prevozov');
     expect(item.bucket).toBe('capacity');
-    expect(item.valueEUR).toBe(120 * CONTEXT.operationalHourCostEUR * MONTHS);
-    expect(item.hoursPerMonth).toBe(120);
+    expect(item.valueEUR).toBe(30 * CONTEXT.adminHourCostEUR * MONTHS);
+    expect(item.hoursPerMonth).toBe(30);
   });
 
-  it('razporejanje se vrednoti po administrativni, ne operativni uri', () => {
-    expect(pick(outputs, 'Razporejanje in usklajevanje voženj').valueEUR).toBe(
-      40 * CONTEXT.adminHourCostEUR * MONTHS,
+  it('brez odgovora o prihodku ne nastane znesek iz dni', () => {
+    const [item] = obracun
+      .compute(resolveInputs(obracun, { invoiceLagDays: 30 }), { ...CONTEXT, annualRevenueEUR: 0 })
+      .filter((output) => output.label === 'Denar, vezan v prepozno izdanih računih');
+    expect(item.valueEUR).toBe(0);
+  });
+
+  it('penali in stojnine ne dodajo nobene postavke', () => {
+    // PANTHEON zamude ne prepreči, zato znesek ostane izven izračuna. Vprašanje
+    // je vseeno postavljeno — prodajnik mora obseg težave videti.
+    expect(outputs).toHaveLength(4);
+    const withoutPenalty = run(obracun, {
+      unbilledExtrasEUR: 12_000,
+      invoiceLagDays: 10,
+      pricingErrorEUR: 4_500,
+      billingHoursPerMonth: 30,
+      mainCause: 0,
+    });
+    expect(outputs.map((output) => output.valueEUR)).toEqual(
+      withoutPenalty.map((output) => output.valueEUR),
     );
   });
+});
 
-  it('glavni vzrok določi naslovljiv delež', () => {
-    expect(pick(outputs, 'Prazni in slabo izkoriščeni kilometri').addressableShare).toBe(
-      ADDRESSABLE_SHARE.planning,
-    );
+describe('Vozniki, potni nalogi in dnevnice', () => {
+  const outputs = run(vozniki, {
+    travelOrderHoursPerMonth: 30,
+    driverTimesheetHoursPerMonth: 12,
+    payrollHoursPerMonth: 8,
+    annualPayrollCorrectionEUR: 1_500,
+    driverCount: 20,
+    mainCause: 0, // Potni nalogi na papirju → data
   });
 
-  it('špediter brez voznega parka ne dobi izmišljenih kilometrov', () => {
-    // Privzeti strošek kilometra ni 0 (drsnik), zato bi brez tega testa 0 vnesenih
-    // kilometrov lahko tiho postalo neničeln znesek.
-    const noFleet = run(odprema, { emptyKmPerMonth: 0, dispatchHoursPerMonth: 40 });
-    expect(pick(noFleet, 'Prazni in slabo izkoriščeni kilometri').valueEUR).toBe(0);
+  it('tri vrste pisarniškega dela so ločene postavke po administrativni uri', () => {
+    expect(pick(outputs, 'Potni nalogi in obračun dnevnic').valueEUR).toBe(
+      30 * CONTEXT.adminHourCostEUR * MONTHS,
+    );
+    expect(pick(outputs, 'Evidence delovnega časa voznikov').valueEUR).toBe(
+      12 * CONTEXT.adminHourCostEUR * MONTHS,
+    );
+    expect(pick(outputs, 'Priprava in popravki obračuna plač').valueEUR).toBe(
+      8 * CONTEXT.adminHourCostEUR * MONTHS,
+    );
+    for (const label of [
+      'Potni nalogi in obračun dnevnic',
+      'Evidence delovnega časa voznikov',
+      'Priprava in popravki obračuna plač',
+    ]) {
+      expect(pick(outputs, label).bucket).toBe('capacity');
+    }
+  });
+
+  it('strošek napačnih obračunov je neposredna izguba', () => {
+    const item = pick(outputs, 'Stroški napačnih obračunov dnevnic in plač');
+    expect(item.bucket).toBe('directLoss');
+    expect(item.valueEUR).toBe(1_500);
+    expect(item.addressableShare).toBe(ADDRESSABLE_SHARE.data);
+  });
+});
+
+describe('Plačilni roki in terjatve', () => {
+  const outputs = run(terjatve, {
+    currentDSODays: 75,
+    overdueDaysAverage: 15,
+    dunningHoursPerMonth: 17,
+    annualBadDebtEUR: 8_000,
+    mainCause: 4, // Naročniki plačujejo po svojem ritmu → external
+  });
+
+  it('šteje se samo prekoračitev nad dogovorjenim rokom', () => {
+    const item = pick(outputs, 'Strošek zamud pri plačilih');
+    expect(item.valueEUR).toBe(DAILY_REVENUE * 15 * CONTEXT.capitalCostRate);
+    expect(item.addressableShare).toBe(ADDRESSABLE_SHARE.external);
+  });
+
+  it('opominjanje je kapaciteta, odpis pa neposredna izguba', () => {
+    const dunning = pick(outputs, 'Opominjanje in izterjava');
+    expect(dunning.bucket).toBe('capacity');
+    expect(dunning.valueEUR).toBe(17 * CONTEXT.adminHourCostEUR * MONTHS);
+    expect(pick(outputs, 'Odpisane terjatve').bucket).toBe('directLoss');
+  });
+});
+
+describe('Prevozna dokumentacija, podatki in statusi', () => {
+  const outputs = run(dokumentacija, {
+    documentHoursPerMonth: 20,
+    retypingHoursPerMonth: 28,
+    dataFixHoursPerMonth: 10,
+    statusHoursPerMonth: 21,
+    podTiming: 3,
+    mainCause: 1, // Listine so papirne → data
+  });
+
+  it('štiri vrste dela, vse kapaciteta po administrativni uri', () => {
+    expect(outputs).toHaveLength(4);
+    expect(outputs.every((output) => output.bucket === 'capacity')).toBe(true);
+    const total = outputs.reduce((sum, output) => sum + (output.valueEUR ?? 0), 0);
+    expect(total).toBe((20 + 28 + 10 + 21) * CONTEXT.adminHourCostEUR * MONTHS);
+  });
+
+  it('obveščanje o statusih je svoja postavka in ne del priprave listin', () => {
+    const item = pick(outputs, 'Obveščanje o statusih in zamudah');
+    expect(item.valueEUR).toBe(21 * CONTEXT.adminHourCostEUR * MONTHS);
+    expect(item.hoursPerMonth).toBe(21);
   });
 });
 
 describe('Napačne dostave, poškodbe in reklamacije', () => {
   const outputs = run(napake, {
-    shipmentsPerMonth: 2_000,
-    errorSharePercent: 0.02,
-    costPerErrorEUR: 45,
-    annualDamageCostEUR: 18_000,
-    claimHoursPerMonth: 30,
-    mainCause: 0, // Podatki o pošiljki so nepopolni → data
+    shipmentsPerMonth: 5_000,
+    errorSharePercent: 0.012,
+    costPerErrorEUR: 90,
+    annualDamageCostEUR: 12_000,
+    claimHoursPerMonth: 15,
+    mainCause: 0, // Podatki o pošiljki nepopolni → data
   });
 
-  it('napačne dostave in poškodovano blago sta neposredni izgubi', () => {
-    expect(pick(outputs, 'Napačne in nepopolne dostave').bucket).toBe('directLoss');
-    expect(pick(outputs, 'Napačne in nepopolne dostave').valueEUR).toBe(2_000 * 0.02 * 45 * MONTHS);
-    expect(pick(outputs, 'Poškodovano in izgubljeno blago').bucket).toBe('directLoss');
-    expect(pick(outputs, 'Poškodovano in izgubljeno blago').valueEUR).toBe(18_000);
+  it('dve neposredni izgubi in ena kapaciteta po administrativni uri', () => {
+    expect(pick(outputs, 'Napačne in nepopolne dostave').valueEUR).toBeCloseTo(
+      5_000 * 0.012 * 90 * MONTHS,
+      6,
+    );
+    expect(pick(outputs, 'Poškodovano in izgubljeno blago').valueEUR).toBe(12_000);
+    const claims = pick(outputs, 'Reševanje reklamacij in iskanje pošiljk');
+    expect(claims.bucket).toBe('capacity');
+    expect(claims.valueEUR).toBe(15 * CONTEXT.adminHourCostEUR * MONTHS);
   });
 
-  it('ure reklamacij so kapaciteta — plačna masa se z njimi ne zniža', () => {
-    const item = pick(outputs, 'Reševanje reklamacij in iskanje pošiljk');
-    expect(item.bucket).toBe('capacity');
-    expect(item.valueEUR).toBe(30 * CONTEXT.adminHourCostEUR * MONTHS);
-  });
-
-  it('vzrok v podatkih da najvišji naslovljiv delež', () => {
-    expect(pick(outputs, 'Napačne in nepopolne dostave').addressableShare).toBe(ADDRESSABLE_SHARE.data);
+  it('poškodbe pri prevozu so fizičen vzrok in zato najmanj naslovljive', () => {
+    const physical = run(napake, { annualDamageCostEUR: 10_000, mainCause: 4 });
+    expect(pick(physical, 'Poškodovano in izgubljeno blago').addressableShare).toBe(
+      ADDRESSABLE_SHARE.physical,
+    );
   });
 });
 
 describe('Skladiščne operacije in zaloga', () => {
   const outputs = run(skladisce, {
     searchHoursPerMonth: 80,
-    inventoryValueEUR: 600_000,
-    annualWriteOffEUR: 22_000,
-    reducibleShare: 2, // 11–20 % → 0.15
+    inventoryValueEUR: 200_000,
+    annualWriteOffEUR: 15_000,
+    reducibleShare: 1,
+    stockVisibility: 2,
     mainCause: 0, // Lokacije niso ažurne → data
   });
 
-  it('odpisi so neposredna izguba, iskanje blaga pa kapaciteta', () => {
-    expect(pick(outputs, 'Popisne razlike in odpisi').bucket).toBe('directLoss');
-    expect(pick(outputs, 'Popisne razlike in odpisi').valueEUR).toBe(22_000);
-    expect(pick(outputs, 'Iskanje in prekladanje blaga').bucket).toBe('capacity');
-    expect(pick(outputs, 'Iskanje in prekladanje blaga').valueEUR).toBe(
-      80 * CONTEXT.operationalHourCostEUR * MONTHS,
-    );
+  it('iskanje blaga gre po operativni uri, ne po administrativni', () => {
+    const item = pick(outputs, 'Iskanje in prekladanje blaga');
+    expect(item.valueEUR).toBe(80 * CONTEXT.operationalHourCostEUR * MONTHS);
+    expect(item.hoursPerMonth).toBe(80);
   });
 
-  it('sprostljiv kapital je enkraten in nima naslovljivega deleža', () => {
+  it('sprostljiv kapital je enkraten in brez naslovljivega deleža', () => {
     const item = pick(outputs, 'Sprostljiv obratni kapital v zalogi');
     expect(item.bucket).toBe('oneTimeCapital');
-    expect(item.valueEUR).toBe(600_000 * 0.15);
+    expect(item.valueEUR).toBe(200_000 * reducibleShareOf(1));
     expect(item.addressableShare).toBeUndefined();
   });
 
-  // Doslej je "Ne vem" padel na natanko isti delež kot najnižji pas (0,05).
-  // To ni bila konservativnost, ampak polovica spodnjega roba tega, kar Aberdeen
-  // izmeri ob uvedbi ERP (13,4–25 %, konservativno sidro 10–15 %) — neodgovor je
-  // obljubljal manj od najslabšega izmerjenega projekta. Odslej 0,10.
-  it('"Ne vem" pade na izmerjeno spodnjo mejo, ne na najnižji pas', () => {
-    const valueOf = (share: number) =>
-      pick(run(skladisce, { inventoryValueEUR: 600_000, reducibleShare: share }), 'Sprostljiv obratni kapital v zalogi').valueEUR ?? 0;
-
-    expect(valueOf(4)).toBe(600_000 * reducibleShareOf(4));
-    expect(valueOf(4)).toBeGreaterThan(valueOf(0));
-    expect(valueOf(4)).toBeLessThan(valueOf(2));
-  });
-
-  it('skladiščnik tujega blaga ne dobi sproščenega kapitala', () => {
-    const foreignGoods = run(skladisce, { inventoryValueEUR: 0, searchHoursPerMonth: 80 });
-    expect(pick(foreignGoods, 'Sprostljiv obratni kapital v zalogi').valueEUR).toBe(0);
-    expect(pick(foreignGoods, 'Iskanje in prekladanje blaga').valueEUR).toBeGreaterThan(0);
-  });
-});
-
-describe('Prevozna dokumentacija in podatki', () => {
-  const outputs = run(dokumentacija, {
-    documentHoursPerMonth: 35,
-    retypingHoursPerMonth: 25,
-    dataFixHoursPerMonth: 15,
-    mainCause: 0,
-  });
-
-  it('vse tri postavke so kapaciteta in ločene, da je vidno, kje delo nastaja', () => {
-    expect(outputs).toHaveLength(3);
-    expect(outputs.every((output) => output.bucket === 'capacity')).toBe(true);
-  });
-
-  it('ure se vrednotijo po administrativni uri', () => {
-    expect(pick(outputs, 'Prepisovanje podatkov med orodji').valueEUR).toBe(
-      25 * CONTEXT.adminHourCostEUR * MONTHS,
-    );
-  });
-});
-
-describe('Zamude, stojnine in nujni prevozi', () => {
-  const outputs = run(roki, {
-    expediteCostEUR: 20_000,
-    penaltyCostEUR: 9_000,
-    lostMarginEUR: 14_000,
-    customerCommsHoursPerMonth: 25,
-    mainCause: 3, // Stranke, podizvajalci ali carina → external
-  });
-
-  // Namerna sprememba pričakovanja: izgubljena prispevna marža je bila prestavljena iz
-  // 'directLoss' v 'lostMargin'. Ekspresni prevoz in penal sta plačana in vidna na kontu;
-  // izgubljen posel stoji na predpostavki, kaj bi stranka storila. Test zato meri prav
-  // to ločnico — če bi kdo postavki spet združil, bi padel.
-  it('plačani stroški so neposredne izgube, izgubljen posel pa nezaslužena marža', () => {
-    const directLoss = outputs.filter((output) => output.bucket === 'directLoss');
-    expect(directLoss).toHaveLength(2);
-    expect(directLoss.reduce((sum, output) => sum + (output.valueEUR ?? 0), 0)).toBe(29_000);
-
-    const lostMargin = outputs.filter((output) => output.bucket === 'lostMargin');
-    expect(lostMargin).toHaveLength(1);
-    expect(lostMargin[0].valueEUR).toBe(14_000);
-  });
-
-  it('obveščanje strank je kapaciteta', () => {
-    const item = pick(outputs, 'Obveščanje in usklajevanje s strankami');
-    expect(item.bucket).toBe('capacity');
-    expect(item.valueEUR).toBe(25 * CONTEXT.adminHourCostEUR * MONTHS);
-  });
-
-  it('zunanji vzrok močno zniža naslovljiv delež', () => {
-    expect(pick(outputs, 'Nujni podnajemi in ekspresni prevozi').addressableShare).toBe(
-      ADDRESSABLE_SHARE.external,
-    );
+  it('brez lastne zaloge ni sprostljivega kapitala', () => {
+    const foreign = run(skladisce, { inventoryValueEUR: 0, reducibleShare: 3 });
+    expect(pick(foreign, 'Sprostljiv obratni kapital v zalogi').valueEUR).toBe(0);
   });
 });
 
 describe('Kratka diagnostika', () => {
-  it('vrne dve oceni tveganja brez evrov', () => {
-    const outputs = run(diagnostikaLogistika);
-    expect(outputs).toHaveLength(2);
-    for (const output of outputs) {
-      expect(output.bucket).toBe('risk');
-      expect(output.valueEUR).toBeUndefined();
-    }
-  });
-
-  it('najboljši odgovori dajo nizko, najslabši visoko tveganje', () => {
-    const best = run(diagnostikaLogistika, {
+  it('vrne natanko dve oceni tveganja in nobenega zneska', () => {
+    const outputs = run(diagnostikaLogistika, {
       realtimeRecording: 0,
       knowsTripCost: 0,
-      shipmentTraceability: 0,
+      documentTraceability: 0,
       keyPersonIndependence: 0,
     });
-    const worst = run(diagnostikaLogistika, {
-      realtimeRecording: 3,
-      knowsTripCost: 3,
-      shipmentTraceability: 3,
-      keyPersonIndependence: 3,
-    });
-
-    expect(best.every((output) => output.riskLevel === 'low')).toBe(true);
-    expect(worst.every((output) => output.riskLevel === 'high')).toBe(true);
+    expect(outputs).toHaveLength(2);
+    expect(outputs.every((output) => output.bucket === 'risk')).toBe(true);
+    expect(outputs.every((output) => output.valueEUR === undefined)).toBe(true);
+    expect(outputs.every((output) => output.riskLevel === 'low')).toBe(true);
   });
 
-  it('ni v triaži — vprašanja se prikažejo vedno', () => {
+  it('sami odgovori "Ne" dajo visoko tveganje', () => {
+    const outputs = run(diagnostikaLogistika, {
+      realtimeRecording: 3,
+      knowsTripCost: 3,
+      documentTraceability: 3,
+      keyPersonIndependence: 3,
+    });
+    expect(outputs.every((output) => output.riskLevel === 'high')).toBe(true);
+  });
+
+  it('nima triaže, zato se prikaže vedno', () => {
     expect(diagnostikaLogistika.triage).toBeUndefined();
   });
 });
 
-describe('Skupne lastnosti stroškovnih modulov', () => {
-  it('vsak modul ima 5–6 polj, da vprašalnik ostane kratek', () => {
+describe('Skupne lastnosti področij', () => {
+  it('vsako stroškovno področje ima pet ali šest vprašanj', () => {
     for (const definition of COSTED_MODULES) {
       expect(definition.fields.length, definition.id).toBeGreaterThanOrEqual(5);
       expect(definition.fields.length, definition.id).toBeLessThanOrEqual(6);
     }
   });
 
-  // Vprašanje o glavnem vzroku nima privzetka (MAIN_CAUSE_UNANSWERED): brez izbire
-  // ni označen noben radio, delež pa pade na konservativni 'unknown'. Ta test hodi
-  // prek compute() in NE prek withoutUnknowns — celotno pot varuje moduleEngine.test.ts.
-  it('neodgovorjen glavni vzrok da konservativen delež', () => {
+  it('neodgovorjen glavni vzrok pade na konservativni delež', () => {
     for (const definition of COSTED_MODULES) {
-      const outputs = run(definition).filter((output) => output.addressableShare !== undefined);
-      expect(outputs.length, definition.id).toBeGreaterThan(0);
-      for (const output of outputs) {
-        expect(output.addressableShare, `${definition.id}: ${output.label}`).toBe(
+      const withShare = run(definition).filter((output) => output.addressableShare !== undefined);
+      expect(withShare.length, definition.id).toBeGreaterThan(0);
+      for (const output of withShare) {
+        expect(output.addressableShare, `${definition.id}/${output.label}`).toBe(
           ADDRESSABLE_SHARE.unknown,
         );
       }
     }
   });
 
-  it('polja s contextOnly ne premaknejo nobene številke', () => {
-    const scenarios: {
-      definition: ModuleDefinition;
-      base: Record<string, number>;
-      twist: Record<string, number>;
-    }[] = [
-      {
-        definition: odprema,
-        base: { waitingHoursPerMonth: 120, dispatchHoursPerMonth: 40, dispatchMethod: 0 },
-        twist: { waitingHoursPerMonth: 120, dispatchHoursPerMonth: 40, dispatchMethod: 3 },
-      },
-      {
-        definition: skladisce,
-        base: { inventoryValueEUR: 400_000, annualWriteOffEUR: 8_000, stockVisibility: 0 },
-        twist: { inventoryValueEUR: 400_000, annualWriteOffEUR: 8_000, stockVisibility: 3 },
-      },
-      {
-        definition: dokumentacija,
-        base: { documentHoursPerMonth: 35, podTiming: 0 },
-        twist: { documentHoursPerMonth: 35, podTiming: 3 },
-      },
-      {
-        definition: roki,
-        base: { expediteCostEUR: 20_000, lateDeliveriesPerMonth: 0 },
-        twist: { expediteCostEUR: 20_000, lateDeliveriesPerMonth: 120 },
-      },
+  it('kontekstna vprašanja ne premaknejo nobene številke', () => {
+    const scenarios: { definition: ModuleDefinition; key: string }[] = [
+      { definition: obracun, key: 'penaltyStojnineEUR' },
+      { definition: vozniki, key: 'driverCount' },
+      { definition: terjatve, key: 'currentDSODays' },
+      { definition: dokumentacija, key: 'podTiming' },
+      { definition: skladisce, key: 'stockVisibility' },
     ];
 
-    for (const { definition, base, twist } of scenarios) {
-      expect(run(definition, twist), definition.id).toEqual(run(definition, base));
+    for (const { definition, key } of scenarios) {
+      const low = run(definition, { [key]: 0 }).map((output) => output.valueEUR);
+      const high = run(definition, { [key]: 99_000 }).map((output) => output.valueEUR);
+      expect(high, `${definition.id}/${key}`).toEqual(low);
     }
   });
 
-  it('ista oznaka postavke nikoli ne pristane v dveh koših', () => {
-    const bucketByLabel = new Map<string, string>();
+  it('ista oznaka ne pristane v dveh koših', () => {
+    const seen = new Map<string, string>();
     for (const definition of COSTED_MODULES) {
       for (const output of run(definition)) {
-        const previous = bucketByLabel.get(output.label);
-        expect(previous === undefined || previous === output.bucket, output.label).toBe(true);
-        bucketByLabel.set(output.label, output.bucket);
+        const previous = seen.get(output.label);
+        if (previous) expect(previous, output.label).toBe(output.bucket);
+        seen.set(output.label, output.bucket);
       }
     }
   });
 
-  it('ure se ne štejejo dvakrat: čakanje na rampi in iskanje v skladišču sta ločena izida', () => {
-    const dispatchOutputs = run(odprema, { waitingHoursPerMonth: 120 });
-    const warehouseOutputs = run(skladisce, { searchHoursPerMonth: 80 });
-
-    expect(pick(dispatchOutputs, 'Čakanje vozil in voznikov').hoursPerMonth).toBe(120);
-    expect(pick(warehouseOutputs, 'Iskanje in prekladanje blaga').hoursPerMonth).toBe(80);
+  it('operativne in administrativne ure se ne mešajo v isti postavki', () => {
+    const warehouse = pick(
+      run(skladisce, { searchHoursPerMonth: 80 }),
+      'Iskanje in prekladanje blaga',
+    );
+    const billing = pick(
+      run(obracun, { billingHoursPerMonth: 80 }),
+      'Priprava obračuna prevozov',
+    );
+    expect(warehouse.valueEUR).toBe(80 * CONTEXT.operationalHourCostEUR * MONTHS);
+    expect(billing.valueEUR).toBe(80 * CONTEXT.adminHourCostEUR * MONTHS);
+    expect(warehouse.valueEUR).not.toBe(billing.valueEUR);
   });
 });

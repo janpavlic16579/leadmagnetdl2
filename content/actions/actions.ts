@@ -85,12 +85,28 @@ export const ACTION_PLANS: Record<string, ActionPlanEntry> = {
     ],
   },
   // --- Logistika in transport -----------------------------------------------
-  odprema: {
-    headline: 'Največji strošek: prazne vožnje in čakanje',
+  obracun_logistika: {
+    headline: 'Največji strošek: obračun in nezaračunane storitve',
     actions: [
-      'Teden dni beležite vsako čakanje z vzrokom (stranka / naklad / razpored) — brez tega ne veste, kateri od treh vas res stane.',
-      'Za pet najpogostejših relacij preverite, koliko voženj se vrača praznih, in poiščite povratni tovor prav zanje.',
-      'Razpored za naslednji dan zaključite ob fiksni uri; spremembe po tem uvrščajte v izjeme, ki jih boste tedensko prešteli.',
+      'En mesec beležite vsako čakanje, dodatno postajo in ležarino ne glede na to, ali jo boste zaračunali — brez tega seznama se o dodatkih pogajate na pamet.',
+      'Izmerite, koliko dni po dostavi izdate račun, in poiščite, kje se dokazilo ustavi: pri vozniku, v pisarni ali pri naročniku.',
+      'Za pet največjih naročnikov zberite veljavne cene in dogovorjene dodatke na eno mesto — kar ni zapisano, se praviloma ne zaračuna.',
+    ],
+  },
+  vozniki: {
+    headline: 'Največji strošek: potni nalogi in dnevnice',
+    actions: [
+      'Izmerite, koliko minut vzame en potni nalog od izdaje do obračuna, in to pomnožite s številom nalogov na mesec — šele tedaj vidite pravo velikost postavke.',
+      'Preverite, koliko nalogov se vrne nepopolnih in kateri podatek najpogosteje manjka; en manjkajoč podatek pomeni dva obiska iste papirologije.',
+      'Določite fiksen rok za oddajo dokumentacije z vožnje in ga merite en mesec — zamik pri oddaji je zamik pri plači in pri računu.',
+    ],
+  },
+  terjatve_logistika: {
+    headline: 'Največji strošek: plačilni roki in terjatve',
+    actions: [
+      'Razvrstite odprte postavke po dnevih zapadlosti — praviloma je večina denarja pri nekaj naročnikih in ne razpršena čez vse.',
+      'Za tri največje zamudnike preverite, ali zamuda izvira iz sporne postavke; tam ne pomaga opomin, ampak čistejši račun.',
+      'Prvi opomin pošljite na fiksen dan po zapadlosti in brez izjem — nedosleden ritem naročnika nauči, da rok ni resen.',
     ],
   },
   napake: {
@@ -110,19 +126,11 @@ export const ACTION_PLANS: Record<string, ActionPlanEntry> = {
     ],
   },
   dokumentacija: {
-    headline: 'Največji strošek: dokumentacija in podatki',
+    headline: 'Največji strošek: dokumentacija, podatki in statusi',
     actions: [
       'Popišite, kje isti podatek o pošiljki vnesete več kot enkrat — to so mesta, kjer nastajajo tudi napake.',
       'Za tri največje stranke preverite, ali je izmenjavo dokumentov mogoče prevzeti elektronsko namesto prek njihovega portala.',
-      'Izmerite, koliko dni mine od dostave do dokazila v sistemu — ta zamik je zgornja meja hitrosti vašega obračuna.',
-    ],
-  },
-  roki: {
-    headline: 'Največji strošek: zamude in nujni prevozi',
-    actions: [
-      'Za vsak nujni podnajem zadnjega meseca zabeležite vzrok — večina jih izvira iz prepoznega naročila, ne iz kupčeve spremembe.',
-      'Uvedite dnevni pregled pošiljk, ki jim grozi zamuda, dokler je še čas za ukrepanje.',
-      'Stranko obvestite o zamudi takoj, ko jo predvidite — penali in popusti so pogosto posledica molka, ne zamude same.',
+      'Teden dni štejte poizvedbe „kje je pošiljka" — vsaka je znak, da naročnik statusa ne vidi sam.',
     ],
   },
 
