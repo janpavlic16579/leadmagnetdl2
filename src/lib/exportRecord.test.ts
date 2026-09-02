@@ -53,7 +53,7 @@ describe('Izvozni zapis za CRM', () => {
   it('novi stolpci gredo na konec, za obstoječimi', () => {
     // Vrivanje na vsebinsko "pravo" mesto bi premaknilo vse pozicijske preslikave,
     // ki so bile narejene pred spremembo.
-    const tail = CSV_COLUMNS.slice(-11);
+    const tail = CSV_COLUMNS.slice(-13);
     expect(tail).toEqual([
       'firstName',
       'lastName',
@@ -66,6 +66,8 @@ describe('Izvozni zapis za CRM', () => {
       'operationalHourSource',
       'adminHourSource',
       'consentConsulting',
+      'annualRevenueEUR',
+      'annualRevenueSource',
     ]);
   });
 

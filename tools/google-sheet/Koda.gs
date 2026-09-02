@@ -121,17 +121,21 @@ var VRSTNI_RED = [
   'companyName',
   'industryLabel',
   'employeeCount',
+  // Velikost posla ob velikosti ekipe: 30 zaposlenih pri dveh milijonih prometa
+  // je drug pogovor kot 30 zaposlenih pri dvajsetih.
+  'annualRevenueEUR',
+  'email',
   'phone',
   // Ob telefonu in ne pri privolitvah: klicatelj gleda ta dva podatka skupaj.
   KLICI_TAKOJ,
-  'email',
-  LETNO,
-  // Edini stolpec, ki pove, O ČEM naj klicatelj govori: oznake tveganj s stopnjo,
-  // sestavljene iz odgovorov stranke. Vse ostalo je "kdo" in "koliko".
-  'risks',
   POKLICANO,
+  // Za "poklicano" in pred izidom: ko je klic opravljen, je to iztočnica za
+  // pogovor — edini stolpec, ki pove, O ČEM govoriti. Vse ostalo je "kdo" in
+  // "koliko".
+  'risks',
   SESTANEK,
   OPOMBE,
+  LETNO,
   'directLossEUR',
   'lostMarginEUR',
   'capacityEUR',
@@ -181,6 +185,9 @@ var SKRIJ = [
   'hourCostsEstimated',
   'operationalHourSource',
   'adminHourSource',
+  // Vir prometa: zanimiv ob presoji, odveč v pogledu. Vrednost nosi
+  // annualRevenueEUR.
+  'annualRevenueSource',
   // Isto pove KLICI_TAKOJ, le berljivo. Strojna oblika ostane za filtre.
   'consentConsulting',
 ];
@@ -627,6 +634,7 @@ function zeleniIndeksi(glava) {
 /** Denarni stolpci — brez oblike so to gole številke, ki jih je treba šteti. */
 var DENARNI = [
   LETNO,
+  'annualRevenueEUR',
   'directLossEUR',
   'lostMarginEUR',
   'capacityEUR',
@@ -646,6 +654,7 @@ var DENARNI = [
 var POJASNILA = {
   kliciTakoj: 'DA = obiskovalec je v obrazcu prosil, da njegove številke pregledamo skupaj.',
   letno: 'Skupni letni znesek: odliv + nezaslužena marža + vrednost izgubljenega časa.',
+  annualRevenueEUR: 'Letni prihodek podjetja, kot ga je navedel obiskovalec. Vir je v skritem stolpcu annualRevenueSource.',
   risks: 'Tveganja iz odgovorov stranke, s stopnjo. Iztočnica za pogovor.',
   capacityEUR: 'Vrednost časa, ki se porabi za delo, ki ga sistem lahko prevzame.',
   capacityHoursPerMonth: 'Iste ure kot capacityEUR, le v urah na mesec.',
@@ -690,6 +699,7 @@ function urediVidez(list, glava) {
     companyName: 220,
     industryLabel: 200,
     employeeCount: 90,
+    annualRevenueEUR: 130,
     phone: 140,
     kliciTakoj: 90,
     email: 210,
