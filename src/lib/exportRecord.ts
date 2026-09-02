@@ -211,6 +211,12 @@ export const CSV_COLUMNS = [
   // čeprav tja vsebinsko sodi: preslikave v CRM so pozicijske in vrivanje na sredino
   // bi tiho premaknilo vsak stolpec za njim.
   'consentConsulting',
+  // Letni prihodek podjetja. Vprašalnik ga zbere (skupna finančna osnova) in iz
+  // njega računa postavke, vezane na prihodek, v izvoz pa doslej ni šel — prodaja
+  // je tako videla število zaposlenih, ne pa velikosti posla. Vir je ločen stolpec
+  // iz istega razloga kot pri urnih postavkah: "vnesel" ni isto kot "izbral razpon".
+  'annualRevenueEUR',
+  'annualRevenueSource',
 ] as const;
 
 /** Prazna celica namesto "0" — segment brez te vrednosti je ni izračunal, ni je izmeril kot nič. */
@@ -284,6 +290,8 @@ export function buildRowValues(record: LeadExportRecord): string[] {
     record.profile?.operationalHour.source ?? '',
     record.profile?.adminHour.source ?? '',
     String(record.consentConsulting),
+    optionalRounded(record.profile?.annualRevenue.value),
+    record.profile?.annualRevenue.source ?? '',
   ];
 }
 
