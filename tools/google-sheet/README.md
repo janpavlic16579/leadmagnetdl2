@@ -182,6 +182,28 @@ dopisano se izgubi; list zato ob urejanju opozori (opozorilo, ne prepoved).
 Če kakšnega stolpca v `Leadi` ni, se analitika ne sestavi in `urediStolpce` to
 pove v izpisu — urejanje leadov se zaradi tega **ne** razveljavi.
 
+### Kaj ta list namenoma ne pove
+
+- **Kdaj je bil lead poklican.** Potrditveno polje ne hrani časa, zato „povprečen
+  čas od oddaje do klica" ni izračunljiv — ne s formulo ne s skripto. Za to bi
+  bila potrebna sprožilec ob urejanju in nov stolpec z datumom.
+- **Koliko obiskovalcev je odpadlo pred obrazcem.** V preglednico pridejo samo
+  oddaje s privolitvijo; lijak obiskovalec → lead merijo dogodki v
+  `src/lib/analytics.ts`, ne ta list. Kdor bi ga sestavil iz teh številk, bi meril
+  samo tiste, ki so vprašalnik prehodili do konca.
+- **Odstotkov pri malo klicih.** „Sestanki na poklicanega" pod desetimi klici
+  pokaže `n=3 — premalo za odstotek`. Namerno: pri treh klicih odstotek skače med
+  0, 33, 67 in 100 in se v ponedeljek prepolovi. „Delež poklicanih" te zapore
+  nima, ker ni ocena o trgu, ampak napredek lastnega dela.
+- Namesto povprečja letnega zneska sta tu **mediana in največji posamezen znesek**:
+  pri nekaj leadih en velik posel povsem določi povprečje in številka govori o
+  njem, ne o lijaku.
+
+Celica **A3** je kontrolna: dokler je prazna, formule kažejo na prave stolpce. Če
+se v njej pojavi opozorilo, so se stolpci na `Leadi` premaknili — poženite
+`urediAnalitiko`. Če je na `Leadi` vklopljen filter, se številke z vidnimi
+vrsticami ne bodo ujemale: `COUNTIF` filtrov ne upošteva.
+
 ### Ko skripto spremenite
 
 Google poganja **razmeščeno različico**, ne tiste v urejevalniku. Po vsaki

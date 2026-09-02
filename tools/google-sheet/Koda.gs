@@ -837,6 +837,10 @@ function urediAnalitiko() {
   var glava = preberiGlavo(leadi);
   if (!glava.length) throw new Error('List "' + NASTAVITVE.IME_LISTA + '" še nima glave.');
 
+  // List, skrčen na eno samo vrstico (mogoče po `pociistiOdvecneVrstice`), naredi
+  // sklic `A2:A` neveljaven in vsaka formula pokaže #REF!.
+  if (leadi.getMaxRows() < 2) leadi.insertRowsAfter(1, 49);
+
   var vir = "'" + NASTAVITVE.IME_LISTA + "'!";
   /** Odprt razpon enega stolpca: od druge vrstice do konca, da nove oddaje šteje samodejno. */
   var R = function (ime) {
@@ -852,29 +856,64 @@ function urediAnalitiko() {
   var izid = R(SESTANEK);
   var letno = R(LETNO);
 
+  var skupaj = 'COUNTA(' + stevilo + ')';
+  var poklicanih = 'COUNTIF(' + klicano + ',TRUE)';
+
+  // [oznaka, formula, oblika]. Tabela in ne zaporedje klicev — iz istega razloga
+  // kot VRSTNI_RED: postavitev je berljiva na enem mestu.
   var pregled = [
-    ['PREGLED', ''],
-    // Prva vrstica je edina, ki je hkrati NALOGA in ne le podatek.
-    ['Še za poklicati', '=COUNTIF(' + posvet + ',"DA")-COUNTIFS(' + posvet + ',"DA",' + klicano + ',TRUE)'],
-    ['Prosijo za takojšen klic', '=COUNTIF(' + posvet + ',"DA")'],
-    ['', ''],
-    ['Skupaj leadov', '=COUNTA(' + stevilo + ')'],
-    ['Novi zadnjih 7 dni', '=COUNTIFS(' + stevilo + ',">="&TODAY()-7)'],
-    ['Novi zadnjih 30 dni', '=COUNTIFS(' + stevilo + ',">="&TODAY()-30)'],
-    ['', ''],
-    ['Poklicani', '=COUNTIF(' + klicano + ',TRUE)'],
-    ['Delež poklicanih', '=IFERROR(COUNTIF(' + klicano + ',TRUE)/COUNTA(' + stevilo + '),"—")'],
-    ['', ''],
-    ['Dogovorjen sestanek', '=COUNTIF(' + izid + ',"sestanek")'],
-    ['Ne želi', '=COUNTIF(' + izid + ',"ne želi")'],
-    ['Poskusiti drugič', '=COUNTIF(' + izid + ',"drugič")'],
-    ['Sestanki na poklicanega', '=IFERROR(COUNTIF(' + izid + ',"sestanek")/COUNTIF(' + klicano + ',TRUE),"—")'],
-    ['', ''],
-    ['Letni znesek vseh leadov', '=SUM(' + letno + ')'],
-    ['Povprečen letni znesek', '=IFERROR(AVERAGE(' + letno + '),0)'],
-    ['Povprečen promet podjetja', '=IFERROR(AVERAGE(' + R('annualRevenueEUR') + '),0)'],
-    ['Povprečno število zaposlenih', '=IFERROR(AVERAGE(' + R('employeeCount') + '),0)'],
+    ['PREGLED', '', ''],
+    // Prve tri vrstice so edine, ki so hkrati NALOGA in ne le podatek.
+    [
+      'Še za poklicati',
+      '=COUNTIF(' + posvet + ',"DA")-COUNTIFS(' + posvet + ',"DA",' + klicano + ',TRUE)',
+      '#.##0',
+    ],
+    ['Prosijo za takojšen klic', '=COUNTIF(' + posvet + ',"DA")', '#.##0'],
+    // Pogoj "prejeto ni prazen" je nujen: brez njega FILTER prepusti prazne
+    // vrstice pod podatki, MIN vrne 0 in rezultat je razlika do leta 1899.
+    [
+      'Najstarejši nepoklicani (dni)',
+      '=IFERROR(INT(TODAY()-MIN(FILTER(' + stevilo + ',' + stevilo + '<>"",' + klicano + '<>TRUE))),"—")',
+      '#.##0',
+    ],
+    ['', '', ''],
+    ['Skupaj leadov', '=' + skupaj, '#.##0'],
+    ['Novi zadnjih 7 dni', '=COUNTIFS(' + stevilo + ',">="&TODAY()-6)', '#.##0'],
+    ['Novi zadnjih 30 dni', '=COUNTIFS(' + stevilo + ',">="&TODAY()-29)', '#.##0'],
+    // Telefon je v obrazcu neobvezen; tak lead terja e-pošto in ne klica.
+    ['Brez telefonske številke', '=' + skupaj + '-COUNTA(' + R('phone') + ')', '#.##0'],
+    ['', '', ''],
+    ['Poklicani', '=' + poklicanih, '#.##0'],
+    ['Delež poklicanih', '=IF(' + skupaj + '=0,"—",' + poklicanih + '/' + skupaj + ')', '0 %'],
+    // Higiena: ujame klic, po katerem izid ni bil vpisan. Brez tega se izidi
+    // tiho izgubljajo in spodnje vrstice lažejo navzdol.
+    ['Poklicani brez vpisanega izida', '=MAX(0,' + poklicanih + '-COUNTA(' + izid + '))', '#.##0'],
+    ['', '', ''],
   ];
+
+  // Izidi se izpišejo IZ SESTANEK_MOZNOSTI in ne prepišejo na roko: ročni prepis
+  // bi se ob spremembi spustnega seznama tiho razšel z njim.
+  SESTANEK_MOZNOSTI.forEach(function (moznost) {
+    pregled.push(['Izid: ' + moznost, '=COUNTIF(' + izid + ',"' + moznost + '")', '#.##0']);
+  });
+
+  pregled.push(
+    // Odstotek pri malo klicih ni metrika, ampak motnja: pri treh klicih skače
+    // med 0, 33, 67 in 100 %. Pod desetimi zato pokaže n in ne deleža.
+    [
+      'Sestanki na poklicanega',
+      '=IF(' + poklicanih + '<10,"n="&' + poklicanih + '&" — premalo za odstotek",COUNTIF(' + izid + ',"' + SESTANEK_MOZNOSTI[0] + '")/' + poklicanih + ')',
+      '0 %',
+    ],
+    ['', '', ''],
+    ['Letni znesek vseh leadov', '=SUM(' + letno + ')', '#.##0 €'],
+    ['Od tega še nepoklicanih', '=SUM(' + letno + ')-SUMIF(' + klicano + ',TRUE,' + letno + ')', '#.##0 €'],
+    // Mediana in največji namesto povprečja: pri nekaj leadih en velik posel
+    // povsem določi povprečje in številka govori o njem, ne o lijaku.
+    ['Mediana letnega zneska', '=IF(' + skupaj + '=0,"—",MEDIAN(' + letno + '))', '#.##0 €'],
+    ['Največji posamezen znesek', '=IF(' + skupaj + '=0,"—",MAX(' + letno + '))', '#.##0 €'],
+  );
 
   // Razčlenitve se sestavijo PRED čiščenjem lista, ker se v njih razrešujejo
   // zadnje črke stolpcev — vsaka od njih sme vreči napako.
@@ -913,7 +952,14 @@ function urediAnalitiko() {
       'Vse številke so žive: preračunajo se same, tudi ko klicatelj obkljuka klic. ' +
         'Ta list se ob vsakem zagonu „urediStolpce" sestavi na novo — vanj ne pišite ročno.',
     );
-  list.getRange(4, 1, pregled.length, 2).setValues(pregled);
+  list.getRange(4, 1, pregled.length, 2).setValues(
+    pregled.map(function (vrstica) {
+      return [vrstica[0], vrstica[1]];
+    }),
+  );
+  pregled.forEach(function (vrstica, i) {
+    if (vrstica[2]) list.getRange(4 + i, 2).setNumberFormat(vrstica[2]);
+  });
 
   // Delovna vrsta. FILTER in ne QUERY namenoma: QUERY tip stolpca ugane iz
   // vsebine in stolpec s potrditvenimi polji, ki so večinoma prazna, zna razumeti
@@ -942,21 +988,27 @@ function urediAnalitiko() {
   list.getRange('AA4').setValue('PO MESECIH');
   list.getRange('AA5').setFormula(poMesecih);
 
+  // Kontrolna celica: edina pot, po kateri se formule tiho pokvarijo, je ta, da
+  // se stolpci na listu Leadi premaknejo (prepis s setValues sklicev ne popravi).
+  // Ta formula tisto tiho odpoved spremeni v glasno.
+  list.getRange('A3').setFormula(kontrolnaFormula(vir, glava));
+
   list
     .getRange('K3')
     .setValue(
       'Razčlenitve so pri nizkem številu leadov zavajajoče: prvi „100 % iz LinkedIna" je en sam obiskovalec.',
     );
 
-  urediVidezAnalitike(list, pregled.length);
+  urediVidezAnalitike(list);
   zascitiOpozorilno(list);
   return 'Analitika sestavljena.';
 }
 
 /** Naslovi, širine, denarne oblike in odstotki. Nič od tega ne nosi podatka. */
-function urediVidezAnalitike(list, dolzinaPregleda) {
+function urediVidezAnalitike(list) {
   list.getRange('A1').setFontSize(14).setFontWeight('bold');
   list.getRange('A2').setFontColor('#5f6368').setFontStyle('italic');
+  list.getRange('A3').setFontColor('#c5221f').setFontWeight('bold');
   list.getRange('K3').setFontColor('#5f6368').setFontStyle('italic');
 
   ['A4', 'D4', 'K4', 'O4', 'S4', 'W4', 'AA4'].forEach(function (celica) {
@@ -966,16 +1018,6 @@ function urediVidezAnalitike(list, dolzinaPregleda) {
 
   // Prva postavka je naloga in ne podatek — edina, ki sme izstopati.
   list.getRange(5, 1, 1, 2).setFontWeight('bold').setFontColor('#c5221f');
-
-  var vrstica = function (zamik) {
-    return 4 + zamik;
-  };
-  list.getRange(vrstica(9), 2).setNumberFormat('0 %');
-  list.getRange(vrstica(14), 2).setNumberFormat('0 %');
-  [16, 17, 18].forEach(function (zamik) {
-    list.getRange(vrstica(zamik), 2).setNumberFormat('#.##0 €');
-  });
-  list.getRange(vrstica(dolzinaPregleda - 1), 2).setNumberFormat('#.##0');
 
   list.setColumnWidth(1, 230);
   list.setColumnWidth(2, 120);
@@ -1015,6 +1057,26 @@ function zascitiOpozorilno(list) {
   } catch (err) {
     console.warn('Lista ni bilo mogoče zaščititi: ' + err);
   }
+}
+
+/**
+ * Preveri, da glava lista Leadi še stoji tam, kjer jo formule pričakujejo.
+ *
+ * Prazno, dokler je vse prav; sicer stavek, ki pove, kaj storiti. Brez tega bi
+ * premaknjen stolpec pomenil, da COUNTIF nad "poklicano" šteje telefonske
+ * številke in vrne 0 — kar je videti kot veljaven odgovor.
+ */
+function kontrolnaFormula(vir, glava) {
+  var pogoji = [PREJETO, KLICI_TAKOJ, POKLICANO, SESTANEK, OPOMBE, LETNO].map(function (ime) {
+    return vir + '$' + crkaStolpca(glava, ime) + '$1="' + ime + '"';
+  });
+  return (
+    '=IF(AND(' +
+    pogoji.join(',') +
+    '),"","OPOZORILO: stolpci na listu ' +
+    NASTAVITVE.IME_LISTA +
+    ' so se premaknili — številke spodaj so napačne. Poženite urediAnalitiko.")'
+  );
 }
 
 /** QUERY s štetjem in vsoto po eni skupini; prazne skupine odpadejo. */
