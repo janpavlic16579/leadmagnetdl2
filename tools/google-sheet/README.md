@@ -157,6 +157,31 @@ stolpcev — taka vrstica bi bila tiho zamaknjena in videti povsem pravilna.
 `opombe` so pred tem zaščitene z obliko „navadno besedilo"; drugod v list ne
 pišite ročno.
 
+## List „Analitika"
+
+Nastane in se sestavi sam ob vsakem zagonu `urediStolpce`; posebej ga je mogoče
+osvežiti s funkcijo **`urediAnalitiko`**. Vsebuje štiri sklope, postavljene
+drug ob drugem (ne enega pod drugim — seznami se raztezajo navzdol in bi si
+sicer stopili na prste):
+
+| Kje | Kaj |
+|---|---|
+| A | **Pregled**: še za poklicati, prosijo za takojšen klic, skupaj leadov, novi v 7 in 30 dneh, poklicani in delež, izidi (sestanek / ne želi / drugič), sestanki na poklicanega, letni zneski in povprečja |
+| D | **Za poklicati** — samodejen seznam tistih, ki prosijo za posvet in še niso poklicani, najstarejši najprej |
+| K, O, S, W | Razčlenitve po dejavnosti, viru obiska, zanesljivosti vnosa in velikosti podjetja |
+| AA | Gibanje po mesecih |
+
+**Vse številke so žive formule, ne posnetek.** To ni podrobnost izvedbe:
+klicatelj obkljuka `poklicano` in izbere `sestanek` ročno, skripta o tem ne izve
+nikoli, in izračun ob oddaji leada bi bil zastarel od prve kljukice naprej — pri
+čemer bi bile številke videti sveže. Tako pa se preračunajo v isti sekundi.
+
+**V list ne pišite ročno.** Ob vsakem zagonu `urediStolpce` se sestavi na novo in
+dopisano se izgubi; list zato ob urejanju opozori (opozorilo, ne prepoved).
+
+Če kakšnega stolpca v `Leadi` ni, se analitika ne sestavi in `urediStolpce` to
+pove v izpisu — urejanje leadov se zaradi tega **ne** razveljavi.
+
 ### Ko skripto spremenite
 
 Google poganja **razmeščeno različico**, ne tiste v urejevalniku. Po vsaki

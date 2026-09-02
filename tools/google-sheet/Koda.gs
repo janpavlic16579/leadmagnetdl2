@@ -25,6 +25,9 @@ var NASTAVITVE = {
   /** List, na katerega se piše. Nastane sam, če ga ni. */
   IME_LISTA: 'Leadi',
 
+  /** List s pregledom številk. Nastane in se sestavi ob `urediStolpce`. */
+  IME_LISTA_ANALITIKA: 'Analitika',
+
   /**
    * Neobvezen žeton (`?zeton=...` v naslovu webhooka). Prazno = izklopljeno.
    *
@@ -528,7 +531,30 @@ function preurediList() {
   list.getRange(1, 1, nove.length, novaGlava.length).setValues(nove);
 
   urediVidez(list, novaGlava);
-  return 'Urejeno: ' + novaGlava.length + ' stolpcev, ' + (nove.length - 1) + ' vrstic.';
+
+  // Analitika ŠELE ZDAJ: njene formule kažejo na črke stolpcev, zato jih je
+  // mogoče sestaviti šele, ko je glava v končnem stanju.
+  //
+  // In v try/catch: analitika je pogled na podatke, ne podatek. Če je ni mogoče
+  // sestaviti (list še nima vseh stolpcev), je urejanje leadov vseeno opravljeno
+  // in tega ne sme razveljaviti — pove naj se v izpisu, ne z odpovedjo.
+  var analitika;
+  try {
+    urediAnalitiko();
+    analitika = 'Analitika osvežena.';
+  } catch (err) {
+    console.warn('Analitike ni bilo mogoče sestaviti: ' + err);
+    analitika = 'Analitika NI sestavljena: ' + err;
+  }
+
+  return (
+    'Urejeno: ' +
+    novaGlava.length +
+    ' stolpcev, ' +
+    (nove.length - 1) +
+    ' vrstic. ' +
+    analitika
+  );
 }
 
 /**
@@ -783,6 +809,277 @@ function urediVidez(list, glava) {
   list.getDataRange().setWrap(false).setVerticalAlignment('middle');
 }
 
+
+/**
+ * List „Analitika": pregled številk, delovna vrsta za klicanje in razčlenitve.
+ *
+ * VSE ŠTEVILKE SO ŽIVE FORMULE, ne izračun skripte, in to je bistvo.
+ * Klicatelj obkljuka `poklicano` in izbere `sestanek` ROČNO, v preglednici —
+ * skripta o tem ne izve nikoli. Posnetek, izračunan ob oddaji leada, bi bil
+ * zastarel od prve kljukice do naslednjega obiskovalca, in to nevidno: številke
+ * bi bile videti sveže. Formula se preračuna sama, v isti sekundi.
+ *
+ * Iz istega razloga se `doPost` analitike NE dotakne: vroča pot oddaje ostane
+ * brez dodatnih klicev (načelo 3 v glavi datoteke).
+ *
+ * PAST, ZARADI KATERE SE LIST SESTAVI VSAKIČ ZNOVA: formule kažejo na ČRKE
+ * stolpcev, `urediStolpce` pa stolpce PREMIKA. Črke se zato razrešijo iz glave
+ * lista Leadi po IMENU stolpca — isto načelo kot pri pisanju vrstic. Brez tega bi
+ * COUNTIF nad "poklicano" po prvem preurejanju štel telefonske številke in vrnil
+ * 0, kar je videti kot veljaven odgovor.
+ *
+ * Bloki stojijo DRUG OB DRUGEM in ne eden pod drugim: FILTER in QUERY se raztezata
+ * navzdol, koliko vrstic vrneta, pa je odvisno od podatkov — nad vertikalno
+ * zloženimi bloki bi si ob prvem večjem odgovoru stopili na prste (#REF!).
+ */
+function urediAnalitiko() {
+  var leadi = pridobiList();
+  var glava = preberiGlavo(leadi);
+  if (!glava.length) throw new Error('List "' + NASTAVITVE.IME_LISTA + '" še nima glave.');
+
+  var vir = "'" + NASTAVITVE.IME_LISTA + "'!";
+  /** Odprt razpon enega stolpca: od druge vrstice do konca, da nove oddaje šteje samodejno. */
+  var R = function (ime) {
+    var crka = crkaStolpca(glava, ime);
+    return vir + crka + '2:' + crka;
+  };
+  /** Celoten podatkovni pravokotnik — QUERY in FILTER naslavljata stolpce po črkah v njem. */
+  var vse = vir + 'A2:' + crkaIzIndeksa(glava.length);
+
+  var stevilo = R(PREJETO);
+  var posvet = R(KLICI_TAKOJ);
+  var klicano = R(POKLICANO);
+  var izid = R(SESTANEK);
+  var letno = R(LETNO);
+
+  var pregled = [
+    ['PREGLED', ''],
+    // Prva vrstica je edina, ki je hkrati NALOGA in ne le podatek.
+    ['Še za poklicati', '=COUNTIF(' + posvet + ',"DA")-COUNTIFS(' + posvet + ',"DA",' + klicano + ',TRUE)'],
+    ['Prosijo za takojšen klic', '=COUNTIF(' + posvet + ',"DA")'],
+    ['', ''],
+    ['Skupaj leadov', '=COUNTA(' + stevilo + ')'],
+    ['Novi zadnjih 7 dni', '=COUNTIFS(' + stevilo + ',">="&TODAY()-7)'],
+    ['Novi zadnjih 30 dni', '=COUNTIFS(' + stevilo + ',">="&TODAY()-30)'],
+    ['', ''],
+    ['Poklicani', '=COUNTIF(' + klicano + ',TRUE)'],
+    ['Delež poklicanih', '=IFERROR(COUNTIF(' + klicano + ',TRUE)/COUNTA(' + stevilo + '),"—")'],
+    ['', ''],
+    ['Dogovorjen sestanek', '=COUNTIF(' + izid + ',"sestanek")'],
+    ['Ne želi', '=COUNTIF(' + izid + ',"ne želi")'],
+    ['Poskusiti drugič', '=COUNTIF(' + izid + ',"drugič")'],
+    ['Sestanki na poklicanega', '=IFERROR(COUNTIF(' + izid + ',"sestanek")/COUNTIF(' + klicano + ',TRUE),"—")'],
+    ['', ''],
+    ['Letni znesek vseh leadov', '=SUM(' + letno + ')'],
+    ['Povprečen letni znesek', '=IFERROR(AVERAGE(' + letno + '),0)'],
+    ['Povprečen promet podjetja', '=IFERROR(AVERAGE(' + R('annualRevenueEUR') + '),0)'],
+    ['Povprečno število zaposlenih', '=IFERROR(AVERAGE(' + R('employeeCount') + '),0)'],
+  ];
+
+  // Razčlenitve se sestavijo PRED čiščenjem lista, ker se v njih razrešujejo
+  // zadnje črke stolpcev — vsaka od njih sme vreči napako.
+  var razclenitve = [
+    ['K', 'PO DEJAVNOSTI', 'industryLabel'],
+    ['O', 'PO VIRU OBISKA', 'utmSource'],
+    ['S', 'PO ZANESLJIVOSTI VNOSA', 'confidence'],
+    ['W', 'PO VELIKOSTI PODJETJA', 'sizeClass'],
+  ].map(function (blok) {
+    return [blok[0], blok[1], skupinskaFormula(vse, crkaStolpca(glava, blok[2]), crkaStolpca(glava, LETNO))];
+  });
+
+  var poMesecih =
+    '=IFERROR(QUERY({ARRAYFORMULA(IF(' +
+    stevilo +
+    '="","",TEXT(' +
+    stevilo +
+    ',"yyyy-mm"))),' +
+    letno +
+    '},"select Col1, count(Col1), sum(Col2) where Col1 is not null and Col1 <> \'\' ' +
+    "group by Col1 order by Col1 desc label Col1 'Mesec', count(Col1) 'Leadov', sum(Col2) 'Letni znesek'\",0)," +
+    '"Ni podatkov.")';
+
+  // ŠELE ZDAJ čiščenje. Vse zgoraj sme vreči napako (manjkajoč stolpec), in če
+  // bi list počistili prej, bi uporabniku ostal prazen — brez podatkov in brez
+  // pojasnila, kaj je šlo narobe.
+  var list = pridobiListPoImenu(NASTAVITVE.IME_LISTA_ANALITIKA);
+  list.clear();
+  var obstojeci = list.getFilter();
+  if (obstojeci) obstojeci.remove();
+
+  list.getRange('A1').setValue('LM-10 — analitika leadov');
+  list
+    .getRange('A2')
+    .setValue(
+      'Vse številke so žive: preračunajo se same, tudi ko klicatelj obkljuka klic. ' +
+        'Ta list se ob vsakem zagonu „urediStolpce" sestavi na novo — vanj ne pišite ročno.',
+    );
+  list.getRange(4, 1, pregled.length, 2).setValues(pregled);
+
+  // Delovna vrsta. FILTER in ne QUERY namenoma: QUERY tip stolpca ugane iz
+  // vsebine in stolpec s potrditvenimi polji, ki so večinoma prazna, zna razumeti
+  // kot besedilo — pogoj nad njim tedaj tiho ne ujame ničesar. FILTER primerja
+  // celico po celici in prazno celico razume kot "ni obkljukano".
+  var vrsta =
+    '=IFERROR(SORT(FILTER({' +
+    [R(PREJETO), R('firstName'), R('lastName'), R('companyName'), R('phone'), R(LETNO)].join(',') +
+    '},' +
+    posvet +
+    '="DA",' +
+    klicano +
+    '<>TRUE),1,TRUE),"Nikogar ni za poklicati.")';
+
+  list.getRange('D4').setValue('ZA POKLICATI — najstarejši najprej');
+  list
+    .getRange(5, 4, 1, 6)
+    .setValues([['Oddal', 'Ime', 'Priimek', 'Podjetje', 'Telefon', 'Letni znesek']]);
+  list.getRange('D6').setFormula(vrsta);
+
+  razclenitve.forEach(function (blok) {
+    list.getRange(blok[0] + '4').setValue(blok[1]);
+    list.getRange(blok[0] + '5').setFormula(blok[2]);
+  });
+
+  list.getRange('AA4').setValue('PO MESECIH');
+  list.getRange('AA5').setFormula(poMesecih);
+
+  list
+    .getRange('K3')
+    .setValue(
+      'Razčlenitve so pri nizkem številu leadov zavajajoče: prvi „100 % iz LinkedIna" je en sam obiskovalec.',
+    );
+
+  urediVidezAnalitike(list, pregled.length);
+  zascitiOpozorilno(list);
+  return 'Analitika sestavljena.';
+}
+
+/** Naslovi, širine, denarne oblike in odstotki. Nič od tega ne nosi podatka. */
+function urediVidezAnalitike(list, dolzinaPregleda) {
+  list.getRange('A1').setFontSize(14).setFontWeight('bold');
+  list.getRange('A2').setFontColor('#5f6368').setFontStyle('italic');
+  list.getRange('K3').setFontColor('#5f6368').setFontStyle('italic');
+
+  ['A4', 'D4', 'K4', 'O4', 'S4', 'W4', 'AA4'].forEach(function (celica) {
+    list.getRange(celica).setFontWeight('bold').setBackground('#f1f3f4');
+  });
+  list.getRange(5, 4, 1, 6).setFontWeight('bold');
+
+  // Prva postavka je naloga in ne podatek — edina, ki sme izstopati.
+  list.getRange(5, 1, 1, 2).setFontWeight('bold').setFontColor('#c5221f');
+
+  var vrstica = function (zamik) {
+    return 4 + zamik;
+  };
+  list.getRange(vrstica(9), 2).setNumberFormat('0 %');
+  list.getRange(vrstica(14), 2).setNumberFormat('0 %');
+  [16, 17, 18].forEach(function (zamik) {
+    list.getRange(vrstica(zamik), 2).setNumberFormat('#.##0 €');
+  });
+  list.getRange(vrstica(dolzinaPregleda - 1), 2).setNumberFormat('#.##0');
+
+  list.setColumnWidth(1, 230);
+  list.setColumnWidth(2, 120);
+  [4, 5, 6, 7, 8, 9].forEach(function (stolpec, i) {
+    list.setColumnWidth(stolpec, [120, 110, 120, 200, 140, 120][i]);
+  });
+  ['K', 'O', 'S', 'W', 'AA'].forEach(function (crka) {
+    var stolpec = indeksIzCrke(crka);
+    list.setColumnWidth(stolpec, 180);
+    list.setColumnWidth(stolpec + 1, 80);
+    list.setColumnWidth(stolpec + 2, 120);
+  });
+
+  list.setFrozenRows(3);
+}
+
+/**
+ * Opozorilo ob urejanju lista — ne prepoved.
+ *
+ * List je sestavljen iz formul in se ob vsakem `urediStolpce` napiše na novo:
+ * kar kdo vpiše vanj, se tiho izgubi. Opozorilo to pove v trenutku, ko se
+ * dogaja. Prepoved bi bila premočna: uporabnik si sme kaj pripisati, le vedeti
+ * mora, da ne bo obstalo.
+ *
+ * V try/catch, ker je zaščita razkošje: v skupni rabi ali brez pravic klic
+ * odpove, analitika pa je tedaj vseeno sestavljena.
+ */
+function zascitiOpozorilno(list) {
+  try {
+    list.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(function (prejsnja) {
+      prejsnja.remove();
+    });
+    list
+      .protect()
+      .setDescription('Analitika se sestavi samodejno — ročni vnosi se ob naslednjem zagonu izgubijo.')
+      .setWarningOnly(true);
+  } catch (err) {
+    console.warn('Lista ni bilo mogoče zaščititi: ' + err);
+  }
+}
+
+/** QUERY s štetjem in vsoto po eni skupini; prazne skupine odpadejo. */
+function skupinskaFormula(vse, stolpec, znesek) {
+  return (
+    '=IFERROR(QUERY(' +
+    vse +
+    ',"select ' +
+    stolpec +
+    ', count(' +
+    stolpec +
+    '), sum(' +
+    znesek +
+    ') where ' +
+    stolpec +
+    " is not null and " +
+    stolpec +
+    " <> '' group by " +
+    stolpec +
+    ' order by count(' +
+    stolpec +
+    ") desc label count(" +
+    stolpec +
+    ") 'Leadov', sum(" +
+    znesek +
+    ") 'Letni znesek'\",0),\"Ni podatkov.\")"
+  );
+}
+
+/**
+ * Črka stolpca za dano IME iz glave lista Leadi.
+ *
+ * Napaka in ne tiha prazna vrednost: `undefined` v formuli da #REF!, ki ga na
+ * listu s tridesetimi formulami nihče ne opazi, dokler se kdo ne zanese na
+ * številko, ki je ni.
+ */
+function crkaStolpca(glava, ime) {
+  var i = glava.indexOf(ime);
+  if (i === -1) {
+    throw new Error('Stolpca "' + ime + '" v glavi ni — analitike ni mogoče sestaviti.');
+  }
+  return crkaIzIndeksa(i + 1);
+}
+
+/** 1 → A, 26 → Z, 27 → AA. */
+function crkaIzIndeksa(stevilka) {
+  var crka = '';
+  var n = stevilka;
+  while (n > 0) {
+    var ostanek = (n - 1) % 26;
+    crka = String.fromCharCode(65 + ostanek) + crka;
+    n = Math.floor((n - 1) / 26);
+  }
+  return crka;
+}
+
+/** A → 1, AA → 27. Obratna pot, za nastavljanje širin po črki. */
+function indeksIzCrke(crka) {
+  var n = 0;
+  for (var i = 0; i < crka.length; i++) {
+    n = n * 26 + (crka.charCodeAt(i) - 64);
+  }
+  return n;
+}
+
 /**
  * Nov list ima 26 stolpcev, izvoz jih ima krepko čez štirideset. Brez tega
  * zapis glave pade z "obseg presega mejo lista" — in z njim vsaka oddaja.
@@ -827,6 +1124,10 @@ function zaCelico(vrednost) {
 }
 
 function pridobiList() {
+  return pridobiListPoImenu(NASTAVITVE.IME_LISTA);
+}
+
+function pridobiListPoImenu(ime) {
   var preglednica = NASTAVITVE.ID_PREGLEDNICE
     ? SpreadsheetApp.openById(NASTAVITVE.ID_PREGLEDNICE)
     : SpreadsheetApp.getActive();
@@ -834,9 +1135,9 @@ function pridobiList() {
     throw new Error('Preglednice ni: skripta ni v preglednici in ID_PREGLEDNICE ni nastavljen.');
   }
 
-  var list = preglednica.getSheetByName(NASTAVITVE.IME_LISTA);
+  var list = preglednica.getSheetByName(ime);
   if (!list) {
-    list = preglednica.insertSheet(NASTAVITVE.IME_LISTA);
+    list = preglednica.insertSheet(ime);
   }
   return list;
 }
