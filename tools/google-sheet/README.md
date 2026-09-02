@@ -160,16 +160,20 @@ pišite ročno.
 ## List „Analitika"
 
 Nastane in se sestavi sam ob vsakem zagonu `urediStolpce`; posebej ga je mogoče
-osvežiti s funkcijo **`urediAnalitiko`**. Vsebuje štiri sklope, postavljene
-drug ob drugem (ne enega pod drugim — seznami se raztezajo navzdol in bi si
-sicer stopili na prste):
+osvežiti s funkcijo **`urediAnalitiko`**.
 
 | Kje | Kaj |
 |---|---|
-| A | **Pregled**: še za poklicati, prosijo za takojšen klic, skupaj leadov, novi v 7 in 30 dneh, poklicani in delež, izidi (sestanek / ne želi / drugič), sestanki na poklicanega, letni zneski in povprečja |
-| D | **Za poklicati** — samodejen seznam tistih, ki prosijo za posvet in še niso poklicani, najstarejši najprej |
-| K, O, S, W | Razčlenitve po dejavnosti, viru obiska, zanesljivosti vnosa in velikosti podjetja |
-| AA | Gibanje po mesecih |
+| vrstici 5–6 | **Kartice**: še za poklicati (rdeča — edina, ki je naloga in ne podatek), prosijo za posvet, poklicani, leadov skupaj, letni znesek |
+| pod njimi | **Štirje grafi**: lijak od leada do sestanka, izidi klicev, leadi po mesecih, leadi po dejavnosti |
+| vrstica 44 | **Za poklicati** — samodejen seznam tistih, ki prosijo za posvet in še niso poklicani, najstarejši najprej |
+| stolpec N naprej | **Podatki za grafe**: podrobne številke, lijak, izidi, po mesecih, po dejavnosti, viru, zanesljivosti in velikosti |
+
+Podatkovni del stoji desno zato, ker graf v preglednici ne zna računati —
+potrebuje vir na listu, in to v sosednjih stolpcih (oznaka, število). Tabele
+torej morajo obstajati, le da človek vanje ne gleda. Delovna vrsta je čisto
+spodaj, ker se `FILTER` razteza navzdol in bi karkoli pod njim ob prvem večjem
+odgovoru dobilo `#REF!`.
 
 **Vse številke so žive formule, ne posnetek.** To ni podrobnost izvedbe:
 klicatelj obkljuka `poklicano` in izbere `sestanek` ročno, skripta o tem ne izve
