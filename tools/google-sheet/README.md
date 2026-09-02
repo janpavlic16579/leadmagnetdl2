@@ -142,6 +142,13 @@ Preurejanja **ne** počne `doPost`, in to je namerno: prepisovanje celega lista 
 vsaki oddaji bi pomenilo, da ena prekinjena izvedba premeša vse leade. Poseg je
 zato reden, zaveden in ročen.
 
+`urediStolpce` ob vsakem zagonu tudi **pobriše prazne vrstice pod podatki**.
+Google namreč za „uporabljeno" šteje tudi vrstico, ki ima samo obliko in nobene
+vsebine — in če oblikovanje enkrat seže čez ves list, `getLastRow` skoči na dno,
+naslednja oddaja pa pristane pod stotinami praznih vrstic. Zato oblike in
+spustni seznami segajo natanko čez vrstice s podatki; novim vrsticam jih ob
+zapisu doda `opremiVrstico`.
+
 `urediStolpce` in `doPost` si delita isto skriptno ključavnico, zato oddaja med
 preurejanjem počaka (do 30 s) in ne more pristati v listu po starem zaporedju
 stolpcev — taka vrstica bi bila tiho zamaknjena in videti povsem pravilna.

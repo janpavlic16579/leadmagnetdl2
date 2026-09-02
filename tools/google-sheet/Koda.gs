@@ -368,7 +368,55 @@ function zapisiVrstico(vrednosti) {
   var vrstica = glava.map(function (ime) {
     return zaCelico(vrednosti[ime]);
   });
+
+  // Prostor za novo vrstico. Odkar oblikovanje ne sega več čez ves list (glej
+  // urediVidez), se list ne razteza sam in `urediStolpce` odvečne vrstice celo
+  // pobriše — lahko se torej zgodi, da praznih ni nobene.
+  if (list.getMaxRows() <= list.getLastRow()) list.insertRowsAfter(list.getMaxRows(), 50);
+
   list.appendRow(vrstica);
+
+  // Potrditveno polje in spustni seznam za pravkar dodano vrstico. V try/catch,
+  // ker je to kozmetika: napaka tu ne sme pomeniti, da aplikacija dostavo razume
+  // kot neuspelo in prodajno pripravo prenese stranki (načelo 3 v glavi).
+  try {
+    opremiVrstico(list, glava, list.getLastRow());
+  } catch (err) {
+    console.warn('Vrstice ni bilo mogoče opremiti: ' + err);
+  }
+}
+
+/**
+ * Klicateljevim celicam ene vrstice doda potrditveno polje, spustni seznam in
+ * obliko navadnega besedila.
+ *
+ * Zakaj po vrsticah in ne enkrat čez cel stolpec: oblikovanje in veljavnost,
+ * nanesena do konca lista, razširita "uporabljeni obseg" — getLastRow tedaj
+ * skoči na dno lista in vsaka naslednja oddaja pristane za morjem praznih
+ * vrstic. Enkrat se je to že zgodilo (7 vrstic je postalo 996).
+ */
+function opremiVrstico(list, glava, vrstica) {
+  var kje = function (ime) {
+    return glava.indexOf(ime) + 1;
+  };
+
+  if (kje(POKLICANO)) {
+    list
+      .getRange(vrstica, kje(POKLICANO))
+      .setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build())
+      .setHorizontalAlignment('center');
+  }
+  if (kje(SESTANEK)) {
+    list.getRange(vrstica, kje(SESTANEK)).setDataValidation(
+      SpreadsheetApp.newDataValidation()
+        .requireValueInList(SESTANEK_MOZNOSTI, true)
+        .setAllowInvalid(false)
+        .build(),
+    );
+  }
+  if (kje(OPOMBE)) {
+    list.getRange(vrstica, kje(OPOMBE)).setNumberFormat('@');
+  }
 }
 
 /**
@@ -418,6 +466,11 @@ function urediStolpce() {
 function preurediList() {
   var list = pridobiList();
   if (list.getLastRow() === 0) throw new Error('List je prazen — ni česa urejati.');
+
+  // Najprej odvečne prazne vrstice dol. Brez tega bi veliki prepis spodaj
+  // prežvečil ves list (996 praznih vrstic namesto sedmih polnih), oddaja pa bi
+  // pristajala na njegovem dnu.
+  pociistiOdvecneVrstice(list);
 
   // Glavo razširimo LOČENO in prej: ta zapis gre samo v device stolpce, zato
   // podatka ne more poškodovati. Veliki prepis spodaj s tem obdrži svoj pogoj
@@ -469,6 +522,34 @@ function preurediList() {
 
   urediVidez(list, novaGlava);
   return 'Urejeno: ' + novaGlava.length + ' stolpcev, ' + (nove.length - 1) + ' vrstic.';
+}
+
+/**
+ * Pobriše prazne vrstice pod podatki.
+ *
+ * Google šteje za "uporabljeno" tudi vrstico, ki ima samo obliko — brez vsebine.
+ * Ko je oblikovanje enkrat po nesreči seglo čez ves list, je getLastRow skočil s
+ * 7 na 996 in nova oddaja bi pristala pod tisoč praznimi vrsticami. Ta funkcija
+ * je popravilo tiste škode in varovalo, če bi se kdaj ponovila.
+ *
+ * Zadnja vrstica s podatki se prebere iz PRVEGA stolpca (`prejeto`), ki je pri
+ * vsakem leadu izpolnjen; getLastRow bi bil tu neuporaben, saj je prav on tisti,
+ * ki laže.
+ */
+function pociistiOdvecneVrstice(list) {
+  var prvi = list.getRange(1, 1, list.getMaxRows(), 1).getValues();
+  var zadnja = 1;
+  for (var r = prvi.length - 1; r >= 0; r--) {
+    if (String(prvi[r][0]).trim() !== '') {
+      zadnja = r + 1;
+      break;
+    }
+  }
+
+  var odvecnih = list.getMaxRows() - zadnja;
+  if (odvecnih <= 0) return 0;
+  list.deleteRows(zadnja + 1, odvecnih);
+  return odvecnih;
 }
 
 /**
@@ -589,16 +670,18 @@ var POJASNILA = {
  */
 function urediVidez(list, glava) {
   var vrstic = Math.max(0, list.getLastRow() - 1);
-  // Do konca lista in ne le do zadnje vrstice: veljavnost mora čakati tudi na
-  // vrstice, ki jih bo šele dodala oddaja. Veljavnost ni vsebina in getLastRow
-  // s tem ne premakne.
-  var doKonca = Math.max(0, list.getMaxRows() - 1);
 
   list.setFrozenRows(1);
   list.getRange(1, 1, 1, glava.length).setFontWeight('bold').setBackground('#f1f3f4');
 
-  // Veljavnosti najprej povsod dol, nato na novo po IMENU stolpca (glej glavo).
-  if (doKonca) list.getRange(2, 1, doKonca, glava.length).clearDataValidations();
+  // Veljavnosti najprej dol, nato na novo po IMENU stolpca (glej glavo).
+  //
+  // SAMO čez vrstice s podatki, nikoli do getMaxRows(). To je bilo prvič
+  // narobe in se je grdo poznalo: oblikovanje in poravnava, nanesena čez ves
+  // list, razširita "uporabljeni obseg" (isto, kar pokaže Ctrl+End), zato je
+  // getLastRow skočil s 7 na 996 — naslednja oddaja bi pristala tisoč vrstic
+  // niže, za morjem praznih. Nove vrstice dobijo svoje v `opremiVrstico`.
+  if (vrstic) list.getRange(2, 1, vrstic, glava.length).clearDataValidations();
 
   var sirine = {
     prejeto: 130,
@@ -646,19 +729,19 @@ function urediVidez(list, glava) {
         .setHorizontalAlignment('center');
     }
 
-    if (!doKonca) continue;
+    if (!vrstic) continue;
 
     if (ime === POKLICANO) {
       // requireCheckbox in NE insertCheckboxes: slednji v vsako celico razpona
       // ZAPIŠE false — s tem potisne getLastRow na konec lista (naslednja oddaja
       // pristane stotine vrstic niže) in odkljuka vse, kar je klicatelj označil.
       list
-        .getRange(2, stolpec, doKonca, 1)
+        .getRange(2, stolpec, vrstic, 1)
         .setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build())
         .setHorizontalAlignment('center');
     }
     if (ime === SESTANEK) {
-      list.getRange(2, stolpec, doKonca, 1).setDataValidation(
+      list.getRange(2, stolpec, vrstic, 1).setDataValidation(
         SpreadsheetApp.newDataValidation()
           .requireValueInList(SESTANEK_MOZNOSTI, true)
           .setAllowInvalid(false)
@@ -669,7 +752,7 @@ function urediVidez(list, glava) {
       // Navadno besedilo, dokler je stolpec še prazen: sicer preglednica vnos
       // razlaga — "=nekaj" postane formula (in je ob naslednjem prepisu ni več),
       // "3. 9. 2026" pa datum, ki se po prepisu izriše kot serijska številka.
-      list.getRange(2, stolpec, doKonca, 1).setNumberFormat('@');
+      list.getRange(2, stolpec, vrstic, 1).setNumberFormat('@');
     }
   }
 
