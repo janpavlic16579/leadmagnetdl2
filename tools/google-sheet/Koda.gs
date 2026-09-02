@@ -942,6 +942,10 @@ function urediAnalitiko() {
   // pojasnila, kaj je šlo narobe.
   var list = pridobiListPoImenu(NASTAVITVE.IME_LISTA_ANALITIKA);
   list.clear();
+  // Nov list ima 26 stolpcev, blok "po mesecih" pa stoji v AA (27.) in mu širine
+  // nastavimo do AC (29.). Brez tega pade z "Those columns are out of bounds" —
+  // in analitike ni, čeprav je z listom Leadi vse v redu.
+  zagotoviStolpce(list, 30);
   var obstojeci = list.getFilter();
   if (obstojeci) obstojeci.remove();
 
