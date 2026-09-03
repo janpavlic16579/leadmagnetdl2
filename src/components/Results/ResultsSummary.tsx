@@ -32,9 +32,9 @@ interface ResultsSummaryProps {
  * Kartica se izriše samo, kadar ima vrednost — segmenti brez potenciala tako
  * ostanejo pri treh ali manj, brez praznih ničel.
  *
- * Zanesljivost je odslej svoja komponenta (ConfidenceMeter): značka brez
- * lestvice je bila ocena brez merila, tu pa je stala nad karticami kot njihov
- * nadnaslov, čeprav govori o celotnem izračunu in ne o teh petih zneskih.
+ * Zanesljivost je odslej ena sama poved pri sestavi vsote (ConfidenceNote): tu
+ * je stala nad karticami kot njihov nadnaslov, čeprav govori o celotnem izračunu
+ * in ne o teh petih zneskih.
  */
 export function ResultsSummary({ totals, totalsRange, figures }: ResultsSummaryProps) {
   const confidence = totals.confidence;

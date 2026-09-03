@@ -59,3 +59,81 @@ describe('Strankin PDF je ločen od prodajnega', () => {
     expect(pdfSalesSource).toContain('playbook');
   });
 });
+
+/**
+ * Oznaka zanesljivosti je iz strankinega poročila odstranjena.
+ *
+ * Stopnja ("Nizka zanesljivost") in merilnik treh segmentov sta stala ob
+ * naslovnem znesku, kjer ju je stranka brala kot oceno NAŠEGA izračuna, čeprav
+ * sta merila njene vnose. Ostane poved pod kartico, ker edina pove tudi smer
+ * napake — zneski so spodnja meja.
+ *
+ * Preverja se vir in ne izdelan PDF: jsPDF besedilne tokove stisne (glej
+ * utemeljitev zgoraj), zato grep po bajtih ne dokaže ničesar.
+ */
+describe('Strankin PDF ne izpiše stopnje zanesljivosti', () => {
+  it('ne pozna ne značke ne merilnika', () => {
+    expect(pdfSource).not.toContain('CONFIDENCE_LABEL');
+    expect(pdfSource).not.toContain('confidenceMeterSegments');
+    expect(pdfSource).not.toContain('drawConfidenceBadge');
+  });
+
+  it('pojasnilo pod kartico pa ostane', () => {
+    expect(pdfSource).toContain('CONFIDENCE_NOTE');
+    expect(pdfSource).toContain('params.confidenceReason');
+  });
+
+  it('prodajna priprava stopnjo obdrži — sicer test zgoraj ne dokazuje ničesar', () => {
+    // Kontrolni test: prodajnik oceno vhodnih podatkov potrebuje pred pogovorom.
+    expect(pdfSalesSource).toContain('CONFIDENCE_LABEL');
+  });
+});
+
+/**
+ * Tabela povračila je iz strankinega poročila odstranjena.
+ *
+ * Primerjava izmerjenega potenciala z investicijo je pogovor s svetovalcem in ne
+ * izdelek izračuna, ki stranki pride po e-pošti brez sogovornika. Podlaga
+ * (horizon.paybackRows) ostane — spremeni se le, kdo tabelo bere.
+ */
+describe('Strankin PDF ne kaže povračila investicije', () => {
+  it('ne pozna ne vrstic ne razdelka', () => {
+    expect(pdfSource).not.toContain('paybackRows');
+    expect(pdfSource).not.toContain('drawPaybackSection');
+    expect(pdfSource).not.toContain('paybackTitle');
+  });
+
+  it('prodajna priprava tabelo obdrži — sicer test zgoraj ne dokazuje ničesar', () => {
+    // Kontrolni test: svetovalec dobe povračila potrebuje za pogovor o ceni.
+    expect(pdfSalesSource).toContain('paybackInvestmentHeader');
+  });
+});
+
+/**
+ * Znamka na poročilih je ista kot v glavi vprašalnika.
+ *
+ * Stranka je obrazec izpolnila pod logotipom PANTHEON svoje dejavnosti; dokument,
+ * ki ga dobi po e-pošti, ne sme priti pod drugo znamko. Preverja se vir: v Node
+ * okolju testov ni ne Image ne canvasa, zato se logotip v izdelanem PDF-ju nikoli
+ * ne izriše in bi ga vsak test nad blobom zgrešil.
+ */
+describe('Oba PDF-ja nosita logotip PANTHEON, ne datalab', () => {
+  it('strankino poročilo bere register po segmentu', () => {
+    expect(pdfSource).not.toContain('logo-datalab');
+    expect(pdfSource).toContain('PANTHEON_BRAND[params.segment.id]');
+  });
+
+  it('prodajna priprava bere isti register po istem ključu', () => {
+    expect(pdfSalesSource).not.toContain('logo-datalab');
+    expect(pdfSalesSource).toContain('PANTHEON_BRAND[report.qualification.segmentId]');
+  });
+
+  it('oba vzameta TEMNO različico, ker je glava temna', () => {
+    // Napis svetle različice je v znamčni temni #231F20 in bi na glavi izginil —
+    // napaka, ki se pokaže šele na natisnjenem dokumentu (glej pantheonLogos.ts).
+    for (const source of [pdfSource, pdfSalesSource]) {
+      expect(source).toContain('.dark');
+      expect(source).not.toContain('.light');
+    }
+  });
+});

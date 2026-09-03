@@ -14,6 +14,7 @@ import { getIndustryLabel } from '../config/industries';
 import { isUnansweredChoice } from '../config/modules/moduleTypes';
 import type { ModuleDefinition, ModuleOutput } from '../config/modules/moduleTypes';
 import type { SegmentConfig } from '../config/segments';
+import type { SegmentId } from '../config/segmentTypes';
 import { getSizeClass } from '../config/sizeClasses';
 import { getActionPlan, type ActionPlanEntry } from '../../content/actions/actions';
 import { MODULE_METHODOLOGY, type ModuleMethodology } from '../../content/methodology';
@@ -95,6 +96,13 @@ export interface SalesReportMeta extends LeadContact, LeadConsents {
 export interface SalesReportQualification {
   industryLabel: string;
   segmentName: string;
+  /**
+   * Id in ne oznaka — edino polje te vrste tukaj. Oba prodajna izrisovalca po njem
+   * izbereta logotip PANTHEON iste znamke, kot jo je stranka videla v glavi
+   * vprašalnika (config/pantheonLogos.ts). Oznaka `segmentName` je za bralca in se
+   * sme spremeniti; ključ registra ne sme biti odvisen od nje.
+   */
+  segmentId: SegmentId;
   sizeClass: string;
   employeeCount: number;
   /**
@@ -143,18 +151,35 @@ export interface DeadlineRow {
   text: string;
 }
 
-export interface ClientViewPaybackRow {
+export interface PaybackTableRow {
   investmentText: string;
   durationText: string;
+}
+
+/**
+ * Povračilo investicije — svetovalčevo gradivo in NE ogledalo.
+ *
+ * Tabela je bila do zdaj del strankinega poročila in jo je prodajna priprava
+ * zrcalila. Iz poročila je odstranjena: primerjava izmerjenega potenciala z
+ * investicijo je pogovor s svetovalcem, ne izdelek izračuna, ki stranki pride
+ * po e-pošti brez sogovornika. Podlaga ostane ista (horizon.paybackRows), le
+ * bralec je odslej en sam — zato tudi ne stoji več v razdelku "Kaj stranka
+ * gleda", ki mora ostati zvest temu, kar je stranka res videla.
+ */
+export interface SalesReportPayback {
+  /** `null`, kadar dobe ni mogoče izračunati (potencial manjka ali je pod pragom). */
+  rows: PaybackTableRow[] | null;
+  /** Ubesedena podlaga ali razlog, zakaj tabele ni. */
+  note: string;
 }
 
 /**
  * Kaj ima stranka pred sabo v SVOJEM poročilu.
  *
  * Prodajna priprava je doslej poznala iste letne zneske, ne pa izpeljank, ki jih
- * strankino poročilo naredi iz njih — trojni znesek, ceno delovnega dne, ceno meseca
- * odlašanja in tabelo povračila. Stranka pride na sestanek s temi številkami; svetovalec
- * jih mora poznati vnaprej, sicer je presenečen nad podatkom iz lastne hiše.
+ * strankino poročilo naredi iz njih — trojni znesek, ceno delovnega dne in ceno meseca
+ * odlašanja. Stranka pride na sestanek s temi številkami; svetovalec jih mora poznati
+ * vnaprej, sicer je presenečen nad podatkom iz lastne hiše.
  *
  * Vsa polja so že ubesedena in gredo skozi ISTE formatirnike in ISTA vrata kot
  * lib/pdf.ts — ogledalo, ki bi pokazalo številko, ki je stranka ni videla, bi bilo
@@ -165,10 +190,6 @@ export interface SalesReportClientView {
   heroText: string;
   /** Izpeljanke v eni vrstici; `null`, kadar jih stranka ni videla (hero = 0). */
   derivativesText: string | null;
-  /** `null` pomeni, da tabela stranki NI bila prikazana. */
-  payback: ClientViewPaybackRow[] | null;
-  /** Zakaj tabele ni, kadar je `payback` null — svetovalec mora vedeti tudi to. */
-  paybackNote: string;
   coverageText: string | null;
   accountingCapacityText: string | null;
 }
@@ -469,6 +490,8 @@ export interface SalesReport {
   summary: SalesReportSummary;
   /** Iste številke, kot jih bere stranka v svojem poročilu. */
   clientView: SalesReportClientView;
+  /** Povračilo investicije — samo za svetovalca; glej SalesReportPayback. */
+  payback: SalesReportPayback;
   softness: SalesReportSoftness;
   triage: TriageRow[];
   measured: MeasuredArea[];
@@ -532,6 +555,7 @@ export function buildSalesReport(params: BuildSalesReportParams): SalesReport {
     qualification: {
       industryLabel: getIndustryLabel(params.industry) || segmentCopy.displayName,
       segmentName: segmentCopy.displayName,
+      segmentId: segment.id,
       sizeClass: getSizeClass(params.employeeCount),
       employeeCount: params.employeeCount,
       roleLabel: contextOptionLabel(context?.role, profile.role),
@@ -546,6 +570,7 @@ export function buildSalesReport(params: BuildSalesReportParams): SalesReport {
     },
 
     clientView: buildClientView(params),
+    payback: buildPayback(params),
 
     summary: {
       directLossEUR: params.totals.directLossEUR,
@@ -787,6 +812,39 @@ export function nearestDeadline(report: SalesReport): DeadlineRow | null {
   return { ...first, text: `${first.text} … in še ${rest.length} med tveganji` };
 }
 
+/**
+ * Povračilo investicije za svetovalca — glej SalesReportPayback.
+ *
+ * Podlaga in prag ostaneta v horizon.paybackRows: prepisan pogoj bi se ob
+ * spremembi praga razšel z izračunom, ki ga ubeseduje.
+ */
+function buildPayback(params: BuildSalesReportParams): SalesReportPayback {
+  const rows = paybackRows(params.totals.addressablePotentialEUR);
+  if (rows) {
+    return {
+      rows: rows.map((row) => ({
+        investmentText: formatEUR(row.investmentEUR),
+        durationText: row.months === null ? '—' : monthsLabel(row.months),
+      })),
+      // Ograda ostane ista, kot jo je nosila tabela v strankinem poročilu: stopnje
+      // so primerjalne in brez imena izdelka, ceno potrdi svetovalec po ceniku.
+      note: SHARED_COPY.paybackNote,
+    };
+  }
+
+  // Dva različna razloga za odsotnost tabele: potenciala ni izračunanega (dejavnost
+  // brez konteksta) ali je pod pragom. Ena sama poved bi v prvem primeru trdila
+  // nekaj, kar ni res. Praga ne imenujemo — je notranja kalibracija, dokument pa
+  // lahko pristane pri stranki.
+  return {
+    rows: null,
+    note:
+      params.totals.addressablePotentialEUR === undefined
+        ? 'Povračila ni mogoče izračunati — za to dejavnost naslovljiv potencial ni izračunan.'
+        : 'Povračila ne kaži — izmerjen potencial je za tak prikaz prenizek, dobe bi bile argument proti.',
+  };
+}
+
 function buildClientView(params: BuildSalesReportParams): SalesReportClientView {
   const heroEUR = heroValueEUR(params.totals);
   const heroRange = heroRangeEUR(params.totalsRange);
@@ -811,26 +869,9 @@ function buildClientView(params: BuildSalesReportParams): SalesReportClientView 
         )}`
       : null;
 
-  const rows = paybackRows(params.totals.addressablePotentialEUR);
-
   return {
     heroText,
     derivativesText,
-    payback: rows
-      ? rows.map((row) => ({
-          investmentText: formatEUR(row.investmentEUR),
-          durationText: row.months === null ? '—' : monthsLabel(row.months),
-        }))
-      : null,
-    // Dva različna razloga za odsotnost tabele: potenciala ni izračunanega (dejavnost
-    // brez konteksta) ali je pod pragom. Ena sama poved bi v prvem primeru trdila
-    // nekaj, kar ni res. Praga ne imenujemo — je notranja kalibracija, ki je stranka
-    // ni videla, dokument pa lahko pristane pri njej.
-    paybackNote: rows
-      ? SHARED_COPY.paybackNote
-      : params.totals.addressablePotentialEUR === undefined
-        ? 'Tabele povračila stranka ni videla — za to dejavnost naslovljiv potencial ni izračunan.'
-        : 'Tabele povračila stranka ni videla — izmerjen potencial je za tak prikaz prenizek.',
     coverageText:
       params.coverage && params.coverage.measuredCount < params.coverage.offeredCount
         ? `Izmerjeno ${params.coverage.measuredCount} od ${params.coverage.offeredCount} področij — neizmerjena v zneske ne vstopajo.`

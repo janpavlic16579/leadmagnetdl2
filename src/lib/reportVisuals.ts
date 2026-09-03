@@ -1,6 +1,5 @@
 import { heroValueEUR, type HeroBuckets } from './heroTotals';
 import { HORIZON_YEARS, multiYearEUR } from './horizon';
-import type { ConfidenceLevel } from './potential';
 
 /**
  * Podatki za grafične prikaze strankinega poročila — na enem mestu za oba medija.
@@ -159,26 +158,7 @@ export function projectionSeries(annualEUR: number, years: number = HORIZON_YEAR
   return points;
 }
 
-// --- Zanesljivost in pokritost ----------------------------------------------
-
-export interface ConfidenceMeter {
-  filled: number;
-  total: number;
-}
-
-export const CONFIDENCE_METER_TOTAL = 3;
-
-/**
- * Zanesljivost kot merilnik in ne le kot beseda.
- *
- * Značka pove stopnjo, ne pove pa, ali je od nje kaj višjega — "Srednja
- * zanesljivost" brez lestvice je ocena brez merila. Trije segmenti povedo tudi,
- * koliko manjka, kar je hkrati vabilo, da obiskovalec dopolni vnose.
- */
-export function confidenceMeterSegments(level: ConfidenceLevel): ConfidenceMeter {
-  const filled = level === 'high' ? 3 : level === 'medium' ? 2 : 1;
-  return { filled, total: CONFIDENCE_METER_TOTAL };
-}
+// --- Pokritost ---------------------------------------------------------------
 
 export interface CoverageSegment {
   index: number;

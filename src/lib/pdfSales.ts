@@ -11,7 +11,6 @@ import {
   drawTable,
   ensurePageSpace,
   createPdfDocument,
-  loadImage,
   MARGIN,
   PAGE_WIDTH,
   PALETTE,
@@ -31,6 +30,9 @@ import {
   type SalesReport,
 } from './salesReport';
 import { SHARED_COPY } from '../config/copy';
+import { PANTHEON_BRAND } from '../config/pantheonLogos';
+import { PANTHEON_LOGO_SVG } from '../config/pantheonLogoSources';
+import { HEADER_LOGO_RASTER_WIDTH_PX, rasterizeSvg } from './svgRaster';
 
 /**
  * Prodajna priprava na pogovor.
@@ -59,7 +61,13 @@ const DATE_TIME = new Intl.DateTimeFormat('sl-SI', { dateStyle: 'short', timeSty
 /** Sestavi pripravo in jo vrne — dostavo opravi lib/download.ts (glej pdf.ts). */
 export async function buildSalesPdfFile(report: SalesReport): Promise<DownloadFile> {
   const doc = createPdfDocument();
-  const logo = await loadImage(`${import.meta.env.BASE_URL}logo-datalab.png`);
+  // Ista znamka, kot jo je stranka videla v glavi vprašalnika — svetovalec in
+  // stranka gledata isti logotip. Temna različica, ker je glava temna; SVG mora
+  // skozi raster, ker jsPDF vektorja ne sprejme (glej lib/svgRaster.ts).
+  const logo = await rasterizeSvg(
+    PANTHEON_LOGO_SVG[PANTHEON_BRAND[report.qualification.segmentId]].dark,
+    HEADER_LOGO_RASTER_WIDTH_PX,
+  );
 
   // Pet razdelkov: sodba → dejstva → ukrep → utemeljitev sodbe.
   let y = drawHeader(doc, report, logo);
@@ -193,6 +201,7 @@ function drawSummary(doc: jsPDF, report: SalesReport, startY: number): number {
   });
 
   y = drawClientView(doc, report, y);
+  y = drawPayback(doc, report, y);
 
   if (s.confidence) {
     y = drawMutedParagraph(doc, `${CONFIDENCE_LABEL[s.confidence]}. ${s.confidenceReason}`, y);
@@ -225,17 +234,27 @@ function drawClientView(doc: jsPDF, report: SalesReport, startY: number): number
   if (view.accountingCapacityText) rows.push(['Prevedeno v posel', view.accountingCapacityText]);
 
   let y = drawSubTitle(doc, 'Kaj stranka gleda v svojem poročilu', startY);
-  y = drawTable(doc, { head: ['', 'Kot to bere stranka'], rows, startY: y, columnWidths: [46] });
+  return drawTable(doc, { head: ['', 'Kot to bere stranka'], rows, startY: y, columnWidths: [46] });
+}
 
-  if (view.payback) {
+/**
+ * Povračilo investicije — svetovalčevo gradivo, ne ogledalo. Stranka te tabele
+ * v svojem poročilu NIMA (glej SalesReportPayback), zato stoji pod svojim
+ * naslovom in ne v razdelku zgoraj.
+ */
+function drawPayback(doc: jsPDF, report: SalesReport, startY: number): number {
+  const { rows, note } = report.payback;
+  let y = drawSubTitle(doc, 'Povračilo investicije — za vaš pogovor', startY);
+
+  if (rows) {
     y = drawTable(doc, {
       head: [SHARED_COPY.paybackInvestmentHeader, SHARED_COPY.paybackDurationHeader],
-      rows: view.payback.map((row) => [row.investmentText, row.durationText]),
+      rows: rows.map((row) => [row.investmentText, row.durationText]),
       startY: ensurePageSpace(doc, y, 22),
       columnWidths: [60],
     });
   }
-  return drawMutedParagraph(doc, view.paybackNote, y);
+  return drawMutedParagraph(doc, note, y);
 }
 
 // --- 3b. Njihovi največji painpointi -----------------------------------------

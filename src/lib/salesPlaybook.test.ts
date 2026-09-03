@@ -47,14 +47,14 @@ const BASE: PlaybookInput = {
   clientView: {
     heroText: '109.440 EUR',
     derivativesText: null,
-    payback: null,
-    paybackNote: 'Tabele povračila stranka ni videla.',
     coverageText: null,
     accountingCapacityText: null,
   },
+  payback: { rows: null, note: 'Povračila ne kaži — potencial je prenizek.' },
   qualification: {
     industryLabel: 'Trgovina, veleprodaja in distribucija',
     segmentName: 'Veleprodaja in distribucija',
+    segmentId: 'trgovina',
     sizeClass: '10–49',
     employeeCount: 30,
     roleLabel: 'Direktor/-ica',

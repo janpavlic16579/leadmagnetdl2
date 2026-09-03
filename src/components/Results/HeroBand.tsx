@@ -13,6 +13,11 @@ interface HeroBandProps {
   stepLabel: string;
   heroValueEUR: number;
   heroRange: EURRange | null;
+  /**
+   * Le še za obliko zneska: pri nizki oceni se izpiše razpon namesto ene
+   * številke. Značke ni več — kakovost vhodnih podatkov pove ConfidenceNote
+   * pri sestavi vsote, kjer je ob razčlenitvi in ne nad naslovnim zneskom.
+   */
   confidence?: ConfidenceLevel;
   /** Računovodstvo: "+X strank brez nove zaposlitve" — edina panožna izpeljanka. */
   accountingCapacity?: number;
@@ -74,10 +79,6 @@ export function HeroBand({
         <span aria-hidden="true">{animatedTotal}</span>
         <span className={styles.srOnly}>{finalTotal}</span>
       </p>
-
-      {confidence ? (
-        <p className={`${styles.badge} ${styles[confidence]}`}>{SHARED_COPY.confidenceLabel[confidence]}</p>
-      ) : null}
 
       <p className={styles.note}>{copy.results.heroNote}</p>
 

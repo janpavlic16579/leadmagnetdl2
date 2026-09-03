@@ -12,7 +12,7 @@ import type { ModuleOutput, RiskLevel } from '../config/modules/moduleTypes';
 import type { SegmentConfig } from '../config/segments';
 import { getActionPlan } from '../../content/actions/actions';
 import { groupByModule } from './moduleEngine';
-import type { ConfidenceLevel, ResultTotals } from './potential';
+import type { ResultTotals } from './potential';
 import {
   formatAmount,
   formatDecimal,
@@ -23,27 +23,25 @@ import {
   MIN_FIGURE_EUR,
 } from './format';
 import {
-  monthsLabel,
   multiYearEUR,
-  paybackRows,
   perMonthEUR,
   perWorkingDayEUR,
   yearsLabel,
-  type PaybackRow,
 } from './horizon';
 import { heroValueEUR as heroTotal, heroRangeEUR as heroTotalRange } from './heroTotals';
 import {
   breakdownRows,
   compositionSegments,
-  confidenceMeterSegments,
   projectionSeries,
   type BreakdownRow,
 } from './reportVisuals';
+import { PANTHEON_BRAND } from '../config/pantheonLogos';
+import { PANTHEON_LOGO_SVG } from '../config/pantheonLogoSources';
+import { HEADER_LOGO_RASTER_WIDTH_PX, rasterizeSvg } from './svgRaster';
 import { deadlineChipText, riskDeadline } from './deadlines';
 import { displayRange, type EURRange, type TotalsRange } from './range';
 import { slugify, type DownloadFile } from './download';
 import {
-  CONFIDENCE_LABEL,
   CONFIDENCE_NOTE,
   CONTENT_WIDTH,
   drawFooterOnEveryPage,
@@ -52,7 +50,6 @@ import {
   drawTable,
   ensurePageSpace,
   createPdfDocument,
-  loadImage,
   MARGIN,
   PAGE_WIDTH,
   PALETTE,
@@ -166,21 +163,22 @@ export async function buildResultsPdfFile(params: GeneratePdfParams): Promise<Do
   // pred rokom (izris ob polnoči).
   const now = new Date();
   const dateStr = new Intl.DateTimeFormat('sl-SI').format(now);
-  // Poti do public/ morajo iti prek BASE_URL — aplikacija se strežе izpod
-  // /leadmagnetdl/ (glej vite.config.ts), zato bi trdo kodiran koren 404-iral.
-  const logo = await loadImage(`${import.meta.env.BASE_URL}logo-datalab.png`);
+  // Logotip PANTHEON iste znamke, kot jo je stranka videla v glavi vprašalnika
+  // (Header.tsx bere isti PANTHEON_BRAND). Temna različica, ker je glava temna —
+  // napis svetle je v #231F20 in bi na njej izginil. Rasterizacija je nujna:
+  // jsPDF SVG-ja ne sprejme (glej lib/svgRaster.ts).
+  const logo = await rasterizeSvg(
+    PANTHEON_LOGO_SVG[PANTHEON_BRAND[params.segment.id]].dark,
+    HEADER_LOGO_RASTER_WIDTH_PX,
+  );
 
   let y = drawHeader(doc, params, copy, dateStr, logo);
   y = drawHeroSection(doc, params, copy, y);
 
   // Vrstni red pripovedi: koliko stane (hero), iz česa je sestavljeno (kartice),
-  // kaj to pomeni za investicijo (povračilo), zakaj je znesek spodnja meja (ograde).
-  // Vrata so v horizon.paybackRows in ne tu: prodajna priprava mora pokazati natanko
-  // to, kar je videla stranka, in prepisan pogoj bi se ob spremembi praga razšel.
-  const payback = paybackRows(params.totals.addressablePotentialEUR);
-  if (payback) {
-    y = drawPaybackSection(doc, payback, y);
-  }
+  // zakaj je znesek spodnja meja (ograde), kako je razčlenjen (graf in tabela).
+  // Tabele povračila tu ni več: primerjava z investicijo je pogovor s svetovalcem
+  // in ne izdelek izračuna. Živi naprej v prodajni pripravi, kot njegovo gradivo.
   y = drawNotIncludedSection(doc, y);
 
   const chartData = buildChartData(params.segment, params.outputs);
@@ -303,48 +301,6 @@ function drawHeader(
 
 // --- Hero ----------------------------------------------------------------
 
-function drawConfidenceBadge(doc: jsPDF, level: ConfidenceLevel, x: number, y: number): void {
-  const colors = level === 'high' ? { bg: PALETTE.cream, text: PALETTE.amber } : { bg: PALETTE.warningBg, text: PALETTE.warningText };
-  setFont(doc, level === 'low' ? 'bold' : 'normal');
-  doc.setFontSize(8);
-  const label = CONFIDENCE_LABEL[level];
-  const textWidth = doc.getTextWidth(label);
-  const badgeWidth = textWidth + 6;
-  const badgeHeight = 6;
-  doc.setFillColor(...colors.bg);
-  if (level !== 'high') {
-    doc.setDrawColor(...PALETTE.warningBorder);
-    doc.roundedRect(x - badgeWidth, y, badgeWidth, badgeHeight, 1.5, 1.5, 'FD');
-  } else {
-    doc.roundedRect(x - badgeWidth, y, badgeWidth, badgeHeight, 1.5, 1.5, 'F');
-  }
-  doc.setTextColor(...colors.text);
-  doc.text(label, x - badgeWidth / 2, y + badgeHeight / 2 + 1.4, { align: 'center' });
-
-  /**
-   * Merilnik levo od značke — enako kot ConfidenceMeter na zaslonu.
-   *
-   * Značka pove stopnjo, ne pa tudi, ali je nad njo še kaj: "Srednja
-   * zanesljivost" brez lestvice je ocena brez merila.
-   */
-  const { filled, total } = confidenceMeterSegments(level);
-  const segmentWidth = 5;
-  const segmentGap = 1;
-  const meterWidth = total * segmentWidth + (total - 1) * segmentGap;
-  const meterX = x - badgeWidth - 3 - meterWidth;
-
-  for (let index = 0; index < total; index += 1) {
-    const segmentX = meterX + index * (segmentWidth + segmentGap);
-    if (index < filled) {
-      doc.setFillColor(...PALETTE.brandYellow);
-      doc.rect(segmentX, y + 2, segmentWidth, 2, 'F');
-    } else {
-      doc.setFillColor(...PALETTE.border);
-      doc.rect(segmentX, y + 2, segmentWidth, 2, 'F');
-    }
-  }
-}
-
 /**
  * Naložena vrstica sestave naslovne vsote — zrcalo CompositionBar z zaslona.
  *
@@ -459,10 +415,6 @@ function drawHeroSection(
   doc.setTextColor(...PALETTE.textMuted);
   doc.text(copy.results.heroLabel.toUpperCase(), MARGIN + 8, y + 11);
 
-  if (params.totals.confidence) {
-    drawConfidenceBadge(doc, params.totals.confidence, MARGIN + CONTENT_WIDTH - 8, y + 7.5);
-  }
-
   setFont(doc, 'bold');
   doc.setFontSize(24);
   doc.setTextColor(...PALETTE.brandDark);
@@ -541,10 +493,12 @@ function drawHeroSection(
 
   y += heroHeight + 6;
 
-  // Pojasnilo zanesljivosti pod kartico — na zaslonu stoji ob znački v
-  // ResultsSummary, v hero kartici pa ni več prostora ob opombi o sestavi vsote.
-  // Pri nizki oceni ima prednost izračunan razlog: splošni stavek trdi, da
-  // podatki manjkajo, tudi kadar so vneseni vsi in so ocene le urne postavke.
+  // Pojasnilo o kakovosti vhodnih podatkov pod kartico. Značke in merilnika nad
+  // njim ni več (glej ConfidenceNote): stopnja je stranki na naslovnem znesku
+  // brala kot ocena našega izračuna, čeprav je merila njene vnose. Poved ostane,
+  // ker edina pove tudi smer napake. Pri nizki oceni ima prednost izračunan
+  // razlog: splošni stavek trdi, da podatki manjkajo, tudi kadar so vneseni vsi
+  // in so ocene le urne postavke.
   if (params.totals.confidence) {
     const note =
       params.totals.confidence === 'low' && params.confidenceReason
@@ -718,66 +672,6 @@ function drawHeroSection(
   }
 
   return y;
-}
-
-// --- Povračilo investicije ---------------------------------------------------
-
-/**
- * Pri kateri investiciji se izmerjeni potencial povrne.
- *
- * Poročilo je doslej potencial izračunalo in ga pustilo viseti — primerjavo z
- * investicijo je bralec naredil sam, s prvo številko, ki mu je prišla pod roko.
- * Tabela mu jo ponudi na podlagi njegovega lastnega izračuna.
- *
- * Nobene cene: stopnje so primerjalne in brez imena izdelka, ograda pod tabelo
- * pa pove isto, kar prodajnemu gradivu nalaga PANTHEON_FIT_CONFIRM. Pri nizkem
- * potencialu se tabela ne izriše — dobe povračila v desetletjih bi bile
- * argument proti temu, kar naj tabela pokaže.
- */
-function drawPaybackSection(doc: jsPDF, payback: PaybackRow[], startY: number): number {
-  let y = ensurePageSpace(doc, startY, 24 + payback.length * 8);
-  y = drawSectionTitle(doc, SHARED_COPY.paybackTitle, y);
-
-  /**
-   * Vrstice namesto tabele: doba povračila je količina in ne besedilo v celici.
-   * Tabela je bralca pustila primerjati "12 mesecev" s "24 meseci" po branju,
-   * dolžine vrstic pa razliko pokažejo, preden začne brati.
-   */
-  const maxMonths = Math.max(...payback.map((row) => row.months ?? 0), 1);
-  const trackX = MARGIN + 34;
-  const trackWidth = CONTENT_WIDTH - 34 - 34;
-
-  setFont(doc, 'semibold');
-  doc.setFontSize(7);
-  doc.setTextColor(...PALETTE.textMuted);
-  doc.text(SHARED_COPY.paybackInvestmentHeader.toUpperCase(), MARGIN, y);
-  doc.text(SHARED_COPY.paybackDurationHeader.toUpperCase(), MARGIN + CONTENT_WIDTH, y, {
-    align: 'right',
-  });
-  y += 4;
-
-  for (const row of payback) {
-    setFont(doc, 'normal');
-    doc.setFontSize(7.5);
-    doc.setTextColor(...PALETTE.text);
-    doc.text(formatEUR(row.investmentEUR), MARGIN, y + 3.4);
-
-    doc.setFillColor(...PALETTE.cream);
-    doc.rect(trackX, y, trackWidth, 4, 'F');
-    if (row.months !== null) {
-      doc.setFillColor(...PALETTE.brandYellow);
-      doc.rect(trackX, y, (row.months / maxMonths) * trackWidth, 4, 'F');
-    }
-
-    setFont(doc, 'semibold');
-    doc.setTextColor(...PALETTE.brandDark);
-    doc.text(row.months === null ? '—' : monthsLabel(row.months), MARGIN + CONTENT_WIDTH, y + 3.4, {
-      align: 'right',
-    });
-    y += 7;
-  }
-
-  return drawMutedParagraph(doc, SHARED_COPY.paybackNote, y + 1, 7.5) + 2;
 }
 
 // --- Česa znesek ne vsebuje --------------------------------------------------
