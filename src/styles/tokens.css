@@ -21,6 +21,12 @@
   --color-warning-border: #f0b429;
   --color-warning-text: #7a4a00;
   --color-danger: #c0392b;
+  /*
+   * Ploskev napake. Opozorilo ima tri žetone, napaka doslej enega — zato bi bilo
+   * treba vsako rdečo ploskev mešati na roko. #fdecea nosi --color-text pri 8,5:1
+   * in --color-danger pri 4,8:1.
+   */
+  --color-danger-bg: #fdecea;
 
   /*
    * Barve serij v grafu — LASTNI tokeni in ne semantični.
@@ -143,6 +149,9 @@
   --color-warning-border: #a8791f;
   --color-warning-text: #f3ca7d;
   --color-danger: #e8776b;
+  /* Topla temna rdeča po istem načelu kot --color-warning-bg: --color-text pri
+     12,5:1, --color-danger pri 5,3:1. */
+  --color-danger-bg: #3a1e1b;
 
   /* Ista tri mesta v svetlobni lestvici, obrnjena za temno podlago (≈0,72/0,49/0,36). */
   --color-chart-loss: #faaf17;

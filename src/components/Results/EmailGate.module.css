@@ -60,9 +60,17 @@
   font-size: var(--font-size-sm);
 }
 
+/*
+ * Namig, ki oddaje NE ustavi (telefon, davčna) — zato jantar in ne rdeča.
+ *
+ * Prej je bil rdeč, torej v isti barvi kot napaka, ki oddajo res ustavi, in to
+ * nad besedilom "Oddaje to ne ustavi." Protislovje razvrednoti rdečo povsod
+ * drugod na obrazcu. Pravilo je zapisano v ModuleInput.module.css: jantar za
+ * neblokirno opozorilo, rdeča za napako.
+ */
 .hint {
   font-size: var(--font-size-sm);
-  color: var(--color-danger);
+  color: var(--color-warning-text);
   margin: 0;
 }
 
@@ -112,6 +120,45 @@
   color: var(--color-text);
 }
 
+/*
+ * Polje z napako mora biti prepoznavno tudi brez branja besedila pod njim.
+ *
+ * Po zadržanem kliku fokus pristane v prvem pomanjkljivem polju — doslej v polju,
+ * ki je izgledalo popolnoma enako kot vseh pet ostalih. Selektor bere
+ * [aria-invalid] in ne lastnega razreda: stanje že nosi dostopnostna lastnost,
+ * dva zapisa istega pa bi se prej ali slej razšla.
+ *
+ * 2 px in ne le barva: WCAG 1.4.1 zahteva, da podatek ni podan zgolj z barvo.
+ * Zunanja mera polja ostane ista (box-sizing: border-box je globalen v
+ * tokens.css), zato obrazec ob prikazu napake ne poskoči.
+ */
+.input[aria-invalid='true'] {
+  border-width: 2px;
+  border-color: var(--color-danger);
+}
+
+/*
+ * Telefon in davčna: opozorilo, ne napaka — enako kot .hint pod njima.
+ *
+ * MORA stati ZA pravilom zgoraj: specifičnost je enaka (0-2-0), zato odloči
+ * vrstni red. Debeline namenoma ne podeduje — 1 px pove, da polje ne ustavlja.
+ */
+.softInvalid[aria-invalid='true'] {
+  border-width: 1px;
+  border-color: var(--color-warning-border);
+}
+
+/*
+ * Pripeta glava (Header.module.css) je visoka 77 px: 44 px preklopnik teme,
+ * 2 × 16 px odmika, 1 px črte. Brskalnik ob focus() polje pomakne na sam rob
+ * vidnega polja — torej POD glavo. Na telefonu je obiskovalec po zadržanem kliku
+ * doslej pristal v polju, ki ga ni videl, in videl le, da je stran poskočila.
+ */
+.input,
+.consentRow input {
+  scroll-margin-top: 88px;
+}
+
 .consentRow {
   display: flex;
   align-items: flex-start;
@@ -127,9 +174,78 @@
   flex-shrink: 0;
 }
 
+/*
+ * Obvezna privolitev nima obrobe, ki bi jo bilo mogoče pobarvati: sistemsko
+ * kljukico vsak brskalnik izriše po svoje, accent-color pa pobarva samo OZNAČENO
+ * stanje — napaka je tu prav v neoznačenem. Zato se označi cela VRSTICA.
+ *
+ * outline in ne border: obris ne zaseda prostora, zato se ob pojavu napake
+ * neobvezni privolitvi pod njo ne premakneta. :has() je v tej kodi že v rabi
+ * (ModuleInput.module.css, .choice:has(input:checked)).
+ */
+.consentRow:has(input[aria-invalid='true']) {
+  outline: 2px solid var(--color-danger);
+  outline-offset: var(--space-1);
+  border-radius: var(--radius-md);
+}
+
 .consentText {
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
+}
+
+/*
+ * Povzetek zadržane oddaje — in ista ploskev za spodletelo pripravo.
+ *
+ * Stoji tik NAD gumbi in ne na vrhu obrazca: ob kliku sta pogled in kazalec tu.
+ * Sporočilo, ki ga obiskovalec ne vidi, je zanj isto kot molk — in molk je bil
+ * razlog, da je gumb izpadel pokvarjen.
+ *
+ * Ploskev in ne golo rdeče besedilo: tik nad njo stoji kartica svetovanja z
+ * obarvanim ozadjem, tik pod njo rumen gumb; odstavek med njima bi se bral kot
+ * opomba. Debelejši levi rob je isti prijem kot .unanswered v ModuleInput.module.css.
+ */
+.blocked {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3);
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger);
+  border-left-width: 6px;
+  border-radius: var(--radius-lg);
+}
+
+.blockedTitle {
+  margin: 0;
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-danger);
+}
+
+.blockedNote {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+
+/*
+ * Barva ostane --color-text in ne --color-danger: rdečo nosita obroba in naslov,
+ * cel rdeč seznam pa se bere kot grajanje — in se slabše bere.
+ */
+.blockedList {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+
+.blockedList li + li {
+  margin-top: var(--space-1);
+}
+
+/* Klic je izhod v sili: na telefonu mora biti tarča, ne le besedilo. */
+.blockedLink {
+  color: var(--color-danger);
+  font-weight: 600;
 }
 
 .actions {
