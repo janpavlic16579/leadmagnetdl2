@@ -166,6 +166,13 @@ kateri ni prav ničesar — vrstica z zgolj klicateljevo opombo ostane.
 preurejanjem počaka (do 30 s) in ne more pristati v listu po starem zaporedju
 stolpcev — taka vrstica bi bila tiho zamaknjena in videti povsem pravilna.
 
+Pred postavitvijo videza se **odstranijo oblike števil, zapiski in pravila
+veljavnosti** — vse troje se s prerazporeditvijo ne premakne in bi obviselo nad
+napačnim stolpcem. Pri veljavnosti to vrže napako, pri oblikah in zapiskih pa
+nič: ure na mesec bi se v podedovani obliki brale kot evri, nad glavo pa bi
+viselo pojasnilo sosednjega stolpca. `urediVidez` vse troje takoj za tem postavi
+znova, po imenu stolpca.
+
 Pred prepisom se **odstranijo pravila veljavnosti** (spustni seznam, potrditveno
 polje). Nujno: seznam v stolpcu `sestanek` je strog, veljavnost pa se s
 prerazporeditvijo ne premakne — ostane na stari fizični celici, in ko prepis vanjo
