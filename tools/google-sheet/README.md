@@ -161,6 +161,12 @@ kateri ni prav ničesar — vrstica z zgolj klicateljevo opombo ostane.
 preurejanjem počaka (do 30 s) in ne more pristati v listu po starem zaporedju
 stolpcev — taka vrstica bi bila tiho zamaknjena in videti povsem pravilna.
 
+Pred prepisom se **odstranijo pravila veljavnosti** (spustni seznam, potrditveno
+polje). Nujno: seznam v stolpcu `sestanek` je strog, veljavnost pa se s
+prerazporeditvijo ne premakne — ostane na stari fizični celici, in ko prepis vanjo
+zapiše podatek drugega stolpca, ga Google zavrne in cel poseg pade. `urediVidez`
+pravila takoj za tem postavi znova, po imenu stolpca.
+
 Česar prepis **ne** ohrani: formule in datumov, ki bi ju kdo natipkal v celico.
 `opombe` so pred tem zaščitene z obliko „navadno besedilo"; drugod v list ne
 pišite ročno.
