@@ -530,9 +530,19 @@ function preurediList() {
     nove.push(vrstica);
   }
 
-  // Najprej zapis, šele nato čiščenje ostanka: če bi list počistili vnaprej in
-  // bi zapis padel, bi bili leadi izgubljeni. Stolpcev je enako mnogo kot prej,
-  // zato prepis pokrije prav vse celice.
+  // Veljavnost podatkov mora dol PRED zapisom, sicer prepis sploh ne steče.
+  //
+  // Spustni seznam v stolpcu `sestanek` je nastavljen strogo (setAllowInvalid
+  // false), veljavnost pa se s prerazporeditvijo NE premakne — ostane na stari
+  // fizični celici. Ko prepis vanjo zapiše podatek drugega stolpca, ga Google
+  // zavrne z "The data you entered violates the data validation rules" in cel
+  // poseg pade. Pravila spodaj postavi urediVidez znova, po imenu stolpca.
+  if (nove.length > 1) {
+    list.getRange(2, 1, nove.length - 1, list.getMaxColumns()).clearDataValidations();
+  }
+
+  // Zapis je en sam: znotraj enega setValues delnega zapisa ni. Stolpcev je
+  // enako mnogo kot prej, zato prepis pokrije prav vse celice.
   list.getRange(1, 1, nove.length, novaGlava.length).setValues(nove);
 
   urediVidez(list, novaGlava);
