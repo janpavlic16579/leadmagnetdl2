@@ -754,6 +754,17 @@ function urediVidez(list, glava) {
   list.setFrozenRows(1);
   list.getRange(1, 1, 1, glava.length).setFontWeight('bold').setBackground('#f1f3f4');
 
+  // Oblike in zapiski se s prerazporeditvijo prav tako NE premaknejo — ostanejo
+  // na stari fizični celici, kar je isti vzorec kot pri veljavnosti, le da tu
+  // nič ne vrže napake: list samo laže. Brez tega pristanejo ure na mesec v
+  // stolpcu z obliko "#.##0 €" in se berejo kot evri, nad glavo `utmSource` pa
+  // obvisi pojasnilo sosednjega stolpca. Zato oboje dol in nato znova po imenu.
+  //
+  // Obseg je natanko podatkovni blok, nikoli do getMaxRows(): tako je nastala
+  // napaka, ob kateri je iz sedmih vrstic nastalo 996.
+  if (vrstic) list.getRange(2, 1, vrstic, glava.length).clearFormat();
+  list.getRange(1, 1, 1, glava.length).clearNote();
+
   // Veljavnosti najprej dol, nato na novo po IMENU stolpca (glej glavo).
   //
   // SAMO čez vrstice s podatki, nikoli do getMaxRows(). To je bilo prvič
@@ -847,7 +858,12 @@ function urediVidez(list, glava) {
   // je klicateljevo prvo opravilo in brez filtra ni izvedljivo.
   var obstojeci = list.getFilter();
   if (obstojeci) obstojeci.remove();
-  list.getRange(1, 1, Math.max(2, list.getLastRow()), glava.length).createFilter();
+  // Na listu, skrčenem na samo glavo, bi razpon dveh vrstic segel čez rob in
+  // vrgel napako — filter je okras, ki ne sme podreti celotnega posega.
+  if (list.getMaxRows() >= 2) {
+    var visina = Math.min(list.getMaxRows(), Math.max(2, list.getLastRow()));
+    list.getRange(1, 1, visina, glava.length).createFilter();
+  }
 
   // Brez preloma besedila: ena oddaja naj ostane ena vrstica, sicer se list
   // razpotegne v nekaj, česar se ne da preleteti.
