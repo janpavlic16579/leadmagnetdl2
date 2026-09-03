@@ -379,11 +379,16 @@ function zapisiVrstico(vrednosti) {
     return zaCelico(vrednosti[ime]);
   });
 
-  // Prostor za novo vrstico. Odkar oblikovanje ne sega več čez ves list (glej
-  // urediVidez), se list ne razteza sam in `urediStolpce` odvečne vrstice celo
-  // pobriše — lahko se torej zgodi, da praznih ni nobene.
-  if (list.getMaxRows() <= list.getLastRow()) list.insertRowsAfter(list.getMaxRows(), 50);
-
+  // Tu je nekoč stalo varovalo, ki je ob polnem listu vrinilo 50 praznih vrstic.
+  // Bilo je NAROBE in je verjetno povzročilo napako, zaradi katere je bilo videti,
+  // da se leadi ne vpisujejo: vrinjene vrstice podedujejo obliko vrstice nad
+  // sabo, Google pa oblikovano vrstico šteje za uporabljeno. getLastRow je zato
+  // ob vsaki oddaji poskočil za petdeset, naslednja oddaja pristala še niže, in
+  // po nekaj desetih leadih je bilo med podatki dva tisoč praznih vrstic.
+  //
+  // appendRow list po potrebi razširi sam. Če tega kdaj ne bi zmogel, se napaka
+  // vidi takoj (dostava pade v rezervno pot) — kar je neprimerno bolje od tihega
+  // odmikanja vrstic proti dnu.
   list.appendRow(vrstica);
 
   // Potrditveno polje in spustni seznam za pravkar dodano vrstico. V try/catch,
