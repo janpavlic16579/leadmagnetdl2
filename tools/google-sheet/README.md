@@ -60,6 +60,11 @@ Zato: v urejevalniku izberite funkcijo **`preizkusPoste`** in kliknite *Zaženi*
 Tedaj se pojavi vprašanje za dovoljenje (*Napredno → Pojdi na projekt → Dovoli*),
 v nabiralnik pa pride preizkusno sporočilo. Šele nato razmestite novo različico.
 
+**Izid zadnjega zagona `urediStolpce`** je prav tako viden na naslovu `/exec`:
+kdaj je tekel, koliko stolpcev in vrstic je uredil oziroma s katero napako je
+padel, ter koliko vrstic in stolpcev ima list. Ročni zagon je namreč videl samo
+tisti, ki je bil takrat pred zaslonom.
+
 **Ko pošte ni, ne brskajte po dnevniku** — odprite naslov `/exec` v brskalniku.
 `doGet` izpiše, ali so obvestila vklopljena, kdaj je nazadnje odšla pošta in kaj
 je bila zadnja napaka (naslovi so v izpisu zakriti, ker je odgovor javen). Te tri

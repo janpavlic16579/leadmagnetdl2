@@ -213,6 +213,8 @@ function doGet() {
     'Obvestila: ' + (NASTAVITVE.E_NASLOV_ZA_OBVESTILA ? 'nastavljena' : 'IZKLOPLJENA (prazen E_NASLOV_ZA_OBVESTILA)'),
     'Zadnja poslana pošta: ' + (lastnosti.getProperty('ZADNJA_POSTA') || 'še nobena'),
     'Zadnja napaka pošte: ' + (lastnosti.getProperty('ZADNJA_NAPAKA_POSTE') || 'brez'),
+    'Zadnje urejanje stolpcev: ' + (lastnosti.getProperty('ZADNJE_UREJANJE') || 'še nobeno'),
+    'Vrstic v listu (getMaxRows): ' + list.getMaxRows() + ', stolpcev: ' + list.getMaxColumns(),
   ];
   return ContentService.createTextOutput(vrstice.join('\n'));
 }
@@ -469,10 +471,22 @@ function urediStolpce() {
   // veliki prepis pa je ne pokrije (zajame le toliko vrstic, kolikor jih je bilo
   // ob branju). Vrstica ostane tiho zamaknjena — pod "firstName" datum, pod
   // "phone" e-naslov — in je videti popolnoma pravilna.
+  var lastnosti = PropertiesService.getScriptProperties();
   var kljucavnica = LockService.getScriptLock();
   kljucavnica.waitLock(30000);
   try {
-    return preurediList();
+    var izid = preurediList();
+    lastnosti.setProperty('ZADNJE_UREJANJE', new Date().toISOString() + ' — ' + izid);
+    return izid;
+  } catch (err) {
+    // Zapisano zato, ker je izid ročnega zagona doslej videl samo tisti, ki je
+    // bil takrat pred zaslonom. Odgovor doGet je edino, kar je o tem vidno od
+    // zunaj — brez tega je vsako reševanje odvisno od prepisovanja dnevnika.
+    lastnosti.setProperty(
+      'ZADNJE_UREJANJE',
+      new Date().toISOString() + ' — NAPAKA: ' + zakrijNaslove(String(err)),
+    );
+    throw err;
   } finally {
     kljucavnica.releaseLock();
   }
