@@ -1,7 +1,7 @@
 /*
- * Značka in pojasnilo zanesljivosti sta se preselila v ConfidenceMeter: značka
- * brez lestvice je bila ocena brez merila, tu pa je stala nad karticami kot
- * njihov nadnaslov, čeprav govori o celotnem izračunu in ne o teh petih zneskih.
+ * Pojasnilo zanesljivosti se je preselilo v ConfidenceNote: tu je stalo nad
+ * karticami kot njihov nadnaslov, čeprav govori o celotnem izračunu in ne o
+ * teh petih zneskih.
  */
 .grid {
   display: grid;

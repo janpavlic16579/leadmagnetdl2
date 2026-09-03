@@ -26,14 +26,14 @@ const BASE: SalesReport = {
   clientView: {
     heroText: '109.440 EUR',
     derivativesText: null,
-    payback: null,
-    paybackNote: 'Tabele povračila stranka ni videla.',
     coverageText: null,
     accountingCapacityText: null,
   },
+  payback: { rows: null, note: 'Povračila ne kaži — potencial je prenizek.' },
   qualification: {
     industryLabel: 'Trgovina, veleprodaja in distribucija',
     segmentName: 'Veleprodaja in distribucija',
+    segmentId: 'trgovina',
     sizeClass: '10–49',
     employeeCount: 30,
     roleLabel: 'Direktor/-ica',
@@ -104,7 +104,25 @@ describe('buildSalesReportHtml', () => {
     expect(html.startsWith('<!doctype html>')).toBe(true);
     expect(html).not.toMatch(/<link[^>]+href=/i);
     expect(html).not.toMatch(/<script/i);
-    expect(html).not.toMatch(/https?:\/\//);
+    expect(html).not.toMatch(/<img/i);
+
+    // Naslovi XML imenskih prostorov (xmlns na vgrajenem logotipu) se izvzamejo:
+    // brskalnik jih NIKOLI ne prenese, so le identifikator slovarja oznak. Prej je
+    // pravilo iskalo vsak "http", kar je vgrajen SVG lažno prijavilo kot zunanji
+    // vir. Pravi zunanji viri se prepoznajo po tem, da nekaj NALOŽIJO.
+    const withoutNamespaces = html.replace(/xmlns(:\w+)?="[^"]*"/g, '');
+    expect(withoutNamespaces).not.toMatch(/https?:\/\//);
+  });
+
+  it('logotip je vgrajen, s prefiksiranimi id-ji obeh različic', () => {
+    // Oba SVG-ja uporabljata iste kratke id-je (a–d). Brez prefiksa bi se maska
+    // druge različice razrešila na prvo in znak v barvnem krogu bi izginil —
+    // napaka, ki je ne javi nihče, ker je HTML še vedno veljaven.
+    const html = buildSalesReportHtml(BASE);
+    expect(html).toContain('<svg');
+    expect(html).toContain('id="lgd-a"');
+    expect(html).toContain('id="lgl-a"');
+    expect(html).not.toMatch(/id="[a-d]"/);
   });
 
   it('ubeži vsak vnos obiskovalca, ki pristane v oznakah', () => {

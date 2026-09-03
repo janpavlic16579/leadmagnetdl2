@@ -1,4 +1,6 @@
 import { SHARED_COPY } from '../config/copy';
+import { PANTHEON_BRAND } from '../config/pantheonLogos';
+import { PANTHEON_LOGO_SVG, prefixSvgIds } from '../config/pantheonLogoSources';
 import { formatEUR, formatEURRange, formatHours, formatPercent } from './format';
 import { displayRange, type EURRange } from './range';
 import {
@@ -39,6 +41,7 @@ export function buildSalesReportHtml(report: SalesReport): string {
 </head>
 <body>
 <header>
+  ${headerLogo(report)}
   <p class="eyebrow">Datalab · priprava na pogovor</p>
   <h1>${esc(report.meta.companyName || 'Stranka brez imena')}</h1>
   <p class="sub">${esc(q.industryLabel)} · ${esc(q.sizeClass)} zaposlenih · izpolnjeno ${esc(
@@ -166,6 +169,7 @@ function subsectionTheirInfo(report: SalesReport): string {
   return `<h3>Njihove info</h3>
   <div class="cards">${cards.join('')}</div>
   ${clientViewBlock(report)}
+  ${paybackBlock(report)}
   <p class="note"><strong>${esc(
     s.confidence ? SHARED_COPY.confidenceLabel[s.confidence] : 'Zanesljivost ni ocenjena',
   )}.</strong> ${esc(s.confidenceReason)}</p>
@@ -190,6 +194,25 @@ function subsectionTheirInfo(report: SalesReport): string {
 }
 
 /**
+ * Logotip PANTHEON v glavi — ista znamka, kot jo je stranka videla v vprašalniku.
+ *
+ * SVG je VGRAJEN in ne naslovljen: datoteka se odpira prek file:// in potuje po
+ * e-pošti, kjer je vsak zunanji vir tiho blokiran. To ne krši načela "nobene
+ * slike" iz glave te datoteke — načelo prepoveduje zunanje vire, ne vektorja v
+ * besedilu.
+ *
+ * Različici sta dve, ker se glava pri tisku iz temne prevesi v belo (@media print
+ * spodaj): na temni podlagi bi napis svetle različice izginil in obratno. Id-ji
+ * se prefiksirajo, sicer bi si maski obeh SVG-jev prevzeli druga drugo.
+ */
+function headerLogo(report: SalesReport): string {
+  const brand = PANTHEON_BRAND[report.qualification.segmentId];
+  const source = PANTHEON_LOGO_SVG[brand];
+  return `<span class="logo logo-screen">${prefixSvgIds(source.dark, 'lgd')}</span>
+  <span class="logo logo-print">${prefixSvgIds(source.light, 'lgl')}</span>`;
+}
+
+/**
  * Kaj ima stranka pred sabo. Vse številke gredo skozi iste formatirnike in ista vrata
  * kot njeno poročilo — glej SalesReportClientView.
  */
@@ -202,17 +225,27 @@ function clientViewBlock(report: SalesReport): string {
     rows.push(['Prevedeno v posel', view.accountingCapacityText]);
   }
 
-  const payback = view.payback
+  return `<h4>Kaj stranka gleda v svojem poročilu</h4>
+  ${keyValueTable(rows)}`;
+}
+
+/**
+ * Povračilo investicije — svetovalčevo gradivo, ne ogledalo. Stranka te tabele
+ * v svojem poročilu NIMA (glej SalesReportPayback), zato stoji pod svojim
+ * naslovom in ne v razdelku zgoraj.
+ */
+function paybackBlock(report: SalesReport): string {
+  const { rows, note } = report.payback;
+  const body = rows
     ? table(
         [SHARED_COPY.paybackInvestmentHeader, SHARED_COPY.paybackDurationHeader],
-        view.payback.map((row) => [row.investmentText, row.durationText]),
+        rows.map((row) => [row.investmentText, row.durationText]),
       )
     : '';
 
-  return `<h4>Kaj stranka gleda v svojem poročilu</h4>
-  ${keyValueTable(rows)}
-  ${payback}
-  <p class="note">${esc(view.paybackNote)}</p>`;
+  return `<h4>Povračilo investicije — za vaš pogovor</h4>
+  ${body}
+  <p class="note">${esc(note)}</p>`;
 }
 
 /**
@@ -549,6 +582,8 @@ const STYLE = `
 body{margin:0;font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--text);background:#fff}
 header{background:var(--dark);color:#fff;padding:24px 20px;border-bottom:4px solid var(--yellow)}
 header h1{margin:4px 0;font-size:1.6rem}
+.logo svg{height:32px;width:auto;display:block;margin-bottom:12px}
+.logo-print{display:none}
 .eyebrow{margin:0;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--cream)}
 .sub{margin:0;color:var(--cream);font-size:.9rem}
 main{max-width:900px;margin:0 auto;padding:8px 20px 40px}
@@ -600,5 +635,6 @@ li{margin:6px 0}
 footer{border-top:1px solid var(--border);padding:16px 20px;color:var(--muted);font-size:.75rem;
 max-width:900px;margin:0 auto}
 @media print{header{background:#fff;color:var(--dark)}.eyebrow,.sub{color:var(--muted)}
+.logo-screen{display:none}.logo-print{display:block}
 details{display:block}details>summary{display:none}}
 `;

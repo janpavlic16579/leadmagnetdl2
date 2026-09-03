@@ -1,0 +1,13 @@
+/*
+ * Pojasnilo o kakovosti vhodnih podatkov pod sestavo vsote.
+ *
+ * Merilnik in značka sta odpadla (glej ConfidenceNote.tsx), zato tu ni več
+ * barvnih stopenj — ostane ločnica, ki poved loči od traku nad njo.
+ */
+.note {
+  border-top: 1px solid var(--color-border);
+  margin: var(--space-4) 0 0;
+  padding-top: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}

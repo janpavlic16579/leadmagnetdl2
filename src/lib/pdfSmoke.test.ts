@@ -231,8 +231,9 @@ describe('Prodajni PDF se sestavi', () => {
 
     // Ogledalo mora nastati in pokazati isto, kar vidi stranka.
     expect(report.clientView.derivativesText).not.toBeNull();
-    expect(report.clientView.payback).not.toBeNull();
     expect(report.clientView.coverageText).toContain('3 od 10');
+    // Povračilo ni del ogledala — je svetovalčevo gradivo (SalesReportPayback).
+    expect(report.payback.rows).not.toBeNull();
 
     const file = await buildSalesPdfFile(report);
     expect(file.filename).toContain('priprava-na-pogovor');

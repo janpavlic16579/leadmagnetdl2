@@ -128,17 +128,33 @@ export function EmailGate({
     email: isValidEmail(email) ? null : 'Vpišite veljaven e-naslov (npr. ime@podjetje.si).',
     consentProcessing: consentProcessing
       ? null
-      : 'Brez te privolitve vam poročila ne smemo poslati.',
+      : // "Brez TE privolitve" je delovalo samo pod kljukico. V povzetku nad gumbom
+        // kazalni zaimek nima na kaj kazati, zato poved privolitev poimenuje.
+        'Brez privolitve za obdelavo podatkov vam poročila ne smemo poslati.',
   };
-  const firstInvalid = (
-    [
-      ['firstName', errors.firstName, firstNameRef],
-      ['lastName', errors.lastName, lastNameRef],
-      ['companyName', errors.companyName, companyNameRef],
-      ['email', errors.email, emailRef],
-      ['consentProcessing', errors.consentProcessing, consentRef],
-    ] as const
-  ).find(([, error]) => error !== null);
+  /**
+   * Ista tabela nosi dvoje: kam skoči fokus (prva vrstica z napako) in kaj našteje
+   * povzetek nad gumbom (vse vrstice z napako).
+   *
+   * Dva ločena seznama bi se ob prvem dodanem polju razšla — in razšla bi se prav
+   * v najbolj zavajajočo smer: fokus bi skočil v eno polje, povzetek pa bi govoril
+   * o drugem.
+   */
+  const requiredFields = [
+    ['firstName', errors.firstName, firstNameRef],
+    ['lastName', errors.lastName, lastNameRef],
+    ['companyName', errors.companyName, companyNameRef],
+    ['email', errors.email, emailRef],
+    ['consentProcessing', errors.consentProcessing, consentRef],
+  ] as const;
+  // Ostane .find() in ne blocking[0]: brez noUncheckedIndexedAccess bi se indeks
+  // tipiziral kot ne-opcijski in tiho oslabil stražo `if (firstInvalid)` spodaj.
+  const firstInvalid = requiredFields.find(([, error]) => error !== null);
+  /** Vse, kar ustavlja oddajo — v vrstnem redu polj na zaslonu. */
+  const blocking = requiredFields.filter(([, error]) => error !== null);
+  /** Povzetek se pokaže po istem pravilu kot napake pod polji (glej showErrors). */
+  const showBlockedSummary = showErrors && blocking.length > 0;
+  const alertId = `${fieldId}-submit-alert`;
 
   async function handleSubmit(event: React.FormEvent) {
     // Brez tega privzeta oddaja ponovno naloži SPA in uniči vse module, triažne
@@ -149,10 +165,15 @@ export function EmailGate({
 
     if (firstInvalid) {
       setShowErrors(true);
+      // Nov zadržan poskus prekrije staro napako priprave: dve rdeči ploskvi z
+      // različnima razlogoma hkrati sta ugibanje, ne pojasnilo.
+      setFailed(false);
       // Katero polje ustavi največ ljudi — ime polja in nič vsebine.
       track('lm10_form_blocked', { field: firstInvalid[0] });
-      // Fokus na prvo pomanjkljivo polje: sporočilo pod poljem na dolgem obrazcu
-      // lahko ostane zunaj zaslona, kazalec v polju pa pove, kje smo obtičali.
+      // Fokus ostane na PRVEM pomanjkljivem polju in ne skoči na povzetek nad
+      // gumbom: povzetek stoji na dnu obrazca, popravlja pa se gor. Fokus na dnu
+      // bi pomenil, da se obiskovalec do polja prebija s shift-tabom nazaj skozi
+      // kartico svetovanja in tri privolitve. Povzetek pove, fokus pelje.
       firstInvalid[2].current?.focus();
       return;
     }
@@ -370,7 +391,7 @@ export function EmailGate({
             </label>
             <input
               id={`${fieldId}-phone`}
-              className={styles.input}
+              className={`${styles.input} ${styles.softInvalid}`}
               type="tel"
               autoComplete="tel"
               value={phone}
@@ -393,7 +414,7 @@ export function EmailGate({
             {/* type="text" in ne "number": slednji odreže predpono SI in doda vrtavko. */}
             <input
               id={`${fieldId}-taxNumber`}
-              className={styles.input}
+              className={`${styles.input} ${styles.softInvalid}`}
               type="text"
               inputMode="numeric"
               placeholder="npr. 12345679"
@@ -511,10 +532,66 @@ export function EmailGate({
           ) : null}
         </div>
 
-        {failed ? (
-          <p className={styles.consentText} role="alert">
-            Priprave datotek ni bilo mogoče dokončati. Poskusite znova — vneseni podatki ostanejo.
-          </p>
+        {/*
+          Zakaj TU in ne na vrhu obrazca: ob kliku sta pogled in kazalec na gumbu.
+          Sporočilo na vrhu je na telefonu pet zaslonov stran, na visokem namizju pa
+          nad pregibom — obiskovalec ga ne vidi in sklepa, da gumb ne dela. Prav to
+          je bila pritožba. Blok hkrati potisne gumb navzdol; premik pod kazalcem je
+          sam po sebi znak, da se je nekaj zgodilo.
+
+          Naštejemo VSE, kar manjka, in ne le prvega: prikaz po enem bi ponovil
+          natanko tisto, zaradi česar je bil onemogočen gumb odstranjen — za vsako
+          naslednjo oviro bi bilo treba znova klikniti.
+
+          role="status" in ne role="alert": fokus se v isti sapi premakne v polje in
+          bralnik zaslona takrat prebere njegovo ime in napako. Vsiljivo območje bi to
+          napoved prekinilo ali bi bilo prekinjeno; vljudno se uvrsti za njo. Isti
+          prijem kot pri zadržanem koraku v StepEmployeeCount.tsx.
+
+          Napake POD polji namenoma nimajo vloge: pet hkratnih obvestil je šum, ne
+          pomoč. Bralnik jih dobi prek aria-describedby, ko pride do polja.
+
+          Veji sta izključujoči in imata RAZLIČEN key: brez njega bi React isto
+          vozlišče uporabil znova in mu le zamenjal vlogo in vsebino — živo območje,
+          ki se ne premontira, se pogosto ne oglasi.
+        */}
+        {showBlockedSummary ? (
+          <div key="blocked" id={alertId} className={styles.blocked} role="status">
+            <p className={styles.blockedTitle}>Prenos se ni začel.</p>
+            {/* Brez števila manjkajočih: slovenska dvojina bi terjala tri različice. */}
+            <p className={styles.blockedNote}>Poročilo pripravimo takoj, ko dopolnite naslednje:</p>
+            <ul className={styles.blockedList}>
+              {/*
+                Besedila so ISTA kot pod polji in ne skrajšana različica: dve
+                formulaciji istega pravila bi obiskovalec bral kot dve zahtevi.
+              */}
+              {blocking.map(([field, error]) => (
+                <li key={field}>{error}</li>
+              ))}
+            </ul>
+            <p className={styles.blockedNote}>Nato znova kliknite »Prenesi poročilo«.</p>
+          </div>
+        ) : failed ? (
+          /*
+            Prej je isto sporočilo nosil .consentText — sivo, drobno, najtišje besedilo
+            na strani, čeprav je edino, ki pove, da priprava res ni uspela. Zdaj ista
+            ploskev kot zadržana oddaja, ker je za obiskovalca isti trenutek: kliknil
+            je in poročila ni. Telefon je izhod v sili — brez njega ta pot nikamor ne
+            pelje, saj zaledja, ki bi poročilo poslalo pozneje, ni.
+
+            role="alert" ostane: nič ne premika fokusa, zato se napoved nima s čim
+            zaleteti, napaka pa je nepričakovana in ne posledica obiskovalčevega dejanja.
+          */
+          <div key="failed" id={alertId} className={styles.blocked} role="alert">
+            <p className={styles.blockedTitle}>Priprava poročila ni uspela.</p>
+            <p className={styles.blockedNote}>
+              Poskusite znova — vneseni podatki ostanejo. Če se ponovi, nas pokličite na{' '}
+              <a className={styles.blockedLink} href={SALES_CONTACT.phoneHref}>
+                {SALES_CONTACT.phone}
+              </a>
+              .
+            </p>
+          </div>
         ) : null}
 
         <div className={styles.actions}>
@@ -522,8 +599,18 @@ export function EmailGate({
           <button type="button" className={buttonStyles.secondaryButton} onClick={onBack} disabled={busy}>
             Nazaj
           </button>
-          {/* Ni več `disabled`: gumb, ki molči, je bil edini znak, da nekaj manjka. */}
-          <button type="submit" className={buttonStyles.primaryButton} disabled={busy}>
+          {/*
+            Ni več `disabled`: gumb, ki molči, je bil edini znak, da nekaj manjka.
+            aria-describedby poskrbi, da tudi tisti, ki se na gumb VRNE s tabulatorjem,
+            sliši razlog — sicer bi mu bralnik prebral samo ime gumba, torej isto kot
+            pred klikom, in gumb bi bil "pokvarjen" tudi zanj.
+          */}
+          <button
+            type="submit"
+            className={buttonStyles.primaryButton}
+            disabled={busy}
+            aria-describedby={showBlockedSummary || failed ? alertId : undefined}
+          >
             {busy ? 'Pripravljam …' : 'Prenesi poročilo'}
           </button>
         </div>

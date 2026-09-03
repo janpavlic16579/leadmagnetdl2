@@ -82,40 +82,6 @@
   border: 0;
 }
 
-/*
- * Značka zanesljivosti. Na temni ploskvi ne moreta veljati svetla opozorilna
- * tokena (#fff4e5 z besedilom #7a4a00 bi bila svetla lisa sredi temnega pasu),
- * zato obrobljena različica: prosojna ploskev, barvna obroba in besedilo.
- */
-.badge {
-  display: inline-block;
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-pill);
-  border: 1px solid;
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  margin: 0 0 var(--space-3);
-}
-
-/* Visoka: krem besedilo na temnem — 12,4:1, mirna in brez opozorilnega tona. */
-.high {
-  color: var(--color-accent);
-  border-color: var(--color-hero-border);
-  background: rgba(241, 237, 226, 0.08);
-}
-
-/* Srednja in nizka: rumena obroba, ker sta pridržek — nizka še s krepko pisavo. */
-.medium,
-.low {
-  color: var(--color-primary);
-  border-color: var(--color-primary);
-  background: rgba(250, 175, 23, 0.1);
-}
-
-.low {
-  font-weight: 700;
-}
-
 .note {
   margin: 0 0 var(--space-4);
   font-size: var(--font-size-sm);

@@ -11,7 +11,7 @@ import type { ResultTotals } from '../../lib/potential';
 import type { TotalsRange } from '../../lib/range';
 import { Breakdown } from './Breakdown';
 import { CompositionBar } from './CompositionBar';
-import { ConfidenceMeter } from './ConfidenceMeter';
+import { ConfidenceNote } from './ConfidenceNote';
 import { HeroBand } from './HeroBand';
 import { ProjectionBars } from './ProjectionBars';
 import { ResultsSummary } from './ResultsSummary';
@@ -50,7 +50,7 @@ interface ResultsViewProps {
   /** Razrešeni vnosi po modulu — razčlenitev iz njih pokaže, iz česa znesek nastane. */
   valuesByModule: Record<string, Record<string, number>>;
   stepLabel: string;
-  /** Izračunan razlog nizke zanesljivosti — glej ConfidenceMeter. */
+  /** Izračunan razlog nizke zanesljivosti — glej ConfidenceNote. */
   confidenceReason?: string | null;
   onMeasureModule: (id: string) => void;
   onProceedToEmail: () => void;
@@ -176,7 +176,7 @@ export function ResultsView({
             <CompositionBar totals={totals} figures={copy.figures} />
           </div>
           {totals.confidence ? (
-            <ConfidenceMeter level={totals.confidence} reason={confidenceReason} />
+            <ConfidenceNote level={totals.confidence} reason={confidenceReason} />
           ) : null}
         </Reveal>
       ) : null}

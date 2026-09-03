@@ -4,7 +4,6 @@ import {
   breakdownChartHeightPx,
   breakdownRows,
   compositionSegments,
-  confidenceMeterSegments,
   coverageSegments,
   projectionSeries,
 } from './reportVisuals';
@@ -111,14 +110,6 @@ describe('projectionSeries', () => {
   it('brez letnega zneska ni projekcije', () => {
     expect(projectionSeries(0)).toEqual([]);
     expect(projectionSeries(-100)).toEqual([]);
-  });
-});
-
-describe('confidenceMeterSegments', () => {
-  it('nizka 1, srednja 2, visoka 3 od treh', () => {
-    expect(confidenceMeterSegments('low')).toEqual({ filled: 1, total: 3 });
-    expect(confidenceMeterSegments('medium')).toEqual({ filled: 2, total: 3 });
-    expect(confidenceMeterSegments('high')).toEqual({ filled: 3, total: 3 });
   });
 });
 

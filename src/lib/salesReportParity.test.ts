@@ -144,8 +144,20 @@ describe('Ogledalo pokaže to, kar vidi stranka', () => {
     // vrat bi trdilo "0 EUR vsak delovni dan" — številko, ki je ni videl nihče.
     const empty = reportFor({ empty: true });
     expect(empty.clientView.derivativesText).toBeNull();
-    expect(empty.clientView.payback).toBeNull();
-    expect(empty.clientView.paybackNote).not.toContain('EUR');
+  });
+
+  it('povračilo ne stoji v ogledalu, ker ga stranka v poročilu nima', () => {
+    // Tabela je iz strankinega poročila odstranjena. Dokler je bila del clientView,
+    // je prodajna priprava trdila, da jo ima stranka pred sabo — po odstranitvi bi
+    // bila ta trditev neresnična, svetovalec pa bi se skliceval na prikaz, ki ga ni.
+    const report = reportFor();
+    expect(report.clientView).not.toHaveProperty('payback');
+    expect(report.payback.rows).not.toBeNull();
+
+    const empty = reportFor({ empty: true });
+    expect(empty.payback.rows).toBeNull();
+    expect(empty.payback.note).not.toContain('EUR');
+    expect(empty.payback.note).not.toContain('stranka');
   });
 });
 
