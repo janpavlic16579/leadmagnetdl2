@@ -570,19 +570,35 @@ function preurediList() {
  * ki laže.
  */
 function pociistiOdvecneVrstice(list) {
-  var prvi = list.getRange(1, 1, list.getMaxRows(), 1).getValues();
-  var zadnja = 1;
-  for (var r = prvi.length - 1; r >= 0; r--) {
-    if (String(prvi[r][0]).trim() !== '') {
-      zadnja = r + 1;
-      break;
+  var vrstic = list.getMaxRows();
+  if (vrstic < 2) return 0;
+
+  // CELOTNA vrstica in ne le prvi stolpec. Prvi stolpec pove, ali je to lead;
+  // prazna vrstica pa je samo tista, v kateri ni prav ničesar — tudi ne
+  // klicateljeve opombe brez vsega drugega.
+  var podatki = list.getRange(2, 1, vrstic - 1, list.getMaxColumns()).getValues();
+  var prazna = podatki.map(function (vrstica) {
+    return vrstica.every(function (celica) {
+      return celica === '' || celica === null;
+    });
+  });
+
+  // Od spodaj navzgor in v strnjenih blokih: brisanje od zgoraj bi premaknilo
+  // vse indekse pod sabo, blok pa je en klic namesto tisoč.
+  var pobrisanih = 0;
+  var konec = null;
+  for (var i = prazna.length - 1; i >= -1; i--) {
+    var jePrazna = i >= 0 && prazna[i];
+    if (jePrazna && konec === null) konec = i;
+    if (!jePrazna && konec !== null) {
+      var prvaVrstica = i + 3;
+      var koliko = konec - i;
+      list.deleteRows(prvaVrstica, koliko);
+      pobrisanih += koliko;
+      konec = null;
     }
   }
-
-  var odvecnih = list.getMaxRows() - zadnja;
-  if (odvecnih <= 0) return 0;
-  list.deleteRows(zadnja + 1, odvecnih);
-  return odvecnih;
+  return pobrisanih;
 }
 
 /**

@@ -142,12 +142,20 @@ Preurejanja **ne** počne `doPost`, in to je namerno: prepisovanje celega lista 
 vsaki oddaji bi pomenilo, da ena prekinjena izvedba premeša vse leade. Poseg je
 zato reden, zaveden in ročen.
 
-`urediStolpce` ob vsakem zagonu tudi **pobriše prazne vrstice pod podatki**.
+`urediStolpce` ob vsakem zagonu tudi **pobriše vse prazne vrstice** — tako tiste
+pod podatki kot praznino med njimi.
 Google namreč za „uporabljeno" šteje tudi vrstico, ki ima samo obliko in nobene
 vsebine — in če oblikovanje enkrat seže čez ves list, `getLastRow` skoči na dno,
 naslednja oddaja pa pristane pod stotinami praznih vrstic. Zato oblike in
 spustni seznami segajo natanko čez vrstice s podatki; novim vrsticam jih ob
 zapisu doda `opremiVrstico`.
+
+**Če se zdi, da se leadi ne vpisujejo več**, najprej odprite naslov `/exec` v
+brskalniku in poglejte število vrstic. Če je bistveno večje od števila leadov, se
+vpisujejo — le da pristajajo pod praznino, ki jo je nekaj ustvarilo (ročno
+dodane vrstice, oblikovanje čez ves list). Zagon `urediStolpce` praznino pobriše
+in naslednji lead spet pristane tik pod prejšnjim. Prazna je samo vrstica, v
+kateri ni prav ničesar — vrstica z zgolj klicateljevo opombo ostane.
 
 `urediStolpce` in `doPost` si delita isto skriptno ključavnico, zato oddaja med
 preurejanjem počaka (do 30 s) in ne more pristati v listu po starem zaporedju
