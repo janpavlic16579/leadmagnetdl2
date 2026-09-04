@@ -59,6 +59,34 @@ var NASTAVITVE = {
    */
   E_NASLOV_ZA_OBVESTILA: '',
 
+  /**
+   * ActiveCampaign. Naslov računa, ključ API in id seznama NISO tu, ampak v
+   * lastnostih skripte (Nastavitve projekta → Lastnosti skripte): ta datoteka je
+   * v repozitoriju in ključ bi bil s tem v gitu. Stranski dobiček je, da
+   * nastavitve preživijo lepljenje nove različice te datoteke — za razliko od
+   * E_NASLOV_ZA_OBVESTILA zgoraj.
+   */
+  AC: {
+    /**
+     * Na seznam pridejo vsi, naročen (status 1) pa je le, kdor je privolil v
+     * ponudbe ali vsebine; ostali gredo na seznam kot odjavljeni (status 2) in
+     * kampanje jih ne dosežejo. false naroči vse — glej `acNaSeznam`.
+     */
+    SAMO_S_PRIVOLITVIJO: true,
+
+    /** Predpona vseh oznak v AC. Po njej se v CRM-ju loči, od kod je kontakt. */
+    OSNOVNA_OZNAKA: 'LM-10',
+
+    /**
+     * true = kontakt gre v AC že ob oddaji (in ob zamudi vseeno pade na uro).
+     * false = vse prepusti uri; lead je v CRM-ju v nekaj minutah namesto takoj.
+     */
+    POSILJAJ_TAKOJ: true,
+
+    /** Koliko zaostalih vrstic sme pobrati en zagon ure (izvedba ima 6 minut). */
+    NAJVEC_NA_ZAGON: 30,
+  },
+
   /** Prazno = skripta teče v preglednici (Razširitve → Apps Script). */
   ID_PREGLEDNICE: '',
 };
@@ -66,6 +94,15 @@ var NASTAVITVE = {
 /** Stolpca, ki ju doda skripta; pred stolpci iz aplikacije, ker se bereta prva. */
 var PREJETO = 'prejeto';
 var PRIPRAVA = 'prodajnaPriprava';
+
+/**
+ * Stolpec z id-jem kontakta v ActiveCampaignu ali z napako zadnjega poskusa.
+ *
+ * Deklariran TU in ne v razdelku AC na dnu: `VRSTNI_RED` ga navede že zgoraj,
+ * `var` na dnu datoteke pa se ovrednoti šele za njim — v vrstnem redu bi
+ * pristal `undefined` in stolpec bi vsakič pristal na koncu lista.
+ */
+var AC_STOLPEC = 'activeCampaign';
 
 /**
  * Izpeljani stolpec: prošnja za posvet, zapisana tako, da jo klicatelj vidi ob
@@ -155,6 +192,7 @@ var VRSTNI_RED = [
   'confidence',
   'selectedModules',
   PRIPRAVA,
+  AC_STOLPEC,
   'role',
   'roleOther',
   'businessType',
@@ -221,6 +259,9 @@ function doGet() {
     'Zadnja poslana pošta: ' + (lastnosti.getProperty('ZADNJA_POSTA') || 'še nobena'),
     'Zadnja napaka pošte: ' + (lastnosti.getProperty('ZADNJA_NAPAKA_POSTE') || 'brez'),
     'Zadnje urejanje stolpcev: ' + (lastnosti.getProperty('ZADNJE_UREJANJE') || 'še nobeno'),
+    'ActiveCampaign: ' + acStanje(),
+    'Zadnji v AC: ' + (lastnosti.getProperty('AC_ZADNJI') || 'še nobeden'),
+    'Zadnja napaka AC: ' + (lastnosti.getProperty('AC_ZADNJA_NAPAKA') || 'brez'),
     'Vrstic v listu (getMaxRows): ' + list.getMaxRows() + ', stolpcev: ' + list.getMaxColumns(),
   ];
   return ContentService.createTextOutput(vrstice.join('\n'));
@@ -233,6 +274,10 @@ function doPost(e) {
   if (!e || !e.postData || !e.postData.contents) {
     throw new Error('Zahteva je brez telesa.');
   }
+
+  // Merjeno od začetka obdelave: aplikacija čaka odgovor osem sekund in vse, kar
+  // sledi (Drive, vrstica, AC, pošta), se dogaja znotraj njih.
+  var zacetek = Date.now();
 
   var oddaja = JSON.parse(e.postData.contents);
   if (!oddaja.record) throw new Error('V telesu ni zapisa (record).');
@@ -258,7 +303,14 @@ function doPost(e) {
     }
 
     var vrednosti = zdruziVrednosti(oddaja, povezava);
-    zapisiVrstico(vrednosti);
+    var zapisana = zapisiVrstico(vrednosti);
+
+    // ActiveCampaign — ZA vrstico in v svojem try/catch, iz istega razloga kot
+    // pošta spodaj. Nikoli ne vrže: kar gre narobe, pristane kot "NAPAKA: …" v
+    // stolpcu `activeCampaign`, od koder to pobere ura (`posljiZaostaleVAC`).
+    if (NASTAVITVE.AC.POSILJAJ_TAKOJ) {
+      acVrstico(zapisana, vrednosti, zacetek);
+    }
 
     // ŠELE ZA vrstico in v svojem try/catch. Obvestilo je priročnost, vrstica je
     // zapis: padla pošta (kvota, napačen naslov) ne sme pomeniti, da aplikacija
@@ -344,6 +396,11 @@ function dopolniIzpeljano(vrednosti) {
     stevilo(vrednosti.lostMarginEUR) +
     stevilo(vrednosti.capacityEUR);
 
+  // Prazna vrednost in ne izpuščen ključ: `zapisiVrstico` ustvari stolpec samo
+  // za imena, ki so v vrednostih, izid klica v AC pa se zapiše ŠELE za vrstico —
+  // brez tega stolpca ne bi bilo kam zapisati in ura ne bi imela česa brati.
+  if (vrednosti[AC_STOLPEC] === undefined) vrednosti[AC_STOLPEC] = '';
+
   // Klicateljevih stolpcev ne sme zapisati NIHČE razen klicatelja. Danes jih v
   // oddaji ni in prazna vrednost bi nastala sama; to je varovalo za jutri, ko bi
   // kdo v CSV_COLUMNS dodal stolpec z enakim imenom in bi vsaka oddaja tiho
@@ -362,6 +419,15 @@ function dopolniIzpeljano(vrednosti) {
  * `true`, ker preglednica niz "true" ob zapisu pretvori v logično vrednost.
  */
 function jePosvet(vrednost) {
+  return jeResnica(vrednost);
+}
+
+/**
+ * Logična vrednost iz obeh oblik, v katerih pride: niz `'true'` iz aplikacije
+ * (`buildRowValues` vse pretvori v nize) in pravi `true` z lista, ker preglednica
+ * niz "true" ob zapisu pretvori sama.
+ */
+function jeResnica(vrednost) {
   return vrednost === true || String(vrednost).trim().toLowerCase() === 'true';
 }
 
@@ -407,15 +473,20 @@ function zapisiVrstico(vrednosti) {
   // vidi takoj (dostava pade v rezervno pot) — kar je neprimerno bolje od tihega
   // odmikanja vrstic proti dnu.
   list.appendRow(vrstica);
+  var stVrstice = list.getLastRow();
 
   // Potrditveno polje in spustni seznam za pravkar dodano vrstico. V try/catch,
   // ker je to kozmetika: napaka tu ne sme pomeniti, da aplikacija dostavo razume
   // kot neuspelo in prodajno pripravo prenese stranki (načelo 3 v glavi).
   try {
-    opremiVrstico(list, glava, list.getLastRow());
+    opremiVrstico(list, glava, stVrstice);
   } catch (err) {
     console.warn('Vrstice ni bilo mogoče opremiti: ' + err);
   }
+
+  // Kam je vrstica pristala — da zna klicatelj vanjo dopisati izid klica v
+  // ActiveCampaign, ne da bi list bral še enkrat.
+  return { list: list, glava: glava, vrstica: stVrstice };
 }
 
 /**
@@ -749,6 +820,7 @@ var POJASNILA = {
   confidence: 'Koliko izračuna je vnesel obiskovalec in koliko je privzetih vrednosti.',
   hourCostsEstimated: 'true = vsaj ena urna postavka ni vnesena, ampak izbrana ali privzeta.',
   followUpSequence: 'Ključ sekvence za CRM. Ne pove ničesar o stranki.',
+  activeCampaign: 'Id kontakta v ActiveCampaignu. Prazno ali "NAPAKA:" pomeni, da tam še ni — tako vrstico pobere ura (posljiZaostaleVAC).',
   poklicano: 'Obkljukajte, ko je klic opravljen.',
   sestanek: 'Izid klica: sestanek / ne želi / drugič.',
   opombe: 'Prosto besedilo. Oblikovano kot navadno besedilo, da datumi in formule ostanejo, kot jih vpišete.',
@@ -790,6 +862,7 @@ function urediVidez(list, glava) {
   if (vrstic) list.getRange(2, 1, vrstic, glava.length).clearDataValidations();
 
   var sirine = {
+    activeCampaign: 110,
     prejeto: 130,
     firstName: 110,
     lastName: 120,
@@ -1519,4 +1592,591 @@ function pridobiMapo() {
   var mapa = najdene.hasNext() ? najdene.next() : DriveApp.createFolder(NASTAVITVE.IME_MAPE_PRIPRAV);
   lastnosti.setProperty('ID_MAPE_PRIPRAV', mapa.getId());
   return mapa;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * ActiveCampaign
+ *
+ * Vsak lead, ki pristane v vrstici, gre tudi v ActiveCampaign: kontakt se
+ * ustvari ali posodobi po e-naslovu, doda na seznam in dobi oznake. Preglednica
+ * ostane popolna evidenca (štirideset stolpcev, surov JSON, triažne ocene), v
+ * CRM gre prodajno uporaben izvleček.
+ *
+ * ŠTIRIH REČI SE NE SPLAČA SPREMINJATI, ne da bi prej prebrali, zakaj so take:
+ *
+ * 1. AC JE ZA VRSTICO IN V SVOJEM try/catch. Isto načelo kot pri pošti (načelo 3
+ *    v glavi datoteke): padel CRM ne sme pomeniti, da aplikacija dostavo razume
+ *    kot neuspelo in prodajno pripravo prenese stranki. Vrstica je zapis, AC je
+ *    posledica.
+ * 2. IZID SE ZAPIŠE V STOLPEC `activeCampaign`. Prazna celica ali "NAPAKA: …"
+ *    pomeni "še ni v AC" in je edino, po čemer ura (`posljiZaostaleVAC`) ve, kaj
+ *    naj ponovi. Brez tega stolpca je vsak neuspeh tih in nepovraten.
+ * 3. NA VROČI POTI JE ROK. Aplikacija čaka odgovor osem sekund; če ga ne dobi,
+ *    pade v rezervno pot in pripravo prenese stranki. Zato se AC ob oddaji
+ *    pokliče le, če je do tedaj poteklo manj kot `AC_ROK_MS` — sicer ga pobere
+ *    ura. Lead ne sme biti izgubljen zato, ker je bil CRM počasen.
+ * 4. KLJUČ NI V TEJ DATOTEKI. Datoteka je v repozitoriju; ključ API bi bil s tem
+ *    v gitu. Naslov, ključ in id seznama so v lastnostih skripte, kar ima še eno
+ *    dobro lastnost: preživijo lepljenje nove različice te datoteke — za razliko
+ *    od E_NASLOV_ZA_OBVESTILA, ki ga je treba po vsakem prilepljanju vpisati
+ *    znova.
+ */
+
+/** Imena lastnosti skripte. Prve tri vpišete vi, ostalo si zapomni skripta. */
+var AC_LASTNOST = {
+  NASLOV: 'AC_NASLOV',
+  KLJUC: 'AC_KLJUC',
+  SEZNAM: 'AC_SEZNAM',
+  POLJA: 'AC_IDJI_POLJ',
+  OZNAKE: 'AC_IDJI_OZNAK',
+  ZADNJI: 'AC_ZADNJI',
+  ZADNJA_NAPAKA: 'AC_ZADNJA_NAPAKA',
+};
+
+/**
+ * Koliko časa od začetka obdelave še dovolimo, da gremo v AC na vroči poti.
+ *
+ * Osem sekund je rok aplikacije za CELOTEN odgovor, v katerem sta že shranjena
+ * priprava na Drive in zapisana vrstica. Štiri sekunde in pol pustijo klicem v
+ * AC (sync + seznam + oznake) dovolj prostora, hkrati pa je meja dovolj nizka,
+ * da počasen CRM ne potisne odgovora čez rok. Ob prekoračitvi se ne zgodi nič
+ * slabega: celica ostane prazna in vrstico pobere ura.
+ */
+var AC_ROK_MS = 4500;
+
+/**
+ * Polja po meri v ActiveCampaign.
+ *
+ * `tag` je personalizacijska oznaka (v AC vidna kot %LM10_PANOGA%) in je ključ,
+ * po katerem skripta polje najde — naslov se sme v AC preimenovati, oznaka ne.
+ * `stolpec` je ime stolpca v preglednici; `pretvori` obstaja tam, kjer je za
+ * človeka v CRM-ju uporabna druga oblika kot v preglednici.
+ *
+ * Polja ustvari `pripraviAC` in ne oddaja: ustvarjanje polja je poseg v tuj
+ * sistem in sodi v zaveden enkraten korak, ne na pot, po kateri teče vsak lead.
+ */
+var AC_POLJA = [
+  { tag: 'LM10_PODJETJE', naslov: 'LM-10 podjetje', vrsta: 'text', stolpec: 'companyName' },
+  { tag: 'LM10_PANOGA', naslov: 'LM-10 panoga', vrsta: 'text', stolpec: 'industryLabel' },
+  { tag: 'LM10_ZAPOSLENI', naslov: 'LM-10 zaposlenih', vrsta: 'text', stolpec: 'employeeCount' },
+  { tag: 'LM10_PROMET', naslov: 'LM-10 letni prihodek (EUR)', vrsta: 'text', stolpec: 'annualRevenueEUR' },
+  { tag: 'LM10_LETNO', naslov: 'LM-10 letni izračun (EUR)', vrsta: 'text', stolpec: LETNO },
+  { tag: 'LM10_KAPITAL', naslov: 'LM-10 enkratni kapital (EUR)', vrsta: 'text', stolpec: 'oneTimeCapitalEUR' },
+  { tag: 'LM10_ZANESLJIVOST', naslov: 'LM-10 zanesljivost vnosa', vrsta: 'text', stolpec: 'confidence' },
+  { tag: 'LM10_PODROCJA', naslov: 'LM-10 izbrana področja', vrsta: 'text', stolpec: 'selectedModules' },
+  // Textarea in ne text: tveganja so cel stavek na tveganje, ločena s podpičji.
+  { tag: 'LM10_TVEGANJA', naslov: 'LM-10 tveganja', vrsta: 'textarea', stolpec: 'risks' },
+  { tag: 'LM10_POSVET', naslov: 'LM-10 prosi za posvet', vrsta: 'text', stolpec: KLICI_TAKOJ },
+  { tag: 'LM10_PRIPRAVA', naslov: 'LM-10 prodajna priprava', vrsta: 'text', stolpec: PRIPRAVA },
+  { tag: 'LM10_SEKVENCA', naslov: 'LM-10 sekvenca', vrsta: 'text', stolpec: 'followUpSequence' },
+  { tag: 'LM10_VIR', naslov: 'LM-10 vir (utm_source)', vrsta: 'text', stolpec: 'utmSource' },
+  { tag: 'LM10_VLOGA', naslov: 'LM-10 vloga', vrsta: 'text', stolpec: 'role' },
+];
+
+/**
+ * Ena vrstica o stanju AC za odgovor doGet.
+ *
+ * Ista vloga kot pri pošti: ločiti mora "ni nastavljeno" od "nastavljeno, a
+ * pripraviAC še ni tekel" od "dela". Brez tega je edini znak, da polja niso
+ * pripravljena, napaka v stolpcu vsake vrstice.
+ */
+function acStanje() {
+  var n = acNastavitve();
+  if (!n) return 'IZKLOPLJEN (manjkajo lastnosti AC_NASLOV / AC_KLJUC / AC_SEZNAM)';
+  var polj = Object.keys(acIdjiPolj()).length;
+  return 'seznam ' + n.seznam + ', polj: ' + polj + (polj ? '' : ' — POŽENITE pripraviAC');
+}
+
+/**
+ * Nastavitve AC iz lastnosti skripte; null pomeni "ni priklopljeno".
+ *
+ * Null in ne napaka: brez nastavitev mora zbiralnik delovati natanko tako kot
+ * doslej — isti razlog, iz katerega aplikacija brez VITE_LEAD_WEBHOOK_URL deluje
+ * naprej in vse konča v lokalnih prenosih.
+ */
+function acNastavitve() {
+  var lastnosti = PropertiesService.getScriptProperties();
+  var naslov = String(lastnosti.getProperty(AC_LASTNOST.NASLOV) || '').trim();
+  var kljuc = String(lastnosti.getProperty(AC_LASTNOST.KLJUC) || '').trim();
+  var seznam = String(lastnosti.getProperty(AC_LASTNOST.SEZNAM) || '').trim();
+  if (!naslov || !kljuc || !seznam) return null;
+
+  // Konec s poševnico in morebitni /api/3 dol: naslov iz AC (Settings →
+  // Developer) je zapisan kot https://ime.api-us1.com, prilepi pa se marsikaj.
+  naslov = naslov.replace(/\/+$/, '').replace(/\/api\/3$/, '');
+  return { naslov: naslov, kljuc: kljuc, seznam: seznam };
+}
+
+/**
+ * En klic na API. Vrne razčlenjen odgovor ali vrže napako z razlogom AC-ja.
+ *
+ * `muteHttpExceptions` je nujen: brez njega UrlFetchApp ob 4xx vrže napako, v
+ * kateri je samo koda stanja — telo z razlogom ("Field perstag already exists",
+ * "Contact email is not valid") se izgubi in reševanje postane ugibanje.
+ */
+function acZahteva(pot, metoda, telo) {
+  var n = acNastavitve();
+  if (!n) throw new Error('ActiveCampaign ni nastavljen (glej pripraviAC).');
+  var odziv = UrlFetchApp.fetch(n.naslov + '/api/3/' + pot, acMoznosti(metoda, telo, n));
+  return acRazcleni(odziv, pot);
+}
+
+/** Možnosti zahteve, ločeno zato, ker jih `fetchAll` potrebuje kot objekte. */
+function acMoznosti(metoda, telo, n) {
+  var moznosti = {
+    method: metoda || 'get',
+    headers: { 'Api-Token': n.kljuc, Accept: 'application/json' },
+    contentType: 'application/json',
+    muteHttpExceptions: true,
+  };
+  if (telo) moznosti.payload = JSON.stringify(telo);
+  return moznosti;
+}
+
+function acRazcleni(odziv, pot) {
+  var koda = odziv.getResponseCode();
+  var besedilo = odziv.getContentText();
+  if (koda >= 300) {
+    throw new Error('AC ' + koda + ' na ' + pot + ': ' + besedilo.slice(0, 300));
+  }
+  try {
+    return JSON.parse(besedilo);
+  } catch (err) {
+    throw new Error('AC je na ' + pot + ' vrnil neberljiv odgovor: ' + besedilo.slice(0, 200));
+  }
+}
+
+/**
+ * ENKRATNI POSEG, ki ga poženete v urejevalniku (Zaženi): preveri povezavo,
+ * ustvari manjkajoča polja po meri in si zapomni njihove id-je.
+ *
+ * Obstaja iz istega razloga kot `preizkusPoste`. Dovoljenja za zunanje klice
+ * Google ne zahteva ob razmestitvi, ampak šele ob prvem klicu UrlFetchApp — web
+ * app tedaj pade z "Nimate dovoljenja", napako pa doPost namenoma pogoltne.
+ * Vrstice bi se pisale, v AC pa ne bi prišlo nič in od zunaj ne bi bilo videti,
+ * zakaj. Zagon te funkcije sproži vprašanje za dovoljenje takrat, ko ste ob
+ * računalniku, in v istem koraku dokaže, da ključ in id seznama držita.
+ *
+ * Varno je pognati večkrat: obstoječih polj ne podvaja in ničesar ne briše.
+ */
+function pripraviAC() {
+  var n = acNastavitve();
+  if (!n) {
+    throw new Error(
+      'Manjkajo lastnosti skripte. Nastavitve projekta → Lastnosti skripte, dodajte: ' +
+        AC_LASTNOST.NASLOV +
+        ' (npr. https://ime.api-us1.com), ' +
+        AC_LASTNOST.KLJUC +
+        ' (Settings → Developer) in ' +
+        AC_LASTNOST.SEZNAM +
+        ' (id seznama iz naslova /list/…).',
+    );
+  }
+
+  var seznam = acZahteva('lists/' + n.seznam, 'get');
+  var imeSeznama = seznam && seznam.list ? seznam.list.name : '(brez imena)';
+
+  var obstojeca = acObstojecaPolja();
+  var idji = {};
+  var ustvarjena = [];
+  AC_POLJA.forEach(function (polje) {
+    if (obstojeca[polje.tag]) {
+      idji[polje.tag] = obstojeca[polje.tag];
+      return;
+    }
+    idji[polje.tag] = acUstvariPolje(polje);
+    ustvarjena.push(polje.tag);
+  });
+
+  PropertiesService.getScriptProperties().setProperty(AC_LASTNOST.POLJA, JSON.stringify(idji));
+
+  var izid =
+    'Povezava deluje. Seznam: ' + imeSeznama + ' (id ' + n.seznam + ').\n' +
+    'Polja po meri: ' + Object.keys(idji).length + ' pripravljenih' +
+    (ustvarjena.length ? ', na novo ustvarjena: ' + ustvarjena.join(', ') : ', vsa so že obstajala') +
+    '.\n' +
+    'Naslednji korak: razmestite novo različico (Deploy → Manage deployments → svinčnik → New version).';
+  console.log(izid);
+  return izid;
+}
+
+/** Vsa polja po meri v računu, kot slovar oznaka → id. */
+function acObstojecaPolja() {
+  var najdena = {};
+  var odmik = 0;
+  while (true) {
+    var odgovor = acZahteva('fields?limit=100&offset=' + odmik, 'get');
+    var polja = (odgovor && odgovor.fields) || [];
+    polja.forEach(function (polje) {
+      if (polje.perstag) najdena[String(polje.perstag).replace(/^%|%$/g, '')] = String(polje.id);
+    });
+    if (polja.length < 100) return najdena;
+    odmik += 100;
+    // Varovalo pred neskončno zanko ob nenavadnem odgovoru: nihče nima 2000 polj.
+    if (odmik > 2000) return najdena;
+  }
+}
+
+/**
+ * Novo polje po meri in njegova vezava na vse sezname.
+ *
+ * Vezava (`fieldRels` z `relid: 0`) je ločen klic in je NUJNA: polje brez nje v
+ * AC obstaja, a ni pripeto na noben seznam — v kartici kontakta ga ni videti in
+ * personalizacijska oznaka v e-pošti ostane prazna. Napaka je videti kot "polja
+ * se ne polnijo", čeprav se vrednosti zapisujejo pravilno.
+ */
+function acUstvariPolje(polje) {
+  var odgovor = acZahteva('fields', 'post', {
+    field: {
+      title: polje.naslov,
+      type: polje.vrsta,
+      perstag: polje.tag,
+      descript: 'Samodejno iz vprašalnika LM-10.',
+      visible: 1,
+    },
+  });
+  var id = odgovor && odgovor.field ? String(odgovor.field.id) : '';
+  if (!id) throw new Error('AC ni vrnil id-ja polja ' + polje.tag + '.');
+
+  try {
+    acZahteva('fieldRels', 'post', { fieldRel: { field: id, relid: 0 } });
+  } catch (err) {
+    // Vezava je lahko že postavljena (ob ponovnem zagonu na pol ustvarjenem
+    // polju); to ni razlog, da bi priprava padla.
+    console.warn('Vezave polja ' + polje.tag + ' ni bilo mogoče postaviti: ' + err);
+  }
+  return id;
+}
+
+/** Zapomnjeni id-ji polj. Prazno pomeni, da `pripraviAC` še ni tekel. */
+function acIdjiPolj() {
+  var shranjeno = PropertiesService.getScriptProperties().getProperty(AC_LASTNOST.POLJA);
+  if (!shranjeno) return {};
+  try {
+    return JSON.parse(shranjeno);
+  } catch (err) {
+    return {};
+  }
+}
+
+/**
+ * Kontakt v AC: ustvari ali posodobi, doda na seznam, pripne oznake.
+ * Vrne id kontakta.
+ *
+ * `contact/sync` je namenoma izbran namesto `contacts`: ujema po e-naslovu, zato
+ * drugi obisk istega človeka ne naredi dvojnika, ampak dopolni, kar je vnesel
+ * tokrat.
+ */
+function posljiVAC(vrednosti) {
+  var n = acNastavitve();
+  if (!n) throw new Error('ActiveCampaign ni nastavljen.');
+
+  var email = String(vrednosti.email || '').trim();
+  if (!email) throw new Error('Zapis je brez e-naslova.');
+
+  var idji = acIdjiPolj();
+  if (!Object.keys(idji).length) {
+    throw new Error('Id-ji polj niso znani — poženite pripraviAC.');
+  }
+
+  var polja = [];
+  AC_POLJA.forEach(function (polje) {
+    var id = idji[polje.tag];
+    if (!id) return;
+    var vrednost = acVrednost(vrednosti, polje.stolpec);
+    if (vrednost === '') return;
+    polja.push({ field: id, value: vrednost });
+  });
+
+  var odgovor = acZahteva('contact/sync', 'post', {
+    contact: {
+      email: email,
+      firstName: acVrednost(vrednosti, 'firstName'),
+      lastName: acVrednost(vrednosti, 'lastName'),
+      phone: acVrednost(vrednosti, 'phone'),
+      fieldValues: polja,
+    },
+  });
+  var id = odgovor && odgovor.contact ? String(odgovor.contact.id) : '';
+  if (!id) throw new Error('AC ni vrnil id-ja kontakta.');
+
+  acNaSeznam(id, vrednosti, n.seznam);
+  acOznaci(id, acOznake(vrednosti));
+  return id;
+}
+
+/**
+ * Kontakt na seznam — s statusom, ki ga določa privolitev.
+ *
+ * Na seznam pride VSAK, ker ste seznam naredili za pregled nad tem, kdo je
+ * vprašalnik izpolnil. Status pa loči: 1 (naročen) samo tistemu, ki je v obrazcu
+ * privolil v ponudbe ali vsebine, 2 (odjavljen) vsem drugim. Razlika ni
+ * kozmetična — kampanja, poslana na seznam, gre samo na status 1, zato nekdo, ki
+ * je hotel le svoj izračun, iz tega seznama ne more dobiti oglasnega sporočila
+ * (ZEKom-2, člen o neposrednem trženju).
+ *
+ * `NASTAVITVE.AC.SAMO_S_PRIVOLITVIJO: false` to varovalo izklopi in naroči vse.
+ * Preden ga izklopite, se prepričajte, da je pravna podlaga za to zapisana
+ * drugje — skripta o njej ne ve nič.
+ */
+function acNaSeznam(idKontakta, vrednosti, idSeznama) {
+  var privolitev =
+    jeResnica(vrednosti.consentOffers) || jeResnica(vrednosti.consentContent);
+  var status = NASTAVITVE.AC.SAMO_S_PRIVOLITVIJO && !privolitev ? 2 : 1;
+  acZahteva('contactLists', 'post', {
+    contactList: { list: idSeznama, contact: idKontakta, status: status },
+  });
+}
+
+/**
+ * Oznake, ki jih dobi kontakt.
+ *
+ * Oznaka je v AC edino, na kar se da obesiti avtomatizacijo ("ko dobi oznako X,
+ * začni sekvenco"), zato tu ni okrasje, ampak sprožilec. Zato so ozke in
+ * predvidljive: osnovna za vse, panoga, sekvenca in posvet.
+ */
+function acOznake(vrednosti) {
+  var osnova = String(NASTAVITVE.AC.OSNOVNA_OZNAKA || 'LM-10');
+  var oznake = [osnova];
+
+  var panoga = acVrednost(vrednosti, 'industryLabel');
+  if (panoga) oznake.push(osnova + ' panoga: ' + panoga);
+
+  var sekvenca = acVrednost(vrednosti, 'followUpSequence');
+  if (sekvenca) oznake.push(osnova + ' sekvenca: ' + sekvenca);
+
+  if (jePosvet(vrednosti.consentConsulting)) oznake.push(osnova + ' posvet');
+  return oznake;
+}
+
+/**
+ * Oznake pripne kontaktu. Manjkajoče oznake ustvari, id-je si zapomni.
+ *
+ * Klici gredo skozi `fetchAll` in ne enega za drugim: štiri zaporedne zahteve so
+ * dobro sekundo, vzporedne pa toliko kot ena — na vroči poti, kjer aplikacija
+ * čaka odgovor, je to razlika med "pride takoj" in "pobere ga ura".
+ */
+function acOznaci(idKontakta, imena) {
+  var n = acNastavitve();
+  var zahteve = [];
+  imena.forEach(function (ime) {
+    var idOznake = acIdOznake(ime);
+    if (!idOznake) return;
+    var moznosti = acMoznosti('post', { contactTag: { contact: idKontakta, tag: idOznake } }, n);
+    moznosti.url = n.naslov + '/api/3/contactTags';
+    zahteve.push(moznosti);
+  });
+  if (!zahteve.length) return;
+
+  var odzivi = UrlFetchApp.fetchAll(zahteve);
+  odzivi.forEach(function (odziv, i) {
+    var koda = odziv.getResponseCode();
+    // 422 pomeni "kontakt to oznako že ima" — pri ponovnem obisku istega človeka
+    // je to pravilo in ne izjema, zato ne sme šteti za napako.
+    if (koda >= 300 && koda !== 422) {
+      console.warn('Oznake ' + imena[i] + ' ni bilo mogoče pripeti: ' + koda + ' ' + odziv.getContentText().slice(0, 200));
+    }
+  });
+}
+
+/** Id oznake iz predpomnilnika, sicer iz AC, sicer na novo ustvarjena. */
+function acIdOznake(ime) {
+  var lastnosti = PropertiesService.getScriptProperties();
+  var predpomnilnik = {};
+  try {
+    predpomnilnik = JSON.parse(lastnosti.getProperty(AC_LASTNOST.OZNAKE) || '{}');
+  } catch (err) {
+    predpomnilnik = {};
+  }
+  if (predpomnilnik[ime]) return predpomnilnik[ime];
+
+  var id = acPoisciOznako(ime);
+
+  if (!id) {
+    try {
+      var ustvarjena = acZahteva('tags', 'post', {
+        tag: { tag: ime, tagType: 'contact', description: 'Vprašalnik LM-10.' },
+      });
+      id = ustvarjena && ustvarjena.tag ? String(ustvarjena.tag.id) : '';
+    } catch (err) {
+      // AC zavrne podvojeno ime s 422. To pomeni, da oznaka OBSTAJA, iskanje pa
+      // je ni vrnilo — pri več sto oznakah zaradi strani, sicer zaradi ločil v
+      // imenu. Tedaj jo poiščemo po straneh; brez tega bi ostala nepripeta in
+      // avtomatizacija v AC se ne bi sprožila.
+      console.warn('Oznake "' + ime + '" ni bilo mogoče ustvariti: ' + err);
+      id = acPoisciOznako(ime, true);
+      if (!id) return '';
+    }
+  }
+  if (!id) return '';
+
+  predpomnilnik[ime] = id;
+  lastnosti.setProperty(AC_LASTNOST.OZNAKE, JSON.stringify(predpomnilnik));
+  return id;
+}
+
+/**
+ * Id oznake z natanko tem imenom, ali prazen niz.
+ *
+ * Ujemanje je NATANČNO in ne delno, kar iskanje v AC vrne: "LM-10" bi sicer
+ * pobral id oznake "LM-10 posvet" in vse leade označil narobe. `poStraneh` je
+ * počasnejša pot za primer, ko iskanje oznake ne vrne, čeprav obstaja.
+ */
+function acPoisciOznako(ime, poStraneh) {
+  var odmik = 0;
+  while (true) {
+    var pot = poStraneh
+      ? 'tags?limit=100&offset=' + odmik
+      : 'tags?limit=100&search=' + encodeURIComponent(ime);
+    var odgovor = acZahteva(pot, 'get');
+    var oznake = (odgovor && odgovor.tags) || [];
+    for (var i = 0; i < oznake.length; i++) {
+      if (String(oznake[i].tag) === ime) return String(oznake[i].id);
+    }
+    if (!poStraneh || oznake.length < 100) return '';
+    odmik += 100;
+    if (odmik > 5000) return '';
+  }
+}
+
+/** Vrednost stolpca kot niz; manjkajoče je prazno in ne "undefined". */
+function acVrednost(vrednosti, ime) {
+  var vrednost = vrednosti[ime];
+  if (vrednost === undefined || vrednost === null) return '';
+  if (vrednost instanceof Date) return Utilities.formatDate(vrednost, 'Europe/Ljubljana', 'yyyy-MM-dd HH:mm');
+  return String(vrednost).trim();
+}
+
+/**
+ * Klic v AC z vroče poti oddaje: rok, lasten try/catch in zapis izida v celico.
+ *
+ * Nikoli ne vrže. Vse, kar gre tu narobe, se konča z "NAPAKA: …" v stolpcu
+ * `activeCampaign` — od koder to čez nekaj minut pobere ura.
+ */
+function acVrstico(zapisana, vrednosti, zacetek) {
+  var lastnosti = PropertiesService.getScriptProperties();
+  if (!acNastavitve()) return;
+
+  if (Date.now() - zacetek > AC_ROK_MS) {
+    // Celica ostane prazna, kar je za uro isto kot napaka: vrstico bo pobrala.
+    console.warn('AC preskočen na vroči poti (rok ' + AC_ROK_MS + ' ms); pobere ga ura.');
+    return;
+  }
+
+  try {
+    var id = posljiVAC(vrednosti);
+    acZapisiIzid(zapisana, id);
+    lastnosti.setProperty(AC_LASTNOST.ZADNJI, new Date().toISOString() + ' — kontakt ' + id);
+    lastnosti.deleteProperty(AC_LASTNOST.ZADNJA_NAPAKA);
+  } catch (err) {
+    console.warn('Leada ni bilo mogoče poslati v AC: ' + err);
+    acZapisiIzid(zapisana, 'NAPAKA: ' + err);
+    lastnosti.setProperty(
+      AC_LASTNOST.ZADNJA_NAPAKA,
+      new Date().toISOString() + ' — ' + zakrijNaslove(String(err)),
+    );
+  }
+}
+
+/** Izid v stolpec `activeCampaign` pravkar zapisane vrstice. */
+function acZapisiIzid(zapisana, besedilo) {
+  if (!zapisana || !zapisana.glava) return;
+  var stolpec = zapisana.glava.indexOf(AC_STOLPEC) + 1;
+  if (!stolpec) return;
+  zapisana.list.getRange(zapisana.vrstica, stolpec).setValue(String(besedilo).slice(0, 500));
+}
+
+/**
+ * Vrstice, ki v AC še niso prišle — ali sploh nikoli, ali z napako.
+ *
+ * Dvoje opravlja hkrati: ponovi, kar je padlo ali kar je na vroči poti odpadlo
+ * zaradi roka, in ob prvem zagonu pošlje vse leade, ki so se nabrali PRED
+ * priklopom. Poženete jo lahko ročno; za samodejno ponavljanje glej
+ * `namestiUroZaAC`.
+ */
+function posljiZaostaleVAC() {
+  if (!acNastavitve()) {
+    console.log('ActiveCampaign ni nastavljen — nič za pošiljanje.');
+    return 'ni nastavljen';
+  }
+
+  // tryLock in ne waitLock: če ravno teče oddaja ali urejanje stolpcev, je bolje
+  // odstopiti in počakati na naslednji zagon ure, kot držati ključavnico in
+  // podaljševati odgovor, ki ga aplikacija čaka.
+  var kljucavnica = LockService.getScriptLock();
+  if (!kljucavnica.tryLock(10000)) {
+    console.log('Zaseden zapis — poskusim ob naslednjem zagonu.');
+    return 'zasedeno';
+  }
+
+  try {
+    var list = pridobiList();
+    var glava = preberiGlavo(list);
+    var stolpecAC = glava.indexOf(AC_STOLPEC) + 1;
+    var stolpecEmail = glava.indexOf('email') + 1;
+    if (!stolpecAC || !stolpecEmail) return 'lista brez stolpcev activeCampaign/email';
+
+    var vrstic = list.getLastRow() - 1;
+    if (vrstic < 1) return 'ni vrstic';
+
+    var podatki = list.getRange(2, 1, vrstic, glava.length).getValues();
+    var poslano = 0;
+    var padlo = 0;
+
+    for (var i = 0; i < podatki.length; i++) {
+      if (poslano + padlo >= NASTAVITVE.AC.NAJVEC_NA_ZAGON) break;
+
+      var stanje = String(podatki[i][stolpecAC - 1] || '').trim();
+      var email = String(podatki[i][stolpecEmail - 1] || '').trim();
+      if (!email) continue;
+      if (stanje && stanje.indexOf('NAPAKA') !== 0) continue;
+
+      var vrednosti = {};
+      for (var j = 0; j < glava.length; j++) vrednosti[glava[j]] = podatki[i][j];
+
+      try {
+        var id = posljiVAC(vrednosti);
+        list.getRange(i + 2, stolpecAC).setValue(id);
+        poslano++;
+      } catch (err) {
+        console.warn('Vrstica ' + (i + 2) + ' ni šla v AC: ' + err);
+        list.getRange(i + 2, stolpecAC).setValue(('NAPAKA: ' + err).slice(0, 500));
+        padlo++;
+      }
+    }
+
+    var izid = 'Poslano: ' + poslano + ', padlo: ' + padlo + '.';
+    PropertiesService.getScriptProperties().setProperty(
+      AC_LASTNOST.ZADNJI,
+      new Date().toISOString() + ' — ura: ' + izid,
+    );
+    console.log(izid);
+    return izid;
+  } finally {
+    kljucavnica.releaseLock();
+  }
+}
+
+/**
+ * Ura, ki vsakih deset minut pobere zaostanek. Poženite enkrat, ročno.
+ *
+ * Prej pobriše svoje starejše ure: dvakrat pognana funkcija bi sicer pustila dva
+ * sprožilca in vsak lead bi šel v AC dvakrat.
+ */
+function namestiUroZaAC() {
+  odstraniUroZaAC();
+  ScriptApp.newTrigger('posljiZaostaleVAC').timeBased().everyMinutes(10).create();
+  console.log('Ura nameščena: posljiZaostaleVAC vsakih 10 minut.');
+}
+
+function odstraniUroZaAC() {
+  var koliko = 0;
+  ScriptApp.getProjectTriggers().forEach(function (sprozilec) {
+    if (sprozilec.getHandlerFunction() === 'posljiZaostaleVAC') {
+      ScriptApp.deleteTrigger(sprozilec);
+      koliko++;
+    }
+  });
+  if (koliko) console.log('Odstranjenih ur: ' + koliko + '.');
+  return koliko;
 }
