@@ -21,6 +21,7 @@ const PROGRESS: StoredProgress = {
   triageScores: { zamude: 3 },
   triageSelection: ['zamude'],
   inputsModuleId: 'zamude',
+  submitted: false,
 };
 
 describe('progressStorage', () => {
@@ -46,7 +47,9 @@ describe('progressStorage', () => {
 
   it('zapis stare različice sheme se zavrže', () => {
     // Sicer bi po objavi nove različice orodja obudil vprašalnik, ki mu vsebina
-    // ne ustreza več — npr. odgovore za modul, ki ga segment ne pozna.
+    // ne ustreza več — npr. odgovore za modul, ki ga segment ne pozna. Ali pa
+    // zapis s korakom 'results' iz časa, ko so rezultati stali pred obrazcem:
+    // ta bi obrazec obšel.
     store.set('lm10-napredek', JSON.stringify({ ...PROGRESS, version: 0 }));
     expect(readProgress()).toBeNull();
     expect(store.has('lm10-napredek')).toBe(false);
@@ -56,6 +59,18 @@ describe('progressStorage', () => {
     // Trditev v Koraku 1 ("nič ne zapusti brskalnika, dokler se sami ne odločite
     // oddati obrazca") velja za shrambo enako kot za omrežje.
     saveProgress(PROGRESS);
+    const raw = store.get('lm10-napredek') ?? '';
+    for (const field of ['email', 'firstName', 'lastName', 'phone', 'taxNumber', 'consent']) {
+      expect(raw, field).not.toContain(field);
+    }
+  });
+
+  it('oddaja preživi osvežitev, kontakt pa ne', () => {
+    // Obrazec stoji pred rezultati: brez zastavice bi osvežitev na rezultatih
+    // vrnila vprašalnik in terjala drugo oddajo. Kontakt kljub temu ne sme v
+    // shrambo — zastavica je edino, kar iz obrazca ostane.
+    saveProgress({ ...PROGRESS, step: 'results', submitted: true });
+    expect(readProgress()?.submitted).toBe(true);
     const raw = store.get('lm10-napredek') ?? '';
     for (const field of ['email', 'firstName', 'lastName', 'phone', 'taxNumber', 'consent']) {
       expect(raw, field).not.toContain(field);

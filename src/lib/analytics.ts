@@ -26,14 +26,17 @@ export type AnalyticsEvent =
   | 'lm10_industry_selected'
   /** Zapuščena triaža: koliko področij gre v podroben izračun. */
   | 'lm10_triage_done'
-  /** Rezultat je na zaslonu — konec brezplačnega dela. */
+  /** Rezultat je na zaslonu — po oddaji obrazca. */
   | 'lm10_results_view'
-  /** Obiskovalec je odprl obrazec za PDF. */
+  /** Obiskovalec je prišel do obrazca (naprej iz vnosov) — imenovalec deleža oddaj. */
   | 'lm10_email_gate_view'
   /** Obrazec oddan. */
   | 'lm10_lead_submitted'
-  /** Ponovni prenos poročila — pove, kako pogosto samodejni prenos odpove. */
-  | 'lm10_report_redownload'
+  /**
+   * Prenos strankinega poročila z rezultatov. Vsak prenos je ročen (ob oddaji se
+   * ne prenese nič), zato dogodek pove, koliko obiskovalcev poročilo sploh vzame.
+   */
+  | 'lm10_report_download'
   /** Zaključena finančna osnova — vir vsake postavke (vneseno/povprečje/razpon/prazno). */
   | 'lm10_cost_basis_done'
   /** Validacija je ustavila oddajo — katero polje ustavi največ ljudi. */

@@ -1,7 +1,8 @@
 # LM-10 — Kalkulator "Koliko vas stane sedanji način dela?"
 
-Interaktivni kalkulator skritih stroškov sedanjega načina dela. Obiskovalec vnese svoje številke in
-takoj — še **pred** vnosom e-naslova — dobi razčlenjen letni izračun z razkrito metodologijo.
+Interaktivni kalkulator skritih stroškov sedanjega načina dela. Obiskovalec vnese svoje številke,
+pusti kontakt in dobi razčlenjen letni izračun z razkrito metodologijo — na zaslonu in kot PDF
+poročilo, ki ga prenese s klikom.
 
 ## Zagon
 
@@ -57,13 +58,13 @@ Ob spremembi dejavnosti se odgovori zavržejo samo, kadar se spremeni tudi **seg
 
 | URL | Segment | Koraki |
 |---|---|---|
-| `?s=proizvodnja` | Proizvodnja | 7 |
-| `?s=logistika` | Logistika in transport | 7 |
-| `?s=trgovina` | Veleprodaja in distribucija | 7 |
-| `?s=maloprodaja` | Maloprodaja | 7 |
-| `?s=storitve` | Storitve in projekti | 7 |
-| `?s=racunovodstvo` | Računovodski servis | 7 |
-| `?s=splosno` | Direktor / CFO | 7 |
+| `?s=proizvodnja` | Proizvodnja | 8 |
+| `?s=logistika` | Logistika in transport | 8 |
+| `?s=trgovina` | Veleprodaja in distribucija | 8 |
+| `?s=maloprodaja` | Maloprodaja | 8 |
+| `?s=storitve` | Storitve in projekti | 8 |
+| `?s=racunovodstvo` | Računovodski servis | 8 |
+| `?s=splosno` | Direktor / CFO | 8 |
 
 Imena so čista imena panog. Velikostni razred (`1–9` / `10–49` / `50–249` / `250+`) se oznaki pripne
 ob izrisu iz vnesenega števila zaposlenih — `segmentLabelWithSize` v `config/copy/index.ts` nad
@@ -72,7 +73,7 @@ ob izrisu iz vnesenega števila zaposlenih — `segmentLabelWithSize` v `config/
 ## Tok
 
 ```
-dejavnost → zaposleni → [kontekst] → [triaža] → [stroškovni predpostavki] → vnosi → rezultat → e-naslov
+dejavnost → zaposleni → [kontekst] → [triaža] → [stroškovni predpostavki] → vnosi → kontakt → rezultat (+ PDF)
 ```
 
 ```mermaid
@@ -100,10 +101,10 @@ flowchart TD
         K4["Tveganje<br/>brez zneska"]
     end
 
-    K --> R["Rezultati<br/>zneski, potencial, tveganja"]
-    R --> M["Oddaja e-naslova<br/>kontakt in soglasja"]
-    M --> P1["PDF za stranko<br/>rezultati in akcijski načrt"]
-    M --> P2["Prodajni paket<br/>kvalifikacija, ocena, playbook"]
+    K --> M["Obrazec s kontaktom<br/>kontakt in soglasja"]
+    M --> R["Rezultati<br/>zneski, potencial, tveganja"]
+    R --> P1["PDF za stranko<br/>gumb »Prenesi PDF poročilo«"]
+    M --> P2["Prodajni paket<br/>webhook; brez njega gumb na rezultatih"]
 ```
 
 Dve zakonitosti, ki ju diagram pokaže, iz kode pa nista očitni. Prva: **panoga ni os razvejanja —
@@ -490,8 +491,9 @@ obrazca — to je na strani tudi izrecno napisano.
 
 Napredek se hrani v `sessionStorage` (`src/lib/progressStorage.ts`), da osvežitev strani ne izbriše
 desetih minut dela. Trditev zgoraj s tem ostane resnična: zapis ne zapusti naprave, velja za en
-zavihek in eno sejo, kontaktnih podatkov iz obrazca pa ne vsebuje — ti nastanejo šele z oddajo, ki je
-zavestna odločitev. Ob oddaji se zapis pobriše.
+zavihek in eno sejo, kontaktnih podatkov iz obrazca pa ne vsebuje — ne pred oddajo ne po njej. Po
+oddaji zapis ostane, z zastavico `submitted` in brez kontakta: obrazec stoji pred rezultati, zato
+osvežitev na rezultatih ne sme vrniti vprašalnika in terjati druge oddaje. Zapis umre s sejo zavihka.
 
 ## Ohranjanje toka
 
@@ -510,8 +512,13 @@ Trije mehanizmi, ki jih je lahko spregledati, ker se pokažejo šele ob napaki:
 nobene zunanje skripte in ne postavi nobenega piškotka — brez nameščenega GTM se dogodki naberejo v
 polju in nikamor ne odidejo.
 
-Dogodki: `lm10_step_view`, `lm10_industry_selected`, `lm10_triage_done`, `lm10_results_view`,
-`lm10_email_gate_view`, `lm10_lead_submitted`, `lm10_report_redownload`.
+Dogodki: `lm10_step_view`, `lm10_industry_selected`, `lm10_triage_done`, `lm10_email_gate_view`,
+`lm10_lead_submitted`, `lm10_results_view`, `lm10_report_download`.
+
+`lm10_email_gate_view` šteje samo prihod na obrazec naprej iz vnosov (imenovalec deleža oddaj);
+`lm10_results_view` se sproži po oddaji; `lm10_report_download` ob vsakem prenosu poročila, ker je
+vsak ročen. Dogodek se je prej imenoval `lm10_report_redownload` — sprožilce v GTM je treba
+preimenovati.
 
 `lm10_lead_submitted` nosi tudi lastnost `consulting` (`da`/`ne`) — ali je obiskovalec obkljukal poziv
 za svetovanje na zadnjem koraku. Brez nje o učinku tega poziva ni znano nič.
@@ -520,11 +527,14 @@ za svetovanje na zadnjem koraku. Brez nje o učinku tega poziva ni znano nič.
 število izmerjenih področij, obkljukan poziv). Kar potrebuje prodaja, potuje po webhooku s privolitvijo;
 analitika meri lijak in ne strank.
 
-## Obrazec za prevzem poročila
+## Obrazec pred rezultati
 
-`src/components/Results/EmailGate.tsx` zbere kontakt in privolitve. Obvezni so **ime, priimek, ime
-podjetja, e-naslov** in **prva privolitev**; telefon in davčna sta neobvezna in označena z
-"(neobvezno)".
+`src/components/Results/EmailGate.tsx` zbere kontakt in privolitve. Stoji **med vnosi in rezultati**
+kot oštevilčen korak: kontakt odklene izračun na zaslonu in PDF poročilo. Gumb »Pokaži rezultate«
+ničesar ne prenese — poročilo prenese gumb na rezultatih. Oddan obrazec se ne prikaže drugič: kdor se
+z rezultatov vrne v vnose in popravi številke, pride naravnost na rezultate. Obvezni so **ime,
+priimek, ime podjetja, e-naslov** in **prva privolitev**; telefon in davčna sta neobvezna in označena
+z "(neobvezno)".
 
 Tri odločitve, ki jih je vredno poznati pred urejanjem:
 
@@ -558,66 +568,76 @@ teče na podpoti `/leadmagnetdl/`.
 
 ## Kaj se zgodi ob oddaji obrazca
 
-**Ob delujočem webhooku dobi stranka natanko eno datoteko: svoje poročilo.** Prodajna priprava je
-interni dokument — napisan je O stranki (ocena ustreznosti, priporočilo licenc, pričakovani ugovori
-z odgovori) in ne ZANJO — zato tedaj na njeno napravo ne gre. Dokler webhooka ni, se prenese tudi
-njej; glej razlago pod tabelo.
+**Ob oddaji se ne prenese nič.** Obiskovalec številk še ni videl; po oddaji pristane na rezultatih,
+poročilo pa prenese s klikom na »Prenesi PDF poročilo« v pasu na dnu. PDF se zgradi ob kliku iz
+trenutnega stanja, zato ustreza zaslonu tudi po popravku vnosov. Vsak klik je sveža gesta, zato
+vprašanje, koliko prenosov brskalnik dovoli iz ene, odpade.
+
+**Ob delujočem webhooku stranka prodajne priprave ne vidi.** Priprava je interni dokument — napisan
+je O stranki (ocena ustreznosti, priporočilo licenc, pričakovani ugovori z odgovori) in ne ZANJO —
+zato tedaj na njeno napravo ne gre. Dokler webhooka ni, se ji na rezultatih ponudi kot gumb; glej
+razlago pod tabelo.
 
 Dostava je odvisna od build spremenljivke **`VITE_LEAD_WEBHOOK_URL`** (`.env`):
 
 - **Webhook nastavljen:** ob oddaji se na naslov POST-a JSON (`src/lib/submitLead.ts`) z izvoznim
-  zapisom (`buildLeadExportRecord`, `src/lib/exportRecord.ts`), prodajno pripravo kot HTML in
+  zapisom (`buildLeadExportRecord`, `src/lib/exportRecord.ts`), prodajno pripravo kot HTML,
   vrstico za preglednico (`sheet`: ista glava in vrstica kot pri izvozu CSV — sprejemniku tako ni
-  treba poznati nobenega polja izračuna). S tem se prvič lahko zaprejo kalibracijske zanke
-  ("preveriti po ~50 vnosih"). Zahteva ima osemsekundno omejitev in `keepalive`: viseč strežnik ne
-  sme zadrževati strankinega prenosa, zaprt zavihek pa ne sme pobrisati leada. Tip vsebine je
-  `text/plain` in ne `application/json`: slednji sproži predhodno zahtevo CORS (`OPTIONS`), na
-  katero Apps Script ne odgovori. Pri pripravi, večji od 60 KB, se `keepalive` opusti — brskalnik
-  večjega telesa ne skrajša, ampak celo zahtevo zavrne.
-- **Webhook ni nastavljen (privzeto) ali dostava ne uspe:** prodajna priprava se prenese k stranki,
-  zahvalni zaslon pa jo prosi, naj jo posreduje pred sestankom. To je **začasno stanje**: dokler
-  naslova ni, je posredovanje po stranki edina pot, po kateri svetovalec pripravo sploh dobi. Cena
-  je, da ima stranka na disku dokument, napisan o njej. Ko naslov nastavite, prenos ugasne sam —
-  preklop je uspeh dostave in ne dodatna zastavica.
-- **Interni način `?debug=1`:** pripravo prenese tudi ob delujočem webhooku. Namenjen razvoju in
-  pregledu vsebine; na zahvalnem zaslonu je označen z „[interno]".
+  treba poznati nobenega polja izračuna) in **obema PDF-jema kot base64 prilogama** (`attachments`:
+  poročilo za stranko in priprava na pogovor, zgrajena v brskalniku tik pred oddajo —
+  `buildAttachments` v `src/lib/deliverLead.ts`). Sprejemnik ju pripne k e-obvestilu prodaji. Če
+  PDF ne nastane ali se kos jsPDF ne naloži, gre oddaja naprej brez priloge — lead je vreden več.
+  Isto velja za prodajno pripravo samo: če njena sestava vrže izjemo, odideta zapis in strankin
+  PDF brez nje (`salesReportHtml` je tedaj prazen niz, sprejemnik ga preskoči, stolpec s pripravo
+  ostane prazen). Dostava ni pogojena s pripravo — dokler je bila, je napaka v prodajnem delu
+  lead tiho pokopala.
+  S tem se prvič lahko zaprejo kalibracijske zanke ("preveriti po ~50 vnosih"). Rok zahteve raste
+  s telesom (`requestTimeoutMs`: osem sekund osnove plus čas prenosa po počasni mobilni povezavi —
+  samo HTML ≈ 8 s, s prilogama ≈ 12 s): viseč strežnik ne sme zadrževati rezultatov v nedogled,
+  prekoračitev pa šteje kot neuspela dostava in pripravo pošlje stranki, zato je lažen padec dražji
+  od daljšega čakanja. Rezultati se pokažejo, ko je POST končan — šele takrat je znano, ali stranka
+  gumb za pripravo potrebuje. Tip vsebine je `text/plain` in ne `application/json`: slednji sproži
+  predhodno zahtevo CORS (`OPTIONS`), na katero Apps Script ne odgovori. `keepalive` (zahteva
+  preživi zaprt zavihek) velja le do 60 KB telesa — brskalnik večjega ne skrajša, ampak celo
+  zahtevo zavrne — zato s prilogama vedno odpade; sprejeto, ker obiskovalec med oddajo čaka na
+  rezultate ob zasedenem gumbu.
+- **Webhook ni nastavljen (privzeto) ali dostava ne uspe:** rezultati ponudijo gumb »Priprava v
+  PDF«, besedilo nad njim pa stranko prosi, naj pripravo posreduje pred sestankom. To je **začasno
+  stanje**: dokler naslova ni, je posredovanje po stranki edina pot, po kateri svetovalec pripravo
+  sploh dobi. Cena je, da ima stranka na disku dokument, napisan o njej. Ko naslov nastavite, gumb
+  ugasne sam — preklop je uspeh dostave in ne dodatna zastavica.
+- **Interni način `?debug=1`:** gumb se ponudi tudi ob delujočem webhooku. Namenjen razvoju in
+  pregledu vsebine; besedilo nad njim je označeno z „[interno]".
 
 | Datoteka | Za koga | Kaj vsebuje |
 |---|---|---|
-| `datalab-analiza-skritih-stroskov-<podjetje>-<datum>.pdf` | stranka | `src/lib/pdf.ts` — hero zneski, graf, razčlenitev, tveganja, 3 ukrepi |
-| `datalab-prodajna-priprava-<podjetje>-<datum>.pdf` | svetovalec (webhook; brez njega prek stranke) | `src/lib/pdfSales.ts` |
+| `datalab-analiza-skritih-stroskov-<podjetje>-<datum>.pdf` | stranka (gumb na rezultatih) in prodaja (priloga e-obvestila) | `src/lib/pdf.ts` — hero zneski, graf, razčlenitev, tveganja, 3 ukrepi |
+| `datalab-priprava-na-pogovor-<podjetje>-<datum>.pdf` | svetovalec (priloga e-obvestila; brez webhooka gumb pri stranki) | `src/lib/pdfSales.ts` |
 
-HTML različico prodajne priprave nosi **samo webhook payload** (`buildSalesReportHtml`); z zahvalnega
-zaslona se je umaknila. Tretji prenos iz iste geste je brskalnik najpogosteje zavrgel, PDF pa vsebino
-nosi enako dobro.
-
-Obe datoteki gresta skozi **en** `downloadSequentially` (`src/lib/download.ts`), z razmikom ~1,2 s.
-Brskalnik iz ene geste zanesljivo dovoli en prenos; naslednje bodisi pogojuje z dovoljenjem
-("Prenesti več datotek?") bodisi jih tiho zavrže.
+HTML različico prodajne priprave nosi **samo webhook payload** (`buildSalesReportHtml`); na zaslonu je
+ni. Sprejemnik jo shrani na Drive in povezavo vpiše v vrstico; PDF v prilogi nosi isto vsebino.
 
 Tri pravila, ki jih ni dovoljeno razveljaviti:
 
-- **Strankina datoteka je PRVA v svežnju.** Prvi prenos je edini zajamčen (najbliže je uporabnikovi
-  gesti), napaka ali zamuda v internem delu pa ga ne sme zadrževati — zato prodajni del stoji v
-  `try/catch` in prenos se zgodi tudi, če ta odpade. Zahvalni zaslon ponudi še gumb za ponovni
-  prenos: prenosa bloba na iOS Safari ni mogoče jamčiti in trditev "datoteka je v mapi za
-  prenose" ni bila preverljiva.
-- **Webhook gre ZA prenosoma, nikoli mednju.** Doslej je strankino poročilo odšlo takoj, priprava pa
-  šele za osemsekundnim rokom webhooka in gradnjo PDF-ja; do tedaj je gesta ugasnila in drugi prenos
-  je tiho odpadel. Zato se priprava zgradi **pred** prenosom in odide skupaj s poročilom, POST pa
-  sledi. Ko webhook deluje, prodajne datoteke sploh ni v svežnju in vprašanje odpade. Varujeta ju
-  testa "obe poročili gresta iz ene geste" in "webhook ne stoji pred prenosoma"
-  (`src/lib/deliverLead.test.ts`).
+- **Ob oddaji se na napravo ne prenese nič.** Gumb obrazca obljublja rezultate in jih pokaže; prenos
+  je vedno klik na rezultatih. Samodejni prenos ob oddaji je nekoč pomenil dva prenosa in webhook iz
+  iste geste — drugi prenos je na iOS tiho odpadal, gesta pa je med rokom webhooka ugasnila. PDF-ja
+  se ob oddaji sicer zgradita, a v pomnilniku, in odideta na strežnik kot prilogi obvestila.
+- **Priprava k stranki samo, kadar do svetovalca nima druge poti** — brez webhooka, ob neuspeli
+  dostavi ali v internem načinu — in tudi tedaj kot gumb, nikoli samodejno. Odloči se PRED
+  prikazom rezultatov, da se gumb ne pojavi pod obiskovalcem naknadno. Varuje
+  `src/lib/deliverLead.test.ts`.
 - **Generatorji dokumenta ne prenašajo — vrnejo `DownloadFile`.** Dokler je vsak klical
   `doc.save()`, je dokument prenašal sam sebe po poti jsPDF, ki je ni mogoče ne zakasniti ne uvrstiti
-  v vrsto. Zdaj vodi do prenosa ena sama pot, ki tudi `URL.revokeObjectURL` pokliče **zakasnjeno**:
-  takojšen preklic je vir podatkov odstranil, preden ga je brskalnik prebral, in prenos je odpovedal.
+  v vrsto. Zdaj vodi do prenosa ena sama pot (`src/lib/download.ts`), ki tudi `URL.revokeObjectURL`
+  pokliče **zakasnjeno**: takojšen preklic je vir podatkov odstranil, preden ga je brskalnik prebral,
+  in prenos je odpovedal.
 
-Gumb "Priprava v PDF" na zahvalnem zaslonu ostane kot rezerva, če bi kdo dovoljenje za več datotek
-zavrnil. Pod njim stoji **kartica s kontaktom Datalab prodaje** (telefon kot `tel:`, e-naslov kot
-`mailto:`, konstanta `SALES_CONTACT` v `EmailGate.tsx`): poziv na obrazcu obljublja klic svetovalca,
-kdor pa noče čakati, mora imeti kam poklicati takoj. Prikaže se vsem, tudi tistemu, ki je zahtevek za
-svetovanje že oddal.
+Gumb »Priprava v PDF« in **kartica s kontaktom Datalab prodaje** (telefon kot `tel:`, e-naslov kot
+`mailto:`, konstanta `SALES_CONTACT` v `src/config/salesContact.ts`) živita v
+`src/components/Results/NextSteps.tsx` na dnu rezultatov — vsebina nekdanjega zahvalnega zaslona.
+Poziv na obrazcu obljublja klic svetovalca, kdor pa noče čakati, mora imeti kam poklicati takoj.
+Kartica se prikaže vsem, tudi tistemu, ki je zahtevek za svetovanje že oddal.
 
 ### Priprava na pogovor
 

@@ -1,5 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
-import { leadWebhookUrl, submitLead, type LeadSubmission } from './submitLead';
+import {
+  attachmentFromFile,
+  leadWebhookUrl,
+  requestTimeoutMs,
+  submitLead,
+  type LeadAttachment,
+  type LeadSubmission,
+} from './submitLead';
 import { buildLeadExportRecord, CSV_COLUMNS, buildRowValues } from './exportRecord';
 import type { ResultTotals } from './potential';
 
@@ -149,11 +156,65 @@ describe('submitLead', () => {
     expect(fetchImpl.mock.calls[1][1].keepalive).toBe(false);
   });
 
+  /**
+   * Prilogi sta del oddaje in ne posebna pot: gresta v isto telo, nespremenjeni.
+   * Zaradi njune velikosti `keepalive` odpade — to je sprejeto (glej submitLead.ts).
+   */
+  it('prilogi gresta v telo nespremenjeni, keepalive pa zaradi velikosti odpade', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    const attachments: LeadAttachment[] = [
+      { filename: 'porocilo.pdf', contentType: 'application/pdf', base64: 'A'.repeat(70_000) },
+      { filename: 'priprava.pdf', contentType: 'application/pdf', base64: 'QQ==' },
+    ];
+
+    await submitLead({ ...SUBMISSION, attachments }, 'https://x', fetchImpl as never);
+
+    const [, init] = fetchImpl.mock.calls[0];
+    expect(JSON.parse(init.body).attachments).toEqual(attachments);
+    expect(init.keepalive).toBe(false);
+  });
+
   it('napaka strežnika ali omrežja NIKOLI ne vrže — vrne false', async () => {
     const serverError = vi.fn().mockResolvedValue({ ok: false, status: 500 });
     expect(await submitLead(SUBMISSION, 'https://x', serverError as never)).toBe(false);
 
     const networkError = vi.fn().mockRejectedValue(new Error('offline'));
     expect(await submitLead(SUBMISSION, 'https://x', networkError as never)).toBe(false);
+  });
+});
+
+describe('attachmentFromFile', () => {
+  it('pretvori datoteko generatorja v base64 z imenom in tipom PDF', async () => {
+    const file = { filename: 'x.pdf', blob: new Blob([Uint8Array.from([0x25, 0x50, 0x44, 0x46])]) };
+    expect(await attachmentFromFile(file)).toEqual({
+      filename: 'x.pdf',
+      contentType: 'application/pdf',
+      base64: 'JVBERg==',
+    });
+  });
+
+  /**
+   * Pretvorba teče po kosih po 32 KiB (meja sklada pri `String.fromCharCode`);
+   * PDF je večji od enega kosa, zato mora šiv med kosoma ostati brez izgube.
+   */
+  it('večjo datoteko pretvori po kosih brez izgube', async () => {
+    const bytes = Uint8Array.from({ length: 100_000 }, (_, i) => (i * 7) & 0xff);
+    const { base64 } = await attachmentFromFile({ filename: 'x.pdf', blob: new Blob([bytes]) });
+
+    const decoded = atob(base64);
+    expect(decoded.length).toBe(bytes.length);
+    expect(Array.from(bytes, (byte) => String.fromCharCode(byte)).join('')).toBe(decoded);
+  });
+});
+
+describe('requestTimeoutMs', () => {
+  /**
+   * Rok raste s telesom: samo HTML ostane pri osmih sekundah kot doslej, s
+   * prilogama (≈ 175 kB) pa počasna mobilna povezava dobi čas za prenos —
+   * prekoračitev namreč pošlje prodajno pripravo stranki.
+   */
+  it('samo HTML ≈ 8 s, s prilogama ≈ 12 s', () => {
+    expect(requestTimeoutMs(10_000)).toBe(8_200);
+    expect(requestTimeoutMs(175_000)).toBe(11_500);
   });
 });

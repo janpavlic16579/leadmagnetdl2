@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ReactNode } from 'react';
+import { lazy, Suspense, useState, type ReactNode } from 'react';
 import { getModules, type ModuleDefinition, type ModuleOutput } from '../../config/modules';
 import type { SegmentConfig } from '../../config/segments';
 import { SHARED_COPY, type ResolvedSegmentCopy } from '../../config/copy';
@@ -16,6 +16,8 @@ import { HeroBand } from './HeroBand';
 import { ProjectionBars } from './ProjectionBars';
 import { ResultsSummary } from './ResultsSummary';
 import { RiskCard } from './RiskCard';
+import { NextSteps } from './NextSteps';
+import { SALES_CONTACT } from '../../config/salesContact';
 import buttonStyles from '../../styles/buttons.module.css';
 import styles from './ResultsView.module.css';
 
@@ -53,7 +55,17 @@ interface ResultsViewProps {
   /** Izračunan razlog nizke zanesljivosti — glej ConfidenceNote. */
   confidenceReason?: string | null;
   onMeasureModule: (id: string) => void;
-  onProceedToEmail: () => void;
+  /**
+   * Prenos strankinega poročila. Zgradi se ob kliku iz TRENUTNEGA stanja in ne
+   * iz datoteke, shranjene ob oddaji: obiskovalec sme po oddaji nazaj v vnose
+   * in PDF mora ustrezati zaslonu, s katerega ga prenaša.
+   */
+  onDownloadPdf: () => Promise<void>;
+  /** Kaj sledi rezultatom (NextSteps) — vsebina nekdanjega zahvalnega zaslona. */
+  consultingRequested: boolean;
+  onDownloadSalesPdf?: () => void | Promise<void>;
+  internalMode?: boolean;
+  followUpSequenceDebug?: string;
   onBack: () => void;
 }
 
@@ -71,9 +83,33 @@ export function ResultsView({
   stepLabel,
   confidenceReason,
   onMeasureModule,
-  onProceedToEmail,
+  onDownloadPdf,
+  consultingRequested,
+  onDownloadSalesPdf,
+  internalMode,
+  followUpSequenceDebug,
   onBack,
 }: ResultsViewProps) {
+  /**
+   * Gradnja PDF-ja traja; brez straže dvoklik ustvari dve datoteki. Napaka se
+   * pokaže tik ob gumbu in ne nikjer: odpoved priprave bi sicer obiskovalca
+   * pustila pred gumbom, ki izgleda, kot da ni bil pritisnjen.
+   */
+  const [downloading, setDownloading] = useState(false);
+  const [downloadFailed, setDownloadFailed] = useState(false);
+  const handleDownload = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    setDownloadFailed(false);
+    try {
+      await onDownloadPdf();
+    } catch {
+      setDownloadFailed(true);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const isAccounting = segment.id === 'racunovodstvo';
   const modules = getModules(segment.moduleIds);
 
@@ -279,16 +315,39 @@ export function ResultsView({
         </Reveal>
       ) : null}
 
+      <NextSteps
+        consultingRequested={consultingRequested}
+        onDownloadSalesPdf={onDownloadSalesPdf}
+        internalMode={internalMode}
+        followUpSequenceDebug={followUpSequenceDebug}
+      />
+
       <div className={styles.stickyFooter}>
         <div className={styles.stickyFooterInner}>
+          {downloadFailed ? (
+            <p role="alert" className={styles.footerError}>
+              Priprava PDF-ja ni uspela. Poskusite znova ali nas pokličite na{' '}
+              <a className={styles.footerErrorLink} href={SALES_CONTACT.phoneHref}>
+                {SALES_CONTACT.phone}
+              </a>
+              .
+            </p>
+          ) : null}
           <div className={styles.actions}>
             <button type="button" className={buttonStyles.secondaryButton} onClick={onBack}>
               Nazaj na vnos
             </button>
-            <button type="button" className={buttonStyles.primaryButton} onClick={onProceedToEmail}>
-              {/* Isto besedilo kot naslov naslednjega zaslona — prej je gumb obljubljal
-                  "PDF poročilo", pristalo pa se je na "Razširjen rezultat". */}
-              {SHARED_COPY.resultsPrimaryCta}
+            {/*
+              Prenos neposredno, brez vmesnega zaslona: obrazec je za obiskovalcem.
+              Vsak klik je sveža gesta, zato prenos ne odpade kot nekoč samodejni.
+            */}
+            <button
+              type="button"
+              className={buttonStyles.primaryButton}
+              onClick={handleDownload}
+              disabled={downloading}
+            >
+              {downloading ? 'Pripravljam …' : SHARED_COPY.resultsPrimaryCta}
             </button>
           </div>
         </div>

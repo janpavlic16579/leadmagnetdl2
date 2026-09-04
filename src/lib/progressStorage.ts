@@ -15,8 +15,10 @@ import type { BasicInfo, FlowStep, ModuleInputsState } from '../types';
  * Trditev v Koraku 1 ("nič ne zapusti brskalnika") s tem ostane resnična, hkrati
  * pa tuji vnosi ne čakajo na naslednjega uporabnika istega računalnika.
  *
- * Kontaktnih podatkov iz obrazca tu NAMENOMA ni: ime, e-naslov in davčna se
- * shranijo šele z oddajo, ki je zavestna odločitev obiskovalca.
+ * Kontaktnih podatkov iz obrazca tu NAMENOMA ni — ne pred oddajo ne po njej.
+ * Po oddaji ostane v zapisu samo zastavica `submitted`: obrazec stoji PRED
+ * rezultati, zato bi osvežitev na rezultatih brez nje vrnila vprašalnik in
+ * terjala drugo oddajo — podvojen lead.
  */
 
 const STORAGE_KEY = 'lm10-napredek';
@@ -25,8 +27,12 @@ const STORAGE_KEY = 'lm10-napredek';
  * Različica sheme. Ob spremembi oblike stanja jo je treba dvigniti — sicer bi
  * star zapis obudil vprašalnik, ki mu vsebina ne ustreza več (npr. odgovori za
  * modul, ki ga segment ne pozna).
+ *
+ * 2: `submitted`. Dvig ni bil formalnost: zapis različice 1 s korakom 'results'
+ * je nastal, ko so rezultati stali PRED obrazcem — po objavi bi obiskovalca
+ * postavil na rezultate z `submitted = false` in obrazec obšel.
  */
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 export interface StoredProgress {
   step: FlowStep;
@@ -36,6 +42,8 @@ export interface StoredProgress {
   triageScores: TriageScores;
   triageSelection: string[] | null;
   inputsModuleId: string | null;
+  /** Obrazec je oddan — edino, kar se iz obrazca shrani (glej glavo). */
+  submitted: boolean;
 }
 
 interface Envelope extends StoredProgress {
@@ -91,6 +99,7 @@ export function readProgress(): StoredProgress | null {
       triageScores: envelope.triageScores ?? {},
       triageSelection: envelope.triageSelection ?? null,
       inputsModuleId: envelope.inputsModuleId ?? null,
+      submitted: envelope.submitted ?? false,
     };
   } catch {
     return null;

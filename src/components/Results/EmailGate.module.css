@@ -4,6 +4,15 @@
   padding: var(--space-5) var(--space-3) var(--space-6);
 }
 
+/* Isti zapis kot .stepLabel v StepShell.module.css — Results/ ne uvaža lupine koraka. */
+.stepLabel {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 var(--space-1);
+}
+
 .title {
   font-size: var(--font-size-xl);
   margin: 0 0 var(--space-2);
@@ -255,16 +264,6 @@
   gap: var(--space-3);
 }
 
-.thanks {
-  text-align: center;
-  padding: var(--space-6) var(--space-3);
-}
-
-.thanksTitle {
-  font-size: var(--font-size-xl);
-  margin: 0 0 var(--space-2);
-}
-
 /*
  * Poziv k dejanju, ne drobni tisk. Zato SVOJA kartica zunaj obrazčeve: obarvano
  * ozadje in znamčna obroba sta po petih poljih in treh kljukicah edino, kar še
@@ -320,45 +319,4 @@
    obkljukanem svetovanju in praznem telefonu. */
 .consultingHint {
   font-weight: 600;
-}
-
-/*
- * Zahvalni zaslon je centriran, gumbi pa so podedovali space-between iz obrazca
- * in odleteli na robova; odstavek za njimi se je poleg tega dotikal njihovega
- * spodnjega roba, ker .subtitle nima zgornjega odmika.
- */
-.thanks .actions {
-  justify-content: center;
-  margin-bottom: var(--space-4);
-}
-
-/* .thanks je centriran, kontakt pa se bere kot seznam — zato poravnava levo. */
-.contactCard {
-  margin: var(--space-5) 0 0;
-  text-align: left;
-}
-
-.contactLead {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  margin: 0 0 var(--space-3);
-}
-
-.contactName {
-  font-weight: 600;
-  margin: 0;
-}
-
-/*
- * Povezavi in ne golo besedilo: na telefonu je klik na številko klic, klik na
- * naslov nov e-mail. Vsaka je svoja vrstica z 44 px tarčo — prst ni miška.
- * --color-primary-text ima na --color-accent kontrast v obeh temah (4,8:1 / 8:1).
- */
-.contactLink {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-  font-size: var(--font-size-md);
-  font-weight: 600;
-  color: var(--color-primary-text);
 }
