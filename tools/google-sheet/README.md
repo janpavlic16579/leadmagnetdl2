@@ -52,6 +52,17 @@ preglednice. Če je obiskovalec **prosil za posvet**, se to znajde v zadevi
 (`[POSVET] Nov lead: …`) — to je edino polje obrazca, ki pove namero in ne le
 dovoljenja.
 
+Sporočilo ima **pripeta oba PDF-ja** — poročilo za stranko in pripravo na
+pogovor, isti datoteki, kot ju aplikacija zgradi za stranko oziroma svetovalca.
+Aplikacija ju pošlje v telesu zahteve kot base64 (`attachments`,
+`src/lib/submitLead.ts`), skripta ju dekodira (`pripraviPriloge`) in pripne;
+vrstica »Priloge:« v sporočilu našteje imeni datotek ali pove, da ju aplikacija
+ni poslala (starejši build, PDF v brskalniku ni nastal). Pokvarjena priloga se
+preskoči — vrstica in sporočilo nista nikoli odvisna od nje. Skupaj merita okoli
+100 kB; meja MailApp za sporočilo je 25 MB. Prilogi zahtevata **novo različico**
+skripte in aktualen build aplikacije; stara skripta polje prezre, nova brez
+njega dela naprej.
+
 **Dovoljenje za pošto morate izsiliti sami.** Google ga ne zahteva ob
 razmestitvi in ne ob zagonu poljubne funkcije, ampak šele ob prvem klicu
 `MailApp`. Web app tedaj pade z „Nimate dovoljenja", napako pa `doPost`
@@ -66,10 +77,11 @@ padel, ter koliko vrstic in stolpcev ima list. Ročni zagon je namreč videl sam
 tisti, ki je bil takrat pred zaslonom.
 
 **Ko pošte ni, ne brskajte po dnevniku** — odprite naslov `/exec` v brskalniku.
-`doGet` izpiše, ali so obvestila vklopljena, kdaj je nazadnje odšla pošta in kaj
-je bila zadnja napaka (naslovi so v izpisu zakriti, ker je odgovor javen). Te tri
-vrstice ločijo „naslov ni nastavljen" od „razmeščena je stara različica" od
-„pošiljanje je vrglo napako".
+`doGet` izpiše, ali so obvestila vklopljena, kdaj je nazadnje odšla pošta (s
+številom prilog — `(priloge: 2)` pove, da razmeščena različica prilogi pripenja)
+in kaj je bila zadnja napaka (naslovi so v izpisu zakriti, ker je odgovor javen).
+Te tri vrstice ločijo „naslov ni nastavljen" od „razmeščena je stara različica"
+od „pošiljanje je vrglo napako".
 
 Pošta gre **za** zapisom vrstice in v svojem `try/catch`: izčrpana kvota ali
 napačen naslov ne smeta pomeniti, da aplikacija dostavo razume kot neuspelo in

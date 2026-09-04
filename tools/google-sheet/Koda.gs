@@ -19,6 +19,13 @@
  *    zato aplikacija tiho napako razume kot uspešno dostavo — in prodajne
  *    priprave tedaj NE prenese stranki. Vsaka pot, ki ne konča z zapisano
  *    vrstico, mora zato pustiti napako ven (glej `doPost`).
+ *
+ * Telo lahko nosi še `attachments[]` — PDF-ja v base64 za prilogi obvestila
+ * (glej `pripraviPriloge`). Skripta mora delati tudi brez njih: starejši build
+ * aplikacije jih ne pošlje, PDF pa v brskalniku tudi kdaj ne nastane. Po vsaki
+ * spremembi te datoteke je treba razmestiti NOVO RAZLIČICO (Deploy → Manage
+ * deployments → New version) in znova vpisati E_NASLOV_ZA_OBVESTILA, ker ga
+ * datoteka v repozitoriju nima.
  */
 
 var NASTAVITVE = {
@@ -258,8 +265,16 @@ function doPost(e) {
     // dostavo razume kot neuspelo in prodajno pripravo prenese stranki.
     var lastnosti = PropertiesService.getScriptProperties();
     try {
-      posljiObvestilo(vrednosti);
-      lastnosti.setProperty('ZADNJA_POSTA', new Date().toISOString());
+      // Dekodiranje prilog šele tu, znotraj try/catch pošte: vrstica je zapisana
+      // in je pokvarjena priloga ne sme prizadeti.
+      var priloge = pripraviPriloge(oddaja);
+      posljiObvestilo(vrednosti, priloge);
+      // S številom prilog, da doGet od zunaj pove, ali razmeščena različica
+      // prilogi sploh pripenja.
+      lastnosti.setProperty(
+        'ZADNJA_POSTA',
+        new Date().toISOString() + ' (priloge: ' + priloge.length + ')',
+      );
       lastnosti.deleteProperty('ZADNJA_NAPAKA_POSTE');
     } catch (err) {
       console.warn('Obvestila ni bilo mogoče poslati: ' + err);
@@ -1361,14 +1376,18 @@ function preizkusPoste() {
  * Vsebina je izbrana tako, da se je mogoče odločiti brez odpiranja preglednice:
  * kdo, iz katere panoge, kako velik, koliko ga stane in ali je PROSIL za posvet.
  * Zadnje je edino polje, ki pove namero in ne le dovoljenja, zato stoji v zadevi.
+ * Pripeta sta oba PDF-ja (`priloge`, glej `pripraviPriloge`): poročilo za
+ * stranko in priprava na pogovor — isti datoteki, kot ju aplikacija zgradi za
+ * stranko oziroma svetovalca.
  *
  * Dnevna kvota MailApp je 100 prejemnikov pri navadnem Google računu in 1500 pri
  * Workspacu — za lead magnet daleč dovolj, a ob množičnem testiranju jo je mogoče
  * izčrpati; tedaj obvestila utihnejo, vrstice pa se pišejo naprej.
  */
-function posljiObvestilo(vrednosti) {
+function posljiObvestilo(vrednosti, priloge) {
   var prejemniki = String(NASTAVITVE.E_NASLOV_ZA_OBVESTILA || '').trim();
   if (!prejemniki) return;
+  priloge = priloge || [];
 
   var v = function (ime) {
     return vrednosti[ime] === undefined || vrednosti[ime] === '' ? '—' : String(vrednosti[ime]);
@@ -1393,17 +1412,57 @@ function posljiObvestilo(vrednosti) {
     'Področja: ' + v('selectedModules'),
     'Sekvenca: ' + v('followUpSequence') + ' · vir: ' + v('utmSource'),
     '',
+    // Imeni datotek ali razlog, da ju ni — brez te vrstice bi manjkajoča priloga
+    // izgledala kot napaka poštnega odjemalca.
+    'Priloge: ' +
+      (priloge.length
+        ? priloge
+            .map(function (priloga) {
+              return priloga.getName();
+            })
+            .join(', ')
+        : 'brez — aplikacija jih ni poslala'),
     'Prodajna priprava: ' + v('prodajnaPriprava'),
     'Preglednica: ' + pridobiList().getParent().getUrl(),
   ].filter(function (vrstica) {
     return vrstica !== '';
   });
 
-  MailApp.sendEmail({
+  var sporocilo = {
     to: prejemniki,
     subject: (posvet ? '[POSVET] ' : '') + 'Nov lead: ' + podjetje,
     body: vrstice.join('\n'),
-  });
+  };
+  if (priloge.length) sporocilo.attachments = priloge;
+  MailApp.sendEmail(sporocilo);
+}
+
+/**
+ * Prilogi obvestila iz telesa zahteve: PDF-ja v base64, kot ju je aplikacija
+ * zgradila ob oddaji (`attachments` v `src/lib/submitLead.ts`).
+ *
+ * Nikoli ne vrže: pokvarjen vnos se preskoči in obvestilo gre brez njega —
+ * vrstica in sporočilo nista nikoli odvisna od priloge. Skupaj merita okoli
+ * 100 kB; meja MailApp za sporočilo je 25 MB.
+ */
+function pripraviPriloge(oddaja) {
+  var vnosi = oddaja && Array.isArray(oddaja.attachments) ? oddaja.attachments : [];
+  var priloge = [];
+  for (var i = 0; i < vnosi.length; i++) {
+    var vnos = vnosi[i] || {};
+    try {
+      priloge.push(
+        Utilities.newBlob(
+          Utilities.base64Decode(String(vnos.base64 || '')),
+          String(vnos.contentType || 'application/pdf'),
+          String(vnos.filename || 'priloga-' + (i + 1) + '.pdf'),
+        ),
+      );
+    } catch (err) {
+      console.warn('Priloga ' + (i + 1) + ' ni bila dekodirana: ' + err);
+    }
+  }
+  return priloge;
 }
 
 /** Odgovor doGet je javen, sporočila o napakah pa radi navedejo naslov. */
