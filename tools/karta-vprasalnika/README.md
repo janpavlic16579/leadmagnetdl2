@@ -1,8 +1,8 @@
 # Karta vprašalnika
 
 Orodje, ki iz konfiguracije kalkulatorja zgradi eno samostojno HTML stran z interaktivno karto
-celotnega vprašalnika — vsa vprašanja, odgovori, triažne ocene in koši, od izbire dejavnosti do
-oddaje e-naslova.
+celotnega vprašalnika — vsa vprašanja, odgovori, triažne ocene in koši, od izbire dejavnosti prek
+obrazca s kontaktom do rezultatov.
 
 **To ni del aplikacije.** Kalkulator te mape ne uvaža in zanjo ne ve; odvisnost gre samo v eno
 smer — orodje bere `src/config/**`, nikoli obratno.

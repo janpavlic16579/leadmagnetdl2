@@ -306,8 +306,15 @@ function tailHtml() {
   const slim = (k, l, req, kind) =>
     `<div class="q" data-s="${esc(fold(k + ' ' + l + ' ' + req))}" data-key="${esc(k)}"><div class="qh"><code class="qk">${k}</code><span class="ql">${l}</span></div><div class="qm">${chip(kind)}${chip(req, req === 'obvezno' ? 'req' : '')}</div></div>`;
   return `<div class="tail">
+<div class="box step tail-box" id="gate">
+<div class="step-k">Korak 7 · Kontakt</div>
+<h4>Kontakt in soglasja</h4>
+<p class="intro">Obrazec stoji pred rezultati: kontakt odklene izračun na zaslonu in PDF poročilo. Ob oddaji se nič ne prenese — lead gre na webhook, obiskovalec pa na rezultate.</p>
+${emailFields.map(([k, l, r]) => slim(k, l, r, 'besedilo')).join('')}
+${consents.map(([k, l, r]) => slim(k, l, r, 'kljukica')).join('')}
+</div>
 <div class="box step tail-box" id="k7">
-<div class="step-k">Korak 7 · Rezultati</div>
+<div class="step-k">Korak 8 · Rezultati</div>
 <h4>Zneski, potencial in tveganja</h4>
 <p class="intro">Seštevek po štirih koših — ista postavka šteje le v enem. Neposredna izguba + kapaciteta letno; enkratni kapital ločeno; tveganja brez zneska. Naslovljiv potencial = znesek × naslovljivi delež glavnega vzroka (en sam koeficient). Razdelek »Česa nismo izmerili« našteje preskočena področja in jih pusti doračunati.</p>
 <div class="mbuckets">
@@ -317,14 +324,8 @@ function tailHtml() {
 <span class="bk bk-risk"><span class="dot d-risk"></span>tveganje — brez zneska</span>
 </div>
 </div>
-<div class="box step tail-box" id="gate">
-<div class="step-k">Oddaja e-naslova · zadnja vprašanja</div>
-<h4>Kontakt in soglasja</h4>
-${emailFields.map(([k, l, r]) => slim(k, l, r, 'besedilo')).join('')}
-${consents.map(([k, l, r]) => slim(k, l, r, 'kljukica')).join('')}
-</div>
 <div class="tail-outs">
-<div class="box step out-box" id="pdf1"><div class="step-k">Izhod 1</div><h4>PDF za stranko</h4><p class="intro">Rezultati, metodologija in akcijski načrt za največjo postavko.</p></div>
+<div class="box step out-box" id="pdf1"><div class="step-k">Izhod 1</div><h4>PDF za stranko</h4><p class="intro">Gumb »Prenesi PDF poročilo« na rezultatih: rezultati, metodologija in akcijski načrt za največjo postavko.</p></div>
 <div class="box step out-box" id="pdf2"><div class="step-k">Izhod 2</div><h4>Prodajni paket (PDF + HTML)</h4><p class="intro">Vsi odgovori, triažne ocene, ICP-ocena A/B/C, playbook in predlog nadaljevanja.</p></div>
 </div>
 </div>`;
@@ -879,12 +880,12 @@ function drawWires(){
    twPaths[id+'|'+tqs[m].dataset.mod]=p;
   }
   var colEl=box(document.getElementById('segcol-'+id));
-  if(colEl&&k7){var x1=colEl.x+colEl.w/2,y1=colEl.y+colEl.h,x2=k7.x+k7.w/2,y2=k7.y;
+  if(colEl&&gate){var x1=colEl.x+colEl.w/2,y1=colEl.y+colEl.h,x2=gate.x+gate.w/2,y2=gate.y;
    path('M'+x1+' '+y1+' C'+x1+' '+(y1+90)+' '+x2+' '+(y2-90)+' '+x2+' '+(y2-4),'')
     .setAttribute('marker-end','url(#arr)');}
  }
- vline(k7,gate,'main','ogled rezultatov je brezplačen; PDF zahteva kontakt');
- vline(gate,p1,'main');vline(gate,p2,'main');
+ vline(gate,k7,'main','kontakt odklene rezultate in PDF');
+ vline(k7,p1,'main');vline(gate,p2,'main');
 }
 var redrawPending=false;
 function redraw(){if(redrawPending)return;redrawPending=true;
