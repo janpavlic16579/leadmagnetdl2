@@ -147,12 +147,14 @@ export interface SegmentCopy {
     potential?: { title?: string; note?: string };
   };
 
-  /** Obrazec za prevzem poročila. */
+  /** Obrazec med vnosi in rezultati — odklene rezultat na zaslonu in PDF poročilo. */
   emailGate: {
     /**
-     * Mora poimenovati POROČILO: gumb, ki sem pripelje, obljublja "Prenesi PDF
-     * poročilo". Prav ta razkorak je nekoč obstajal — gumb je obljubljal PDF,
-     * zaslon pa se je imenoval "Razširjen rezultat". Varuje ga copy.test.ts.
+     * Mora poimenovati OBOJE, kar obrazec odklene: REZULTAT in POROČILO. Naslov,
+     * ki bi obljubil samo PDF, pusti vtis, da je rezultat brezplačen (tako je
+     * nekoč pisalo na uvodu); naslov brez poročila pa bi razšel gumb na
+     * rezultatih ("Prenesi PDF poročilo") z obljubo, ki jo je obiskovalec
+     * pravkar izpolnil. Varuje ga copy.test.ts.
      */
     title: string;
     subtitle: string;
@@ -208,9 +210,13 @@ export const SHARED_COPY = {
   /**
    * Obljuba ponudbe pod naslovom uvodnega zaslona. Ista v vseh dejavnostih, ker
    * je ista ponudba — "okoli deset minut" pa mora držati tudi po prepisu naslova.
+   *
+   * Obrazec s kontaktom stoji PRED rezultatom, zato uvod tega ne sme zamolčati:
+   * kdor za kontakt izve šele na predzadnjem koraku, to bere kot past. Prav
+   * nasprotno je uvod nekoč obljubljal ("rezultat vidite brez vnosa e-naslova").
    */
   landingOffer:
-    'Dobite razčlenjen letni znesek po področjih — z vašimi številkami in formulo pod vsako postavko. Rezultat vidite brez vnosa e-naslova; za priporočena tri področja vzame okoli deset minut.',
+    'Dobite razčlenjen letni znesek po področjih — z vašimi številkami in formulo pod vsako postavko, na zaslonu in v PDF poročilu za upravo. Za priporočena tri področja vzame okoli deset minut; pred rezultatom vas prosimo za kontakt.',
 
   /** Vprašanje, ne nagovor: sedem različic bi razšlo tudi izvoz vprašalnika. */
   employeeCountTitle: 'Koliko ljudi zaposlujete?',
@@ -225,9 +231,11 @@ export const SHARED_COPY = {
     'Vpišite število zaposlenih — vsaj 1. Če ste samostojni podjetnik brez zaposlenih, štejte sebe.',
 
   /**
-   * Primarni gumb na rezultatu. Poimenuje DEJANJE, ki je povsod isto; kaj se
-   * prenese, pove naslov naslednjega zaslona (emailGate.title) in ta je panožen.
-   * Gumb in naslov morata govoriti o istem dokumentu — varuje copy.test.ts.
+   * Primarni gumb na rezultatih: poročilo prenese neposredno, brez vmesnega
+   * zaslona — obrazec je obiskovalec izpolnil že PRED rezultati. Vsak klik je
+   * sveža gesta, zato prenos ne odpade, kot je nekoč samodejni po oddaji.
+   * Poimenuje isti dokument, ki ga je obljubil naslov obrazca (emailGate.title)
+   * — varuje copy.test.ts.
    */
   resultsPrimaryCta: 'Prenesi PDF poročilo',
 
@@ -380,7 +388,13 @@ export const NEUTRAL_COPY: ResolvedSegmentCopy = {
     hoursFootnote:
       'Sproščene ure ne pomenijo nižje plačne mase — zaposleni ostane. Gre za čas, ki ga lahko usmerite v drugo delo.',
     runningTotalLabel: 'Trenutni letni strošek izbranih področij',
-    lastPageCta: 'Poglej rezultat',
+    /**
+     * Zadnja stran vnosov pelje na obrazec s kontaktom, ne na rezultat. Nekdanji
+     * "Poglej rezultat" je bil točen, dokler so rezultati sledili vnosom; gumb,
+     * ki obljubi rezultat in pristane na obrazcu, je prav razkorak, kakršnega
+     * je ta koda že enkrat odpravila (glej emailGate.title).
+     */
+    lastPageCta: 'Zaključi vnos',
   },
 
   results: {
@@ -433,9 +447,9 @@ export const NEUTRAL_COPY: ResolvedSegmentCopy = {
   },
 
   emailGate: {
-    title: 'PDF poročilo in akcijski načrt',
+    title: 'Rezultat in PDF poročilo z akcijskim načrtom',
     subtitle:
-      'Isti izračun v dokumentu, ki ga lahko posredujete upravi — razčlenjen po področjih, s formulo pod vsako postavko in tremi ukrepi za področje z največjim zneskom.',
+      'Po oddaji se na zaslonu odpre vaš izračun in z njim PDF poročilo za upravo — razčlenjeno po področjih, s formulo pod vsako postavko in tremi ukrepi za področje z največjim zneskom.',
     consultingTitle: 'Želite, da vaše številke pregledamo skupaj?',
     consultingNote:
       'Brez obveznosti. Svetovalec pogleda vaš izračun in pove, katere postavke je v vašem primeru mogoče nasloviti najhitreje.',
