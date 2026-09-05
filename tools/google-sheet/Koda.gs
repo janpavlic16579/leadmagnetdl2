@@ -582,10 +582,10 @@ function preurediList() {
   var list = pridobiList();
   if (list.getLastRow() === 0) throw new Error('List je prazen — ni česa urejati.');
 
-  // Najprej odvečne prazne vrstice dol. Brez tega bi veliki prepis spodaj
-  // prežvečil ves list (996 praznih vrstic namesto sedmih polnih), oddaja pa bi
-  // pristajala na njegovem dnu.
-  pociistiOdvecneVrstice(list);
+  // Najprej odvečne vrstice dol. Brez tega bi veliki prepis spodaj prežvečil ves
+  // list (dva tisoč praznih vrstic namesto devetih polnih), oddaja pa bi
+  // pristajala na njegovem dnu — daleč pod vidnimi podatki.
+  pociistiOdvecneVrstice(list, preberiGlavo(list));
 
   // Glavo razširimo LOČENO in prej: ta zapis gre samo v device stolpce, zato
   // podatka ne more poškodovati. Veliki prepis spodaj s tem obdrži svoj pogoj
@@ -684,17 +684,34 @@ function preurediList() {
  * vsakem leadu izpolnjen; getLastRow bi bil tu neuporaben, saj je prav on tisti,
  * ki laže.
  */
-function pociistiOdvecneVrstice(list) {
+function pociistiOdvecneVrstice(list, glava) {
   var vrstic = list.getMaxRows();
   if (vrstic < 2) return 0;
 
-  // CELOTNA vrstica in ne le prvi stolpec. Prvi stolpec pove, ali je to lead;
-  // prazna vrstica pa je samo tista, v kateri ni prav ničesar — tudi ne
-  // klicateljeve opombe brez vsega drugega.
   var podatki = list.getRange(2, 1, vrstic - 1, list.getMaxColumns()).getValues();
-  var prazna = podatki.map(function (vrstica) {
-    return vrstica.every(function (celica) {
-      return celica === '' || celica === null;
+
+  // Vrstica je odvečna, kadar NI lead (nima časa prejema) in v njej ni ničesar,
+  // kar bi vpisal klicatelj. Prej je veljalo strožje merilo "vse celice prazne",
+  // a ga je pokvarila ena sama ničla, ki jo je vanje zapisala izpeljava —
+  // odvečne vrstice so ostale za vedno.
+  var kazalo = {};
+  [PREJETO].concat(DELOVNI_STOLPCI).forEach(function (ime) {
+    var i = glava ? glava.indexOf(ime) : -1;
+    if (i !== -1) kazalo[ime] = i;
+  });
+  var pomembni = Object.keys(kazalo).map(function (ime) {
+    return kazalo[ime];
+  });
+
+  var odvecna = podatki.map(function (vrstica) {
+    // Brez glave (star list, druga postavitev) ostane staro, strožje merilo.
+    if (!pomembni.length) {
+      return vrstica.every(function (celica) {
+        return celica === '' || celica === null;
+      });
+    }
+    return pomembni.every(function (i) {
+      return String(vrstica[i] === null ? '' : vrstica[i]).trim() === '';
     });
   });
 
@@ -702,14 +719,12 @@ function pociistiOdvecneVrstice(list) {
   // vse indekse pod sabo, blok pa je en klic namesto tisoč.
   var pobrisanih = 0;
   var konec = null;
-  for (var i = prazna.length - 1; i >= -1; i--) {
-    var jePrazna = i >= 0 && prazna[i];
-    if (jePrazna && konec === null) konec = i;
-    if (!jePrazna && konec !== null) {
-      var prvaVrstica = i + 3;
-      var koliko = konec - i;
-      list.deleteRows(prvaVrstica, koliko);
-      pobrisanih += koliko;
+  for (var i = odvecna.length - 1; i >= -1; i--) {
+    var jeOdvecna = i >= 0 && odvecna[i];
+    if (jeOdvecna && konec === null) konec = i;
+    if (!jeOdvecna && konec !== null) {
+      list.deleteRows(i + 3, konec - i);
+      pobrisanih += konec - i;
       konec = null;
     }
   }
@@ -755,6 +770,12 @@ function izpolniIzpeljanke(vrstica, glava) {
       vrstica[i] = vrednost;
     }
   };
+
+  // Vrstica brez časa prejema ni lead. Brez tega varovala je izpeljava v vsako
+  // prazno vrstico zapisala `letno` = 0 — in s tem naredila prazne vrstice za
+  // vedno "polne", tako da jih čiščenje ni več prepoznalo. Natanko to je
+  // uporabniku napihnilo list na dva tisoč vrstic.
+  if (String(pri(PREJETO)).trim() === '') return;
 
   nastavi(KLICI_TAKOJ, jePosvet(pri('consentConsulting')) ? 'DA' : '');
   nastavi(
