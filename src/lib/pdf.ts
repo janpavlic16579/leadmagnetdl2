@@ -1067,8 +1067,8 @@ function drawMethodologySection(doc: jsPDF, params: GeneratePdfParams, startY: n
 /**
  * Kontakt na koncu dokumenta — edina pot nazaj k Datalabu.
  *
- * Isti zapis kot na zahvalnem zaslonu (config/salesContact.ts): dokument in
- * obrazec morata imenovati isto številko. Brez cen in brez obljub — točen obseg
+ * Isti zapis kot na rezultatih (config/salesContact.ts): dokument in zaslon
+ * morata imenovati isto številko. Brez cen in brez obljub — točen obseg
  * potrdi svetovalec, kar pove že pravni pridržek v nogi.
  */
 function drawNextStepSection(doc: jsPDF, startY: number): number {

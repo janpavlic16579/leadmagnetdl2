@@ -114,14 +114,15 @@ describe('Register besedil po dejavnosti', () => {
     }
   });
 
-  it('naslov obrazca poimenuje poročilo', () => {
-    // Gumb, ki na obrazec pripelje, obljublja "Prenesi PDF poročilo". Ko je ta
-    // zaslon nekoč nosil naslov "Razširjen rezultat", je obiskovalec kliknil na
-    // datoteko in pristal na obrazcu, ki je ni omenjal.
+  it('naslov obrazca poimenuje rezultat in poročilo', () => {
+    // Obrazec stoji pred rezultatom in odklene dvoje. Naslov, ki bi obljubil samo
+    // PDF, pusti obiskovalca v prepričanju, da je rezultat brezplačen (tako je
+    // nekoč pisalo na uvodu); naslov brez poročila pa bi razšel gumb na
+    // rezultatih ("Prenesi PDF poročilo") z obljubo, ki jo je pravkar izpolnil.
     for (const [id, copy] of ENTRIES) {
-      expect(copy.emailGate.title.toLowerCase(), `${id}: naslov obrazca ne omenja poročila`).toMatch(
-        /poročil/,
-      );
+      const title = copy.emailGate.title.toLowerCase();
+      expect(title, `${id}: naslov obrazca ne omenja rezultata`).toMatch(/rezultat/);
+      expect(title, `${id}: naslov obrazca ne omenja poročila`).toMatch(/poročil/);
     }
   });
 

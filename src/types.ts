@@ -57,6 +57,7 @@ export type FlowStep =
   /** Skupni urni postavki — samo segmenti z vnosom v config/contexts/. */
   | 'costBasis'
   | 'inputs'
-  | 'results'
-  /** Edini korak zunaj stepOrder — zato tudi edini brez oznake "Korak N od M". */
-  | 'emailGate';
+  /** Obrazec s kontaktom — člen stepOrder med vnosi in rezultati, zato z oznako "Korak N od M". */
+  | 'emailGate'
+  /** Zadnji zaslon: izračun in gumb za prenos PDF-ja; obrazec je pred njim. */
+  | 'results';

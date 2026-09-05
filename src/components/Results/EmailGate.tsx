@@ -17,6 +17,15 @@ import styles from './EmailGate.module.css';
 const PRIVACY_POLICY_URL = '';
 
 /**
+ * Napis gumba za oddajo. Ena konstanta, ker ga navaja tudi povzetek zadržkov
+ * ("Nato znova kliknite …") — dva zapisa bi se ob prepisu razšla.
+ *
+ * "Pokaži rezultate" in ne "Prenesi poročilo": ob oddaji se ne prenese nič,
+ * poročilo prenese gumb na rezultatih (zakaj — lib/deliverLead.ts).
+ */
+const SUBMIT_LABEL = 'Pokaži rezultate';
+
+/**
  * Prodajni kontakt za tiste, ki na klic nočejo čakati — skupni zapis, isti kot
  * na zadnji strani strankinega PDF-ja (config/salesContact.ts).
  */
@@ -30,50 +39,31 @@ interface EmailGateProps {
    * ničesar — in hkrati zaslon, na katerem se odloči, ali bo lead sploh nastal.
    */
   copy: ResolvedSegmentCopy['emailGate'];
-  submitted: boolean;
-  followUpSequenceDebug?: string;
-  /** Privolitve potujejo naprej: poročilo jih hrani kot dokazilo, ne kot okras. */
+  /** Obrazec je oštevilčen korak med vnosi in rezultati — kot vsi drugi nosi "Korak N od M". */
+  stepLabel: string;
+  /**
+   * Privolitve potujejo naprej: poročilo jih hrani kot dokazilo, ne kot okras.
+   * Ko se obljuba razreši, starš zamenja zaslon z rezultati — obrazec sam zahvale
+   * ne kaže in ničesar ne prenaša (lib/deliverLead.ts pove, zakaj).
+   */
   onSubmit: (params: {
     contact: LeadContact;
     consents: LeadConsents;
   }) => void | Promise<void>;
-  /**
-   * Ponovni prenos strankinega poročila.
-   *
-   * Samodejni prenos bloba ni zanesljiv: iOS Safari ga pogosto odpre v zavihku ali
-   * zavrne, brskalniki pa blokirajo prenos brez sveže geste. Brez tega gumba je
-   * zahvalni zaslon trdil, da je datoteka v mapi za prenose, in ni ponudil izhoda.
-   */
-  onDownloadCustomerPdf?: () => void | Promise<void>;
-  /**
-   * Ponovni prenos priprave za svetovalca.
-   *
-   * Prikaže se, kadar priprava pristane na napravi — torej v internem načinu
-   * (?debug=1) ali dokler webhook ni nastavljen in je posredovanje po stranki
-   * edina pot do svetovalca. Ob delujočem webhooku ostane skrita.
-   */
-  onDownloadSalesPdf?: () => void | Promise<void>;
-  /** Loči interni pregled od stranke: ista gumba, drugo besedilo nad njima. */
-  internalMode?: boolean;
-  /** Vrnitev na rezultate — zahvalni zaslon sicer nima nobene poti naprej ne nazaj. */
-  onBackToResults?: () => void;
+  /** Nazaj na zadnjo stran vnosov. */
   onBack: () => void;
 }
 
-export function EmailGate({
-  copy,
-  submitted,
-  internalMode = false,
-  followUpSequenceDebug,
-  onSubmit,
-  onDownloadCustomerPdf,
-  onDownloadSalesPdf,
-  onBackToResults,
-  onBack,
-}: EmailGateProps) {
-  // Zahvala zamenja obrazec znotraj iste inštance, zato je `submitted` ključ:
-  // brez njega bi fokus ostal na gumbu, ki je pravkar izginil.
-  const headingRef = useStepHeading(submitted);
+/**
+ * Obrazec PRED rezultati.
+ *
+ * Nekoč je stal za njimi in nosil še zahvalni zaslon s prenosi; zdaj je čisti
+ * vmesni korak: kontakt in privolitve, ob oddaji pa lead odide k Datalabu in
+ * obiskovalec pristane na rezultatih. Kar je sledilo zahvali (kontakt prodaje,
+ * priprava za svetovalca), živi v Results/NextSteps.tsx.
+ */
+export function EmailGate({ copy, stepLabel, onSubmit, onBack }: EmailGateProps) {
+  const headingRef = useStepHeading();
   const fieldId = useId();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -97,7 +87,7 @@ export function EmailGate({
    * ker takrat uporabnik popravlja in mora videti, kdaj je popravljeno.
    */
   const [showErrors, setShowErrors] = useState(false);
-  /** Generiranje PDF-jev traja; brez tega dvoklik ustvari dva kompleta datotek. */
+  /** Oddaja čaka na webhook; brez tega dvoklik odda isti lead dvakrat. */
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -130,7 +120,7 @@ export function EmailGate({
       ? null
       : // "Brez TE privolitve" je delovalo samo pod kljukico. V povzetku nad gumbom
         // kazalni zaimek nima na kaj kazati, zato poved privolitev poimenuje.
-        'Brez privolitve za obdelavo podatkov vam poročila ne smemo poslati.',
+        'Brez privolitve za obdelavo podatkov vam rezultata in poročila ne smemo pripraviti.',
   };
   /**
    * Ista tabela nosi dvoje: kam skoči fokus (prva vrstica z napako) in kaj našteje
@@ -194,100 +184,25 @@ export function EmailGate({
         consents: { consentProcessing, consentOffers, consentContent, consentConsulting },
       });
     } catch {
-      // Prej je napaka pustila obiskovalca na obrazcu brez pojasnila: zahvalni
-      // zaslon se ni prikazal, gumb pa je izgledal, kot da ni bil pritisnjen.
+      // Prej je napaka pustila obiskovalca na obrazcu brez pojasnila: rezultati
+      // se niso prikazali, gumb pa je izgledal, kot da ni bil pritisnjen.
       setFailed(true);
     } finally {
       setBusy(false);
     }
   }
 
-  if (submitted) {
-    return (
-      <div className={styles.wrap}>
-        <div className={styles.thanks}>
-          <h1 className={styles.thanksTitle} tabIndex={-1} ref={headingRef}>
-            Hvala!
-          </h1>
-          <p className={styles.subtitle}>
-            {/* "Se je preneslo" je trditev, ki je ne moremo preveriti — brskalnik prenos
-                pogosto odpre v zavihku ali ga zavrne. Gumb spodaj je zato del stavka. */}
-            Poročilo je pripravljeno in bi se moralo prenesti samodejno. Če ga v mapi za prenose ni,
-            ga dobite tu:
-          </p>
-          <div className={styles.actions}>
-            {onDownloadCustomerPdf ? (
-              <button type="button" className={buttonStyles.primaryButton} onClick={onDownloadCustomerPdf}>
-                Prenesi poročilo
-              </button>
-            ) : null}
-            {onBackToResults ? (
-              <button type="button" className={buttonStyles.secondaryButton} onClick={onBackToResults}>
-                Nazaj na rezultate
-              </button>
-            ) : null}
-          </div>
-          {onDownloadSalesPdf ? (
-            <>
-              <p className={styles.subtitle}>
-                {internalMode
-                  ? '[interno] Priprava za svetovalca — ob nastavljenem webhooku se ne prikaže in ne prenese.'
-                  : /* Namen je izrecno posredovanje: brez tega bi obiskovalec dobil datoteko,
-                       za katero ne ve, čemu služi in kaj naj z njo. */
-                    'Poleg njega smo pripravili še povzetek za svetovalca — vaši odgovori na enem mestu. Če nam ga posredujete pred sestankom, vas ne bo spraševal po številkah, ki ste jih pravkar vnesli.'}
-              </p>
-              <div className={styles.actions}>
-                <button type="button" className={buttonStyles.secondaryButton} onClick={onDownloadSalesPdf}>
-                  Priprava v PDF
-                </button>
-              </div>
-            </>
-          ) : null}
-          {/*
-            Brez tega kljukica na zahvali izgine brez sledu in obiskovalec ne ve, ali je
-            zahtevek sploh štel. Namenoma BREZ obljube klica ali roka: dokler webhook ni
-            nastavljen, zahtevek do Datalaba ne pride sam (glej lib/deliverLead.ts).
-          */}
-          {consentConsulting ? (
-            <p className={styles.subtitle}>
-              Označili ste, da želite svetovanje — zahtevek je zabeležen med vašimi odgovori.
-            </p>
-          ) : null}
-          {/*
-            Ista kartica kot poziv na obrazcu: ista ponudba, zato isti videz. Prikaže
-            se VSEM, tudi tistemu, ki je zahtevek že oddal — morda ga ne želi čakati.
-          */}
-          <div className={`${styles.consulting} ${styles.contactCard}`}>
-            <h2 className={styles.consultingTitle}>Želite se pogovoriti takoj?</h2>
-            <p className={styles.contactLead}>
-              Pokličite ali pišite našim prodajnim svetovalcem — brez čakanja na klic.
-            </p>
-            <p className={styles.contactName}>{SALES_CONTACT.label}</p>
-            <a className={styles.contactLink} href={SALES_CONTACT.phoneHref}>
-              {SALES_CONTACT.phone}
-            </a>
-            <a className={styles.contactLink} href={`mailto:${SALES_CONTACT.email}`}>
-              {SALES_CONTACT.email}
-            </a>
-          </div>
-          {import.meta.env.DEV && followUpSequenceDebug ? (
-            <p className={styles.consentText}>[dev] follow-up sekvenca: {followUpSequenceDebug}</p>
-          ) : null}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className={styles.wrap}>
+      <p className={styles.stepLabel}>{stepLabel}</p>
       <h1 className={styles.title} tabIndex={-1} ref={headingRef}>
         {copy.title}
       </h1>
       {/*
-        Podnaslov našteje, kaj dokument vsebuje. Prejšnja različica je končala s
-        stavkom, da je izračun na voljo tudi brez tega koraka — resnica, ki jo je
-        pošteno povedati, a ne kot zadnjo misel tik pred šestimi polji. Zdaj to
-        pove opomba o zasebnosti pod obrazcem, sporočilo tu pa je vrednost.
+        Podnaslov pove, kaj sledi oddaji: izračun na zaslonu in PDF poročilo.
+        Obrazec stoji PRED rezultatom, zato stavka "izračun je na voljo tudi brez
+        tega koraka" ni več nikjer — ne tu ne na uvodu (SHARED_COPY.landingOffer);
+        obljuba, ki je ne držimo, je slabša od poštene prošnje za kontakt.
       */}
       <p className={styles.subtitle}>{copy.subtitle}</p>
       <form onSubmit={handleSubmit} noValidate>
@@ -557,9 +472,9 @@ export function EmailGate({
         */}
         {showBlockedSummary ? (
           <div key="blocked" id={alertId} className={styles.blocked} role="status">
-            <p className={styles.blockedTitle}>Prenos se ni začel.</p>
+            <p className={styles.blockedTitle}>Rezultatov še ne moremo pokazati.</p>
             {/* Brez števila manjkajočih: slovenska dvojina bi terjala tri različice. */}
-            <p className={styles.blockedNote}>Poročilo pripravimo takoj, ko dopolnite naslednje:</p>
+            <p className={styles.blockedNote}>Rezultat in poročilo odklenemo takoj, ko dopolnite naslednje:</p>
             <ul className={styles.blockedList}>
               {/*
                 Besedila so ISTA kot pod polji in ne skrajšana različica: dve
@@ -569,21 +484,22 @@ export function EmailGate({
                 <li key={field}>{error}</li>
               ))}
             </ul>
-            <p className={styles.blockedNote}>Nato znova kliknite »Prenesi poročilo«.</p>
+            <p className={styles.blockedNote}>Nato znova kliknite »{SUBMIT_LABEL}«.</p>
           </div>
         ) : failed ? (
           /*
             Prej je isto sporočilo nosil .consentText — sivo, drobno, najtišje besedilo
-            na strani, čeprav je edino, ki pove, da priprava res ni uspela. Zdaj ista
+            na strani, čeprav je edino, ki pove, da oddaja res ni uspela. Zdaj ista
             ploskev kot zadržana oddaja, ker je za obiskovalca isti trenutek: kliknil
-            je in poročila ni. Telefon je izhod v sili — brez njega ta pot nikamor ne
-            pelje, saj zaledja, ki bi poročilo poslalo pozneje, ni.
+            je in rezultatov ni. Odpove lahko le nalaganje kode za dostavo — napake
+            webhooka in prodajnega dela deliverLead pogoltne sam. Telefon je izhod v
+            sili — brez njega ta pot nikamor ne pelje, saj zaledja ni.
 
             role="alert" ostane: nič ne premika fokusa, zato se napoved nima s čim
             zaleteti, napaka pa je nepričakovana in ne posledica obiskovalčevega dejanja.
           */
           <div key="failed" id={alertId} className={styles.blocked} role="alert">
-            <p className={styles.blockedTitle}>Priprava poročila ni uspela.</p>
+            <p className={styles.blockedTitle}>Oddaja ni uspela.</p>
             <p className={styles.blockedNote}>
               Poskusite znova — vneseni podatki ostanejo. Če se ponovi, nas pokličite na{' '}
               <a className={styles.blockedLink} href={SALES_CONTACT.phoneHref}>
@@ -611,7 +527,7 @@ export function EmailGate({
             disabled={busy}
             aria-describedby={showBlockedSummary || failed ? alertId : undefined}
           >
-            {busy ? 'Pripravljam …' : 'Prenesi poročilo'}
+            {busy ? 'Pripravljam …' : SUBMIT_LABEL}
           </button>
         </div>
       </form>

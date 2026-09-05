@@ -44,9 +44,9 @@ export const RACUNOVODSTVO_COPY: SegmentCopy = {
   },
 
   emailGate: {
-    title: 'PDF poročilo in trije ukrepi za vaš servis',
+    title: 'Rezultat in PDF poročilo s tremi ukrepi za vaš servis',
     subtitle:
-      'Isti izračun v dokumentu za lastnika ali partnerje — razčlenjen po področjih, s formulo pod vsako postavko in tremi ukrepi, ki jih je v servisu mogoče začeti ta teden.',
+      'Po oddaji se na zaslonu odpre vaš izračun in z njim PDF poročilo za lastnika ali partnerje — razčlenjeno po področjih, s formulo pod vsako postavko in tremi ukrepi, ki jih je v servisu mogoče začeti ta teden.',
   },
 
   pdf: { documentTitle: 'Analiza skritih stroškov in kapacitete servisa' },

@@ -1,4 +1,5 @@
 import { CSV_COLUMNS, buildRowValues, type LeadExportRecord } from './exportRecord';
+import type { DownloadFile } from './download';
 
 /**
  * Dostava leada na konfigurabilen webhook — zapiranje kalibracijske zanke.
@@ -18,10 +19,31 @@ import { CSV_COLUMNS, buildRowValues, type LeadExportRecord } from './exportReco
  * pa je `text/plain` (glej POST).
  */
 
+/**
+ * Datoteka za prilogo e-obvestila. Base64 zato, ker telo potuje kot JSON v
+ * `text/plain` (glej POST) in binarnega dela ne more nositi drugače; sprejemnik
+ * jo dekodira z `Utilities.base64Decode`.
+ */
+export interface LeadAttachment {
+  filename: string;
+  contentType: 'application/pdf';
+  base64: string;
+}
+
 export interface LeadSubmission {
   record: LeadExportRecord;
-  /** Prodajna priprava kot samostojen HTML — ob uspešni dostavi se stranki NE prenese. */
+  /**
+   * Prodajna priprava kot samostojen HTML — ob uspešni dostavi se stranki NE
+   * prenese. Prazen niz, kadar priprava ni nastala (lib/deliverLead.ts):
+   * sprejemnik jo tedaj preskoči, zapis pa vseeno pripne.
+   */
   salesReportHtml: string;
+  /**
+   * PDF-ja za prilogi obvestila: najprej poročilo za stranko, nato priprava na
+   * pogovor (lib/deliverLead.ts). Neobvezno — sprejemnik brez njiju dela naprej,
+   * starejši sprejemnik ju prezre.
+   */
+  attachments?: LeadAttachment[];
 }
 
 /**
@@ -57,23 +79,35 @@ export function leadWebhookUrl(env: Record<string, unknown> = import.meta.env): 
 }
 
 /**
- * Koliko časa čakamo webhook, preden odnehamo.
+ * Koliko časa čakamo webhook, preden odnehamo — osnova, h kateri se prišteje
+ * čas za prenos telesa (requestTimeoutMs).
  *
  * Brez omejitve je viseč strežnik pomenil, da obiskovalec gleda vrteči se gumb,
- * dokler ne obupa — njegovega poročila tedaj ni prenesel nihče. Osem sekund je
- * krepko čez vsak zdrav odziv; ob prekoračitvi lead pade v lokalno pot.
+ * dokler ne obupa. Osem sekund je krepko čez vsak zdrav odziv na majhno telo; s
+ * prilogama (≈ 175 kB) pa gre na počasni mobilni povezavi nekaj sekund samo za
+ * prenos, preden strežnik telo sploh dobi. Prekoračitev ni le čas: dostava se šteje kot
+ * neuspela in prodajna priprava gre stranki (deliverLead.ts), zato je daljši rok
+ * cenejši od lažnega padca.
  */
 const REQUEST_TIMEOUT_MS = 8_000;
+/** Počasna mobilna povezava, s katero računamo prenos telesa: ~50 kB/s. */
+const SLOW_UPLINK_BYTES_PER_MS = 50;
+
+/** Rok zahteve glede na velikost telesa: samo HTML ≈ 8 s, s prilogama ≈ 12 s. */
+export function requestTimeoutMs(bodyBytes: number): number {
+  return REQUEST_TIMEOUT_MS + Math.ceil(bodyBytes / SLOW_UPLINK_BYTES_PER_MS);
+}
 
 /**
  * Meja, do katere sme zahteva uporabiti `keepalive`.
  *
- * `keepalive` je tisto, kar ohrani POST pri življenju, ko obiskovalec po prenosu
- * poročila zapre zavihek — brez njega je lead izgubljen. Cena: specifikacija
- * omejuje telo takih zahtev na 64 KiB, brskalnik pa večjo zavrne, ne skrajša.
- * Priprava v HTML je pri običajnem izračunu okoli 10 KB, pri razvejanem lahko
- * bistveno več; ob prekoračitvi je bolje poslati brez `keepalive` (lead pride,
- * če zavihek ostane odprt) kot ne poslati nič.
+ * `keepalive` ohrani POST pri življenju, ko obiskovalec zapre zavihek, preden
+ * strežnik odgovori — brez njega je lead izgubljen. Cena: specifikacija omejuje
+ * telo takih zahtev na 64 KiB, brskalnik pa večjo zavrne, ne skrajša. S
+ * prilogama (≈ 175 kB) meja pade vedno in to je sprejeto: ob oddaji se nič ne
+ * prenese, obiskovalec čaka na rezultate ob zasedenem gumbu in zavihek sredi
+ * čakanja zapre le redko. Brez prilog (PDF ni nastal) ostane vedenje kot prej:
+ * bolje poslati brez `keepalive` kot ne poslati nič.
  */
 const KEEPALIVE_MAX_BYTES = 60_000;
 
@@ -93,6 +127,7 @@ export async function submitLead(
       sheet: { columns: CSV_COLUMNS, row: buildRowValues(submission.record) },
     };
     const body = JSON.stringify(payload);
+    const bodyBytes = new TextEncoder().encode(body).length;
 
     const response = await fetchImpl(url, {
       method: 'POST',
@@ -104,8 +139,8 @@ export async function submitLead(
       body,
       // Zahteva preživi zaprtje zavihka: obiskovalec po prenosu poročila pogosto
       // zapre stran, preden strežnik odgovori, in lead je bil s tem izgubljen.
-      keepalive: new TextEncoder().encode(body).length <= KEEPALIVE_MAX_BYTES,
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      keepalive: bodyBytes <= KEEPALIVE_MAX_BYTES,
+      signal: AbortSignal.timeout(requestTimeoutMs(bodyBytes)),
     });
     if (!response.ok) {
       console.warn(`Oddaja leada ni uspela: ${response.status}`);
@@ -116,4 +151,21 @@ export async function submitLead(
     console.warn('Oddaja leada ni uspela:', error);
     return false;
   }
+}
+
+/**
+ * Pretvori datoteko generatorja v prilogo za žico.
+ *
+ * Brez FileReaderja: tega v node (vitest) ni, `Blob.arrayBuffer` in `btoa` pa
+ * sta v brskalniku in v node enaka. Binarni niz nastaja po kosih, ker
+ * `String.fromCharCode(...bytes)` z več sto tisoč argumenti preseže mejo sklada.
+ */
+export async function attachmentFromFile(file: DownloadFile): Promise<LeadAttachment> {
+  const bytes = new Uint8Array(await file.blob.arrayBuffer());
+  const CHUNK = 0x8000;
+  let binary = '';
+  for (let offset = 0; offset < bytes.length; offset += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + CHUNK));
+  }
+  return { filename: file.filename, contentType: 'application/pdf', base64: btoa(binary) };
 }

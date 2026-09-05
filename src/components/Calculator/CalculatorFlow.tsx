@@ -34,10 +34,10 @@ import { selectFollowUpSequence } from '../../lib/followUp';
 import { triageScoreLabel } from '../../lib/answerLabels';
 import { track } from '../../lib/analytics';
 import { deliverLead, loadDeliveryModules } from '../../lib/deliverLead';
-import { clearProgress, readProgress, saveProgress } from '../../lib/progressStorage';
-import type { DownloadFile } from '../../lib/download';
+import { readProgress, saveProgress } from '../../lib/progressStorage';
 import type { ModuleDefinition } from '../../config/modules/moduleTypes';
 import type { SalesReport } from '../../lib/salesReport';
+import type { GeneratePdfParams } from '../../lib/pdf';
 import type {
   BasicInfo,
   FlowStep,
@@ -60,8 +60,8 @@ interface CalculatorFlowProps {
   initialIndustry: string;
   utmSource: string | null;
   /**
-   * Interni način (?debug=1): edina pot, po kateri se prodajna priprava prenese
-   * na napravo. Brez njega je dostava mogoča samo prek webhooka — dokument je
+   * Interni način (?debug=1): prodajna priprava se na rezultatih ponudi tudi ob
+   * delujočem webhooku. Brez njega gre tedaj samo na strežnik — dokument je
    * napisan O stranki in ne ZANJO.
    */
   internalMode?: boolean;
@@ -121,16 +121,24 @@ export function CalculatorFlow({
   const [inputsModuleId, setInputsModuleId] = useState<string | null>(
     restored?.inputsModuleId ?? null,
   );
-  const [submitted, setSubmitted] = useState(false);
   /**
-   * Strankino poročilo, kot je bilo preneseno.
-   *
-   * Hranimo ga, ker prenos bloba ni zanesljiv — iOS Safari ga pogosto odpre v
-   * zavihku ali zavrne, zahvalni zaslon pa je doslej trdil, da je datoteka v mapi
-   * za prenose, in ni ponudil nobene poti nazaj.
+   * Obrazec je oddan. Obnovi se iz shrambe: obrazec stoji PRED rezultati, zato
+   * bi osvežitev na rezultatih brez tega vrnila vprašalnik in terjala drugo
+   * oddajo — podvojen lead.
    */
-  const [customerFile, setCustomerFile] = useState<DownloadFile | null>(null);
-  /** Pripravljeno poročilo za svetovalca — samo v internem načinu (glej internalMode). */
+  const [submitted, setSubmitted] = useState(restored?.submitted ?? false);
+  /**
+   * Oddani kontakt in privolitve — SAMO v pomnilniku, nikoli v shrambi
+   * (lib/progressStorage.ts). Rezultati ju potrebujejo dvakrat: ime podjetja za
+   * glavo PDF-ja in kljukico svetovanja za potrditev. Po osvežitvi ju ni; PDF
+   * tedaj nosi prazno ime podjetja — cena pravila "kontakta ni v shrambi".
+   */
+  const [lead, setLead] = useState<{ contact: LeadContact; consents: LeadConsents } | null>(null);
+  /**
+   * Priprava za svetovalca — posnetek ob oddaji, isti, kot je šel (ali bi šel) na
+   * strežnik. Postavi se samo, kadar priprava pripada stranki (tabela v
+   * lib/deliverLead.ts); rezultati jo tedaj ponudijo kot gumb.
+   */
   const [salesReport, setSalesReport] = useState<SalesReport | null>(null);
 
   /**
@@ -190,16 +198,24 @@ export function CalculatorFlow({
   /**
    * Napredek preživi osvežitev strani.
    *
-   * Po oddaji ne shranjujemo več in zapis pobrišemo: tok je končan, obiskovalec
-   * pa ob naslednjem obisku ne sme pristati sredi tujega vprašalnika.
+   * Shranjuje se tudi po oddaji — z zastavico `submitted` in brez kontakta. Prej
+   * se je zapis ob oddaji pobrisal, ker je bil tok končan; zdaj oddaji sledijo
+   * rezultati in osvežitev na njih ne sme vrniti vprašalnika. Zapis umre s sejo
+   * zavihka (sessionStorage), zato naslednji obiskovalec istega računalnika ne
+   * pristane sredi tujega.
    */
   useEffect(() => {
-    if (submitted) {
-      clearProgress();
-      return;
-    }
-    saveProgress({ step, basicInfo, profile, moduleInputs, triageScores, triageSelection, inputsModuleId });
-  }, [submitted, step, basicInfo, profile, moduleInputs, triageScores, triageSelection, inputsModuleId]);
+    saveProgress({
+      step,
+      basicInfo,
+      profile,
+      moduleInputs,
+      triageScores,
+      triageSelection,
+      inputsModuleId,
+      submitted,
+    });
+  }, [step, basicInfo, profile, moduleInputs, triageScores, triageSelection, inputsModuleId, submitted]);
 
   /**
    * Gumb "Nazaj" v brskalniku (in gib "swipe back" na telefonu) pelje korak
@@ -282,6 +298,16 @@ export function CalculatorFlow({
   }, []);
 
   /**
+   * Oddan obrazec se ne prikaže drugič — ne iz obnovljene seje ne iz zastarelega
+   * vnosa v zgodovini. Rezultati vnos NADOMESTIJO, da past ne ostane za naprej.
+   */
+  useEffect(() => {
+    if (step !== 'emailGate' || !submitted) return;
+    replaceNextHistoryRef.current = true;
+    setStep('results');
+  }, [step, submitted]);
+
+  /**
    * Opozorilo pred zaprtjem zavihka, kadar je kaj za izgubiti.
    *
    * Le kadar so vnosi neprazni in obrazec še ni oddan: opozorilo brez vsebine je
@@ -314,7 +340,9 @@ export function CalculatorFlow({
     if (context) order.push('context');
     if (segment.triage) order.push('triage');
     if (context) order.push('costBasis');
-    order.push('inputs', 'results');
+    // Obrazec PRED rezultati: kontakt odklene izračun in PDF. Je člen zaporedja
+    // kot vsi drugi, zato dobi vrstico napredka in oznako "Korak N od M".
+    order.push('inputs', 'emailGate', 'results');
     return order;
   }, [segment, context]);
 
@@ -368,7 +396,7 @@ export function CalculatorFlow({
     const index = stepOrder.indexOf(current);
     if (index < inputsAt) return index;
     if (current === 'inputs') return inputsAt + pageIndex;
-    // Rezultati in vse za njimi: vnosi so pojedli inputPages.length mest namesto enega.
+    // Obrazec in rezultati: vnosi so pojedli inputPages.length mest namesto enega.
     return index - 1 + inputPages.length;
   };
 
@@ -397,10 +425,17 @@ export function CalculatorFlow({
     </div>
   );
   const goNext = (current: FlowStep) => () => {
-    const next = stepOrder[stepOrder.indexOf(current) + 1];
+    let next = stepOrder[stepOrder.indexOf(current) + 1];
+    // Oddan obrazec se ne izpolnjuje drugič: kdor se z rezultatov vrne v vnose
+    // ("Nazaj na vnos", "Izračunaj še to") in popravi številke, gre naravnost
+    // na rezultate — drugo oddajo bi prodaja videla kot podvojen lead.
+    if (next === 'emailGate' && submitted) next = 'results';
     // Naprej v vnose se vedno začne na prvem področju — ne glede na to, kateri korak
     // je pred njimi (dejavnost brez konteksta pride iz triaže, ne iz osnove).
     if (next === 'inputs') setInputsModuleId(null);
+    // Imenovalec deleža oddaj: samo prihod NAPREJ iz vnosov. Vsak izris obrazca
+    // (tudi po osvežitvi) meri že lm10_step_view.
+    if (next === 'emailGate') track('lm10_email_gate_view', { segment: segment.id });
     setStep(next);
   };
   const goBack = (current: FlowStep) => () =>
@@ -563,24 +598,30 @@ export function CalculatorFlow({
         !isModuleAnswered(definition, resolvedValues[definition.id])),
   );
 
-/**
-   * Rezultat je konec brezplačnega dela in edina točka, kjer je smiselno meriti
+  /**
+   * jsPDF s pisavami vred je 540 kB. Naloži se, ko obiskovalec pride do obrazca:
+   * med tipkanjem kontakta je povezava prosta, zato oddaja — ki zgradi oba PDF-ja
+   * za prilogi obvestila (lib/deliverLead.ts) — in gumb za prenos na rezultatih
+   * potem ne čakata na kos kode. 'results' pokrije obnovljeno sejo, ki obrazec
+   * preskoči.
+   */
+  useEffect(() => {
+    if (step === 'emailGate' || step === 'results') {
+      void import('../../lib/pdf');
+      void import('../../lib/pdfSales');
+    }
+  }, [step]);
+
+  /**
+   * Rezultat je prva stran po oddaji in edina točka, kjer je smiselno meriti
    * KAKOVOST izračuna (oznaka zanesljivosti, koliko področij je izmerjenih) —
-   * s tem se pokaže, ali obiskovalci odpadejo zaradi šibkih ali močnih številk.
+   * s tem se pokaže, ali leadi prihajajo s šibkimi ali močnimi številkami.
    * Zneskov med njimi ni; ti so poslovni podatek stranke, ne merilo lijaka.
    */
   const resultsSeen = useRef(false);
   useEffect(() => {
     if (step !== 'results' || resultsSeen.current) return;
     resultsSeen.current = true;
-
-    /**
-     * jsPDF s pisavami vred je 540 kB in se doslej začel nalagati šele ob kliku
-     * na "Prenesi poročilo" — obiskovalec je po oddaji obrazca gledal vrteči se
-     * gumb tudi nekaj sekund. Tu je naslednji klik že skoraj gotov, povezava pa
-     * med branjem rezultatov prosta.
-     */
-    void import('../../lib/pdf');
 
     track('lm10_results_view', {
       segment: activeSegmentId,
@@ -590,25 +631,53 @@ export function CalculatorFlow({
     });
   });
 
-  async function handleEmailSubmit({
-    contact,
-    consents,
-  }: {
-    contact: LeadContact;
-    consents: LeadConsents;
-  }) {
+  /**
+   * Pokritost, kot jo vidi obiskovalec: hero znesek meri samo izbrana področja.
+   * Isti podatek dobita priprava za svetovalca in strankin PDF.
+   */
+  const coverage = {
+    measuredCount: triageableIds.length - unmeasuredModules.length,
+    offeredCount: triageableIds.length,
+    unmeasured: unmeasuredModules.map((definition) => ({
+      title: definition.title,
+      scoreLabel:
+        (triageScores[definition.id] ?? 0) > 0
+          ? triageScoreLabel(definition, triageScores[definition.id] ?? 0)
+          : null,
+    })),
+  };
+
+  /**
+   * Parametri strankinega poročila — eno mesto za oba klicatelja: prilogo
+   * obvestila ob oddaji in gumb na rezultatih. Ime podjetja je edino, kar pride
+   * iz obrazca: poročilo gre upravi stranke, ki ve, kdo ga je izpolnil, in se
+   * posreduje interno — osebni podatki v njem so odveč.
+   */
+  function customerPdfParams(companyName: string): GeneratePdfParams {
+    return {
+      segment,
+      companyName,
+      employeeCount: basicInfo.employeeCount,
+      outputs,
+      totals,
+      totalsRange,
+      coverage,
+      highestModule,
+      accountingCapacity,
+      confidenceReason: confidenceReasons.pdf,
+    };
+  }
+
+  async function handleEmailSubmit(submission: { contact: LeadContact; consents: LeadConsents }) {
     // Orkestracija dostave živi v lib/deliverLead.ts: vitest teče brez jsdom, zato
     // je bilo tu — sredi komponente — pravilo "prodajna priprava nikoli k stranki"
-    // nepreverljivo s testom. Tu ostane samo vezava na stanje in na brskalnik.
-    const [modules, { downloadFile, downloadSequentially }] = await Promise.all([
-      loadDeliveryModules(),
-      import('../../lib/download'),
-    ]);
+    // nepreverljivo s testom. Tu ostane samo vezava na stanje in na navigacijo.
+    const modules = await loadDeliveryModules();
 
     await deliverLead(
       {
-        contact,
-        consents,
+        contact: submission.contact,
+        consents: submission.consents,
         utmSource,
         internalMode,
         segment,
@@ -625,30 +694,38 @@ export function CalculatorFlow({
         totalsRange,
         highestModule,
         accountingCapacity,
-        confidenceReasonPdf: confidenceReasons.pdf,
-        // Ista pokritost kot na zaslonu: hero znesek meri samo izbrana področja.
-        coverage: {
-          measuredCount: triageableIds.length - unmeasuredModules.length,
-          offeredCount: triageableIds.length,
-          unmeasured: unmeasuredModules.map((definition) => ({
-            title: definition.title,
-            scoreLabel:
-              (triageScores[definition.id] ?? 0) > 0
-                ? triageScoreLabel(definition, triageScores[definition.id] ?? 0)
-                : null,
-          })),
-        },
+        coverage,
         followUpSequence,
+        customerPdf: customerPdfParams(submission.contact.companyName),
       },
       modules,
       {
-        downloadFile,
-        downloadSequentially,
-        onCustomerFile: setCustomerFile,
         onSalesReport: setSalesReport,
-        onSubmitted: () => setSubmitted(true),
+        onSubmitted: () => {
+          setLead(submission);
+          setSubmitted(true);
+          // Rezultati NADOMESTIJO vnos obrazca v zgodovini: brskalnikov "Nazaj"
+          // (in gib "swipe back") z rezultatov pelje v vnose, ne na oddan obrazec.
+          replaceNextHistoryRef.current = true;
+          setStep('results');
+        },
       },
     );
+  }
+
+  /**
+   * Strankin PDF ob kliku na rezultatih — iz TRENUTNEGA stanja in ne iz datoteke,
+   * poslane ob oddaji: po "Nazaj na vnos" mora poročilo ustrezati zaslonu.
+   * Po osvežitvi ime podjetja ni znano (glej lead).
+   */
+  async function downloadCustomerPdf() {
+    const [{ buildResultsPdfFile }, { downloadFile }] = await Promise.all([
+      import('../../lib/pdf'),
+      import('../../lib/download'),
+    ]);
+    downloadFile(await buildResultsPdfFile(customerPdfParams(lead?.contact.companyName ?? '')));
+    // Koliko obiskovalcev poročilo sploh vzame — vsak prenos je ročen.
+    track('lm10_report_download', { segment: segment.id });
   }
 
   if (step === 'industry') {
@@ -846,36 +923,10 @@ export function CalculatorFlow({
           // in moral do svojega priklikati skozi vsa vmesna.
           openInputsAt(id);
         }}
-        onProceedToEmail={() => {
-          track('lm10_email_gate_view', { segment: segment.id });
-          setStep('emailGate');
-        }}
-        onBack={() => navigateBack(() => openInputsAt(inputPages.at(-1)?.[0].id ?? null))}
-        />
-      </>
-    );
-  }
-
-  if (step === 'emailGate') {
-    return (
-      <EmailGate
-        copy={copy.emailGate}
-        submitted={submitted}
+        onDownloadPdf={downloadCustomerPdf}
+        consultingRequested={lead?.consents.consentConsulting ?? false}
         internalMode={internalMode}
         followUpSequenceDebug={followUpSequence}
-        onSubmit={handleEmailSubmit}
-        onDownloadCustomerPdf={
-          customerFile
-            ? async () => {
-                const { downloadFile } = await import('../../lib/download');
-                downloadFile(customerFile);
-                // Pove, kako pogosto samodejni prenos odpove — brez tega o
-                // zanesljivosti prenosa bloba na iOS ugibamo.
-                track('lm10_report_redownload', { segment: segment.id });
-              }
-            : undefined
-        }
-        onBackToResults={() => navigateBack(() => setStep('results'))}
         onDownloadSalesPdf={
           salesReport
             ? async () => {
@@ -887,8 +938,27 @@ export function CalculatorFlow({
               }
             : undefined
         }
-        onBack={() => navigateBack(() => setStep('results'))}
-      />
+        // Ne goBack('results'): ta bi zdaj pristal na oddanem obrazcu. Nazaj z
+        // rezultatov pelje vedno na zadnjo stran vnosov.
+        onBack={() => navigateBack(() => openInputsAt(inputPages.at(-1)?.[0].id ?? null))}
+        />
+      </>
+    );
+  }
+
+  if (step === 'emailGate') {
+    return (
+      <>
+        {progressBar('emailGate')}
+        <EmailGate
+          copy={copy.emailGate}
+          stepLabel={stepLabel('emailGate')}
+          onSubmit={handleEmailSubmit}
+          // Zadnja stran vnosov: inputsModuleId ob prihodu naprej ostane, zato
+          // "Nazaj" (skozi zgodovino) pristane tam, od koder je obiskovalec prišel.
+          onBack={goBack('emailGate')}
+        />
+      </>
     );
   }
 

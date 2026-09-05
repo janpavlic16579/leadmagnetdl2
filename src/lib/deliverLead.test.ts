@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { deliverLead, loadDeliveryModules, type DeliverLeadInput, type DeliverLeadModules } from './deliverLead';
 import type { DownloadFile } from './download';
-import type { LeadExportRecord } from './exportRecord';
+import type { LeadSubmission } from './submitLead';
 import { computeModules, findHighestModule, resolveInputs } from './moduleEngine';
 import { aggregateResults, assessConfidence, buildComputeContext } from './potential';
 import { getModules } from '../config/modules';
@@ -11,10 +11,11 @@ import { emptyProfileFor, getSegmentContext } from '../config/contexts';
 /**
  * Pravilo, ki ga varuje ta test: KAM GRE PRODAJNA PRIPRAVA.
  *
- * Ob DELUJOČEM webhooku ne sme k stranki — dokument nosi oceno ustreznosti,
- * priporočilo licenc in pričakovane ugovore, torej je napisan O stranki in ne
- * ZANJO. Dokler webhook ni nastavljen, je prenos pri stranki edina pot, po kateri
- * svetovalec pripravo dobi, zato tedaj MORA nastati.
+ * Ob DELUJOČEM webhooku se stranki ne sme ponuditi — dokument nosi oceno
+ * ustreznosti, priporočilo licenc in pričakovane ugovore, torej je napisan O
+ * stranki in ne ZANJO. Dokler webhook ni nastavljen (ali dostava ne uspe), je
+ * pot prek stranke edina, po kateri svetovalec pripravo dobi, zato se tedaj
+ * MORA ponuditi — a samo kot gumb na rezultatih, nikoli kot samodejni prenos.
  *
  * Ta razlika je prav tisto, kar se ob urejanju dostave najlažje pomotoma obrne;
  * dokler je koda živela v komponenti, je ni preverjal noben test (vitest teče
@@ -36,6 +37,9 @@ function scenario(): DeliverLeadInput {
       ? assessConfidence({ profile, context, modules, values, outputs })
       : undefined,
   });
+
+  const highestModule = findHighestModule(outputs, segment.moduleIds);
+  const coverage = { measuredCount: 0, offeredCount: 10, unmeasured: [] };
 
   return {
     contact: {
@@ -61,20 +65,33 @@ function scenario(): DeliverLeadInput {
     outputs,
     totals,
     totalsRange: null,
-    highestModule: findHighestModule(outputs, segment.moduleIds),
-    coverage: { measuredCount: 0, offeredCount: 10, unmeasured: [] },
+    highestModule,
+    coverage,
     followUpSequence: 'low-loss-newsletter',
+    customerPdf: {
+      segment,
+      companyName: 'Testno podjetje d.o.o.',
+      employeeCount: 45,
+      outputs,
+      totals,
+      totalsRange: null,
+      coverage,
+      highestModule,
+      confidenceReason: null,
+    },
   };
 }
 
-/** Prestrežene poti navzven: prenosi, stanje in webhook. */
+/** Poceni generator namesto jsPDF: testi dostave ne merijo izrisa (to je pdfSmoke). */
+function fakePdf(filename: string): () => Promise<DownloadFile> {
+  return async () => ({ filename, blob: new Blob(['%PDF-1.4 testni dokument']) });
+}
+
+/** Prestrežene poti navzven: webhook in stanje. */
 function harness(overrides: Partial<DeliverLeadModules>, real: DeliverLeadModules) {
-  const downloaded: DownloadFile[] = [];
-  /** Prenosi po svežnjih: ravni seznam ne pove, ali sta datoteki šli iz ENE geste. */
-  const batches: DownloadFile[][] = [];
-  /** Vrstni red poti navzven — lovi, ali webhook stoji pred prenosoma. */
-  const order: ('download' | 'webhook')[] = [];
-  const posted: { record: LeadExportRecord; salesReportHtml: string }[] = [];
+  /** Vrstni red poti navzven — lovi, ali se rezultati odklenejo pred odločitvijo o pripravi. */
+  const order: ('webhook' | 'salesReport' | 'submitted')[] = [];
+  const posted: LeadSubmission[] = [];
   let salesReportSet = false;
   let submitted = false;
 
@@ -85,6 +102,8 @@ function harness(overrides: Partial<DeliverLeadModules>, real: DeliverLeadModule
       posted.push(submission);
       return true;
     },
+    buildResultsPdfFile: fakePdf('porocilo.pdf'),
+    buildSalesPdfFile: fakePdf('priprava.pdf'),
     ...overrides,
   };
 
@@ -99,21 +118,12 @@ function harness(overrides: Partial<DeliverLeadModules>, real: DeliverLeadModule
   };
 
   const hooks = {
-    downloadFile: (file: DownloadFile) => {
-      order.push('download');
-      downloaded.push(file);
-      batches.push([file]);
-    },
-    downloadSequentially: async (files: DownloadFile[]) => {
-      order.push('download');
-      downloaded.push(...files);
-      batches.push(files);
-    },
-    onCustomerFile: () => {},
     onSalesReport: () => {
+      order.push('salesReport');
       salesReportSet = true;
     },
     onSubmitted: () => {
+      order.push('submitted');
       submitted = true;
     },
   };
@@ -121,32 +131,26 @@ function harness(overrides: Partial<DeliverLeadModules>, real: DeliverLeadModule
   return {
     modules,
     hooks,
-    downloaded,
-    batches,
     order,
     posted,
     state: () => ({ salesReportSet, submitted }),
   };
 }
 
-const isSalesFile = (file: DownloadFile) => file.filename.includes('priprava-na-pogovor');
-
 describe('Dostava po oddaji', () => {
-  it('brez webhooka: priprava se prenese stranki, da jo posreduje svetovalcu', async () => {
+  it('brez webhooka: priprava se ponudi stranki, da jo posreduje svetovalcu', async () => {
     const real = await loadDeliveryModules();
     const h = harness({}, real);
 
     await deliverLead(scenario(), h.modules, h.hooks);
 
-    // Strankino poročilo je prvo — je edino, ki mora priti vedno.
-    expect(h.downloaded[0]?.filename).toContain('analiza-skritih-stroskov');
-    expect(h.downloaded.filter(isSalesFile)).toHaveLength(1);
-    // Gumba za ponovni prenos na zahvalnem zaslonu visita na tem stanju.
+    // Gumb "Priprava v PDF" na rezultatih visi na tem stanju.
     expect(h.state().salesReportSet).toBe(true);
+    expect(h.posted).toHaveLength(0);
     expect(h.state().submitted).toBe(true);
   });
 
-  it('z webhookom: priprava gre na strežnik in NE k stranki', async () => {
+  it('z webhookom: priprava gre na strežnik in se stranki NE ponudi', async () => {
     const real = await loadDeliveryModules();
     const h = harness({ leadWebhookUrl: () => 'https://example.test/webhook' }, real);
 
@@ -156,11 +160,11 @@ describe('Dostava po oddaji', () => {
     expect(h.posted[0]?.salesReportHtml).toContain('<!doctype html>');
     expect(h.posted[0]?.record.email).toBe('test@example.com');
     // Jedro pravila: uspešna dostava pomeni, da stranka priprave ne vidi.
-    expect(h.downloaded.some(isSalesFile)).toBe(false);
     expect(h.state().salesReportSet).toBe(false);
+    expect(h.state().submitted).toBe(true);
   });
 
-  it('neuspela dostava: priprava pade nazaj na prenos, da se lead ne izgubi', async () => {
+  it('neuspela dostava: priprava se ponudi stranki, da se lead ne izgubi', async () => {
     const real = await loadDeliveryModules();
     const h = harness(
       {
@@ -172,53 +176,48 @@ describe('Dostava po oddaji', () => {
 
     await deliverLead(scenario(), h.modules, h.hooks);
 
-    expect(h.downloaded.filter(isSalesFile)).toHaveLength(1);
-  });
-
-  it('interni način: priprava se prenese in ponudi za ponovni prenos', async () => {
-    const real = await loadDeliveryModules();
-    const h = harness({}, real);
-
-    await deliverLead({ ...scenario(), internalMode: true }, h.modules, h.hooks);
-
-    const salesFiles = h.downloaded.filter(isSalesFile);
-    expect(salesFiles.map((file) => file.filename.split('.').pop())).toEqual(['pdf']);
     expect(h.state().salesReportSet).toBe(true);
+    expect(h.state().submitted).toBe(true);
   });
 
-  /**
-   * Doslej je strankino poročilo odšlo takoj, priprava pa šele za webhookom in
-   * gradnjo PDF-ja. Med prenosoma je minilo do deset sekund, brskalnik pa v tem
-   * času geste ne prizna več in drugi prenos tiho zavrže. Ta dva testa sta edina,
-   * ki to regresijo ujameta — ravni seznam prenosov je ne pokaže.
-   */
-  it('obe poročili gresta iz ene geste, strankino prvo', async () => {
-    const real = await loadDeliveryModules();
-    const h = harness({}, real);
-
-    await deliverLead(scenario(), h.modules, h.hooks);
-
-    expect(h.batches).toHaveLength(1);
-    expect(h.batches[0]).toHaveLength(2);
-    expect(h.batches[0][0].filename).toContain('analiza-skritih-stroskov');
-    expect(h.batches[0][1].filename).toContain('priprava-na-pogovor');
-  });
-
-  it('webhook ne stoji pred prenosoma', async () => {
+  it('napaka med dostavo šteje kot neuspela dostava', async () => {
+    // Prej je izjema rezervo preskočila, ker bi drugi prenos iz ugasle geste
+    // tako ali tako odpadel. Gumb na rezultatih te omejitve nima.
     const real = await loadDeliveryModules();
     const h = harness(
-      { leadWebhookUrl: () => 'https://example.test/webhook', submitLead: async () => false },
+      {
+        leadWebhookUrl: () => 'https://example.test/webhook',
+        submitLead: async () => {
+          throw new Error('omrežje');
+        },
+      },
       real,
     );
 
     await deliverLead(scenario(), h.modules, h.hooks);
 
-    // Prvi stik z zunanjim svetom mora biti prenos, ne osemsekundni rok webhooka.
-    expect(h.order[0]).toBe('download');
-    expect(h.order).toContain('webhook');
+    expect(h.state().salesReportSet).toBe(true);
+    expect(h.state().submitted).toBe(true);
   });
 
-  it('napaka v prodajnem delu ne odnese strankinega poročila', async () => {
+  it('interni način: priprava gre na strežnik IN se ponudi', async () => {
+    const real = await loadDeliveryModules();
+    const h = harness({ leadWebhookUrl: () => 'https://example.test/webhook' }, real);
+
+    await deliverLead({ ...scenario(), internalMode: true }, h.modules, h.hooks);
+
+    expect(h.posted).toHaveLength(1);
+    expect(h.state().salesReportSet).toBe(true);
+  });
+
+  /**
+   * Priprava je pomožna, zapis ni. Dokler je bila dostava pogojena z uspešno
+   * pripravo, je izjema v prodajnem delu lead tiho pokopala: webhook se ni
+   * poklical, obiskovalec pa je pristal na rezultatih, kot da je oddal — in prav
+   * to je ta test takrat zapisoval kot pričakovano (`posted` dolžine 0).
+   */
+  it('napaka v prodajnem delu ne ustavi oddaje: zapis in strankin PDF gresta na webhook brez priprave', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const real = await loadDeliveryModules();
     const h = harness(
       {
@@ -232,10 +231,183 @@ describe('Dostava po oddaji', () => {
 
     await deliverLead(scenario(), h.modules, h.hooks);
 
-    expect(h.downloaded).toHaveLength(1);
-    expect(h.downloaded[0]?.filename).toContain('analiza-skritih-stroskov');
-    expect(h.downloaded.some(isSalesFile)).toBe(false);
-    expect(h.posted).toHaveLength(0);
+    expect(h.posted).toHaveLength(1);
+    expect(h.posted[0]?.record.email).toBe('test@example.com');
+    // Časovni žig zapisa ne sme biti odvisen od priprave.
+    expect(h.posted[0]?.record.timestampISO).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    // Prazen niz in ne izpuščeno polje — sprejemnik ga preskoči.
+    expect(h.posted[0]?.salesReportHtml).toBe('');
+    expect(h.posted[0]?.attachments?.map((attachment) => attachment.filename)).toEqual(['porocilo.pdf']);
+    // Priprave ni, zato je tudi stranki ni mogoče ponuditi; oddaja je opravljena.
+    expect(h.state().salesReportSet).toBe(false);
     expect(h.state().submitted).toBe(true);
+    // Dostava je uspela — rezervna pot se ne sme sprožiti.
+    expect(h.order).toEqual(['webhook', 'submitted']);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('padel izris HTML priprave ne ustavi oddaje: zapis odide, HTML je prazen', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const real = await loadDeliveryModules();
+    const h = harness(
+      {
+        leadWebhookUrl: () => 'https://example.test/webhook',
+        buildSalesReportHtml: () => {
+          throw new Error('izris');
+        },
+      },
+      real,
+    );
+
+    await deliverLead(scenario(), h.modules, h.hooks);
+
+    expect(h.posted).toHaveLength(1);
+    expect(h.posted[0]?.salesReportHtml).toBe('');
+    // Priprava kot podatek obstaja, zato gre njen PDF v prilogo.
+    expect(h.posted[0]?.attachments?.map((attachment) => attachment.filename)).toEqual(['porocilo.pdf', 'priprava.pdf']);
+    expect(h.state().salesReportSet).toBe(false);
+    expect(h.state().submitted).toBe(true);
+    warn.mockRestore();
+  });
+
+  it('brez webhooka in brez priprave se oddaja zaključi brez gumba', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const real = await loadDeliveryModules();
+    const h = harness(
+      {
+        buildSalesReport: () => {
+          throw new Error('sesulo se je');
+        },
+      },
+      real,
+    );
+
+    await deliverLead(scenario(), h.modules, h.hooks);
+
+    expect(h.posted).toHaveLength(0);
+    expect(h.state().salesReportSet).toBe(false);
+    expect(h.state().submitted).toBe(true);
+    warn.mockRestore();
+  });
+
+  /**
+   * Rezultati se izrišejo z gumbom za pripravo ali brez njega — ne pa z gumbom,
+   * ki se pod obiskovalcem pojavi osem sekund pozneje, ko webhook obupa.
+   */
+  it('rezultati se odklenejo šele, ko je o pripravi odločeno', async () => {
+    const real = await loadDeliveryModules();
+    const h = harness(
+      { leadWebhookUrl: () => 'https://example.test/webhook', submitLead: async () => false },
+      real,
+    );
+
+    await deliverLead(scenario(), h.modules, h.hooks);
+
+    expect(h.order.at(-1)).toBe('submitted');
+    expect(h.order.indexOf('webhook')).toBeLessThan(h.order.indexOf('salesReport'));
+  });
+
+  /**
+   * Obvestilo prodaji nosi oba PDF-ja. Vrstni red je del oblike: sprejemnik
+   * (Koda.gs) imen ne razlaga, prodajalec pa v pošti najprej vidi strankin pogled.
+   */
+  it('z webhookom gresta v oddajo oba PDF-ja: najprej strankin, nato priprava', async () => {
+    const real = await loadDeliveryModules();
+    const h = harness({ leadWebhookUrl: () => 'https://example.test/webhook' }, real);
+
+    await deliverLead(scenario(), h.modules, h.hooks);
+
+    const attachments = h.posted[0]?.attachments ?? [];
+    expect(attachments.map((attachment) => attachment.filename)).toEqual(['porocilo.pdf', 'priprava.pdf']);
+    expect(attachments.every((attachment) => attachment.contentType === 'application/pdf')).toBe(true);
+    expect(atob(attachments[0]?.base64 ?? '')).toMatch(/^%PDF-/);
+  });
+
+  /** Dokaz celotne verige s PRAVIMA generatorjema — ne s podtaknjenima. */
+  it('prava generatorja dasta pravi PDF-datoteki z imenoma iz aplikacije', async () => {
+    const real = await loadDeliveryModules();
+    const h = harness(
+      {
+        leadWebhookUrl: () => 'https://example.test/webhook',
+        buildResultsPdfFile: real.buildResultsPdfFile,
+        buildSalesPdfFile: real.buildSalesPdfFile,
+      },
+      real,
+    );
+
+    await deliverLead(scenario(), h.modules, h.hooks);
+
+    const attachments = h.posted[0]?.attachments ?? [];
+    expect(attachments).toHaveLength(2);
+    expect(attachments[0]?.filename).toMatch(/^datalab-analiza-skritih-stroskov-.*\.pdf$/);
+    expect(attachments[1]?.filename).toMatch(/^datalab-priprava-na-pogovor-.*\.pdf$/);
+    for (const attachment of attachments) {
+      expect(atob(attachment.base64).slice(0, 5)).toBe('%PDF-');
+      expect(attachment.base64.length).toBeGreaterThan(1000);
+    }
+  });
+
+  it('padel generator ne ustavi dostave — oddaja gre brez te priloge', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const real = await loadDeliveryModules();
+    const h = harness(
+      {
+        leadWebhookUrl: () => 'https://example.test/webhook',
+        buildResultsPdfFile: async () => {
+          throw new Error('jsPDF');
+        },
+      },
+      real,
+    );
+
+    await deliverLead(scenario(), h.modules, h.hooks);
+
+    expect(h.posted).toHaveLength(1);
+    expect(h.posted[0]?.attachments?.map((attachment) => attachment.filename)).toEqual(['priprava.pdf']);
+    // Dostava je uspela: priprava ostane na strežniku, stranki se ne ponudi.
+    expect(h.state().salesReportSet).toBe(false);
+    expect(h.state().submitted).toBe(true);
+    warn.mockRestore();
+  });
+
+  /**
+   * Zavrnjen uvoz jsPDF bi iz handleEmailSubmit padel kot "Oddaja ni uspela" in
+   * lead bi propadel zaradi priloge; zato generatorja smeta biti null.
+   */
+  it('brez naloženega jsPDF gre oddaja naprej brez prilog', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const real = await loadDeliveryModules();
+    const h = harness(
+      {
+        leadWebhookUrl: () => 'https://example.test/webhook',
+        buildResultsPdfFile: null,
+        buildSalesPdfFile: null,
+      },
+      real,
+    );
+
+    await deliverLead(scenario(), h.modules, h.hooks);
+
+    expect(h.posted).toHaveLength(1);
+    expect(h.posted[0]?.attachments).toEqual([]);
+    expect(h.state().salesReportSet).toBe(false);
+    expect(h.state().submitted).toBe(true);
+    warn.mockRestore();
+  });
+
+  it('brez webhooka se PDF-ja ne gradita', async () => {
+    const real = await loadDeliveryModules();
+    let built = 0;
+    const counting = async (): Promise<DownloadFile> => {
+      built += 1;
+      return { filename: 'x.pdf', blob: new Blob(['%PDF-']) };
+    };
+    const h = harness({ buildResultsPdfFile: counting, buildSalesPdfFile: counting }, real);
+
+    await deliverLead(scenario(), h.modules, h.hooks);
+
+    expect(built).toBe(0);
+    expect(h.posted).toHaveLength(0);
   });
 });

@@ -1,5 +1,4 @@
 import { track } from './analytics';
-import type { DownloadFile } from './download';
 import type { SegmentContext, BusinessProfile } from '../config/contexts';
 import type { ModuleDefinition, ModuleOutput } from '../config/modules/moduleTypes';
 import type { SegmentConfig } from '../config/segments';
@@ -9,10 +8,13 @@ import type { ResultTotals } from './potential';
 import type { TotalsRange } from './range';
 import type { SalesReport } from './salesReport';
 import type { LeadConsents, LeadContact } from '../types';
+import type { DownloadFile } from './download';
+import type { GeneratePdfParams } from './pdf';
+import type { LeadAttachment } from './submitLead';
 
 /**
- * Dostava po oddaji obrazca: sestavi dokumente, jih spravi tja, kamor sodijo, in
- * zapre kalibracijsko zanko.
+ * Dostava po oddaji obrazca: sestavi prodajno pripravo, jo spravi tja, kamor
+ * sodi, in zapre kalibracijsko zanko.
  *
  * Živela je kot 130 vrstic v CalculatorFlow.tsx in je bila zato NEPREVERLJIVA:
  * vitest teče brez jsdom, komponente ni mogoče izrisati, pravilo "prodajna
@@ -20,29 +22,45 @@ import type { LeadConsents, LeadContact } from '../types';
  * kode znal prebrati. Prav to pravilo je najdražje, če se prelomi — dokument
  * govori O stranki in ne ZANJO.
  *
- * Tu je zato čista funkcija s štirimi stiki z zunanjim svetom (prenos datoteke,
- * shramba stanja, sled). Vsi so vbrizgljivi, zato jih test lahko prestreže.
+ * Tu je zato čista funkcija s tremi stiki z zunanjim svetom (webhook, shramba
+ * stanja, sled). Vsi so vbrizgljivi, zato jih test lahko prestreže.
+ *
+ * OB ODDAJI SE NA NAPRAVO NE PRENESE NIČ. Obrazec stoji PRED rezultati:
+ * obiskovalec številk še ni videl in datoteka brez pogleda je datoteka brez
+ * konteksta. Strankino poročilo se zato prenese ob kliku na rezultatih — iz
+ * takratnega stanja, da PDF ustreza zaslonu tudi po popravku vnosov. Vsak klik
+ * je sveža gesta, zato odpade vprašanje, koliko prenosov brskalnik dovoli iz ene
+ * (prej: dva prenosa in webhook iz iste geste, drugi prenos je na iOS tiho
+ * odpadal).
+ *
+ * OBA PDF-JA PA NASTANETA ŽE TU — kot prilogi e-obvestila prodaji
+ * (buildAttachments). Nastaneta v pomnilniku in odideta po žici; sta posnetek ob
+ * oddaji, enako kot vrstica v preglednici, gumb na rezultatih pa gradi iz
+ * trenutnega stanja. jsPDF se zato naloži tudi tu — kos je predhodno naložen na
+ * obrazcu (CalculatorFlow); kadar se ne naloži ali PDF ne nastane, gre oddaja
+ * naprej brez priloge: lead je vreden več od priloge.
  *
  * KAM GRE PRIPRAVA — eno pravilo, ki se preklopi samo:
  *
- * | Webhook | Dostava uspela | Kam gre priprava            | Kdaj                  |
- * |---------|----------------|-----------------------------|-----------------------|
- * | ne      | —              | prenese se STRANKI          | skupaj s poročilom    |
- * | da      | da             | samo na strežnik            | —                     |
- * | da      | ne             | prenese se STRANKI (rezerva)| po webhooku           |
+ * | Webhook | Dostava uspela | Kam gre priprava                        |
+ * |---------|----------------|-----------------------------------------|
+ * | ne      | —              | ponudi se STRANKI (gumb na rezultatih)  |
+ * | da      | da             | samo na strežnik                        |
+ * | da      | ne             | ponudi se STRANKI (rezerva, isti gumb)  |
  *
- * KDAJ je enako pomembno kot KAM. Brskalnik iz ene uporabnikove geste zanesljivo
- * dovoli en prenos, naslednje pa presoja po tem, kako sveža je gesta. Doslej je
- * strankino poročilo odšlo takoj, priprava pa šele za sestavljanjem poročila,
- * ČAKANJEM NA WEBHOOK (rok 8 s) in gradnjo PDF-ja — do tedaj je gesta ugasnila in
- * drugi prenos je tiho odpadel. Zato se priprava zgradi PRED prenosom, oba gresta
- * skozi en downloadSequentially, webhook pa se umakne ZA njiju.
- *
- * Prva vrstica je začasna: dokler `VITE_LEAD_WEBHOOK_URL` ni nastavljen, je prenos
- * pri stranki edina pot, po kateri svetovalec pripravo sploh dobi — stranka mu jo
- * posreduje. Ko naslov nastavite, se prenos ugasne sam, brez posega v kodo.
- * Cena te začasnosti: dokument je napisan O stranki (ocena ustreznosti,
+ * Prva vrstica je začasna: dokler `VITE_LEAD_WEBHOOK_URL` ni nastavljen, je
+ * prenos pri stranki edina pot, po kateri svetovalec pripravo sploh dobi —
+ * stranka mu jo posreduje. Ko naslov nastavite, se gumb umakne sam, brez posega
+ * v kodo. Cena te začasnosti: dokument je napisan O stranki (ocena ustreznosti,
  * priporočilo licenc, pričakovani ugovori) in ne ZANJO.
+ *
+ * PRIPRAVA JE POMOŽNA, ZAPIS NI. Kadar `buildSalesReport` vrže izjemo, gre
+ * oddaja na webhook vseeno: izvozni zapis, vrstica za preglednico in strankin
+ * PDF od priprave niso odvisni, priprava (HTML in njen PDF) pa tedaj odpade.
+ * Dokler je bila dostava pogojena z uspešno pripravo, je napaka v prodajnem
+ * delu — ki je najbolj razvejan kos kode — lead tiho pokopala: webhook se ni
+ * poklical, dogodek neuspeha se ni sprožil, obiskovalec pa je pristal na
+ * rezultatih, kot da je oddal. Sprejemnik (Koda.gs) prazno pripravo preskoči.
  */
 
 export interface DeliverLeadInput {
@@ -50,8 +68,8 @@ export interface DeliverLeadInput {
   consents: LeadConsents;
   utmSource: string | null;
   /**
-   * Interni način (?debug=1). Edina pot, po kateri prodajna priprava pristane na
-   * napravi. Brez njega gre lahko samo na webhook.
+   * Interni način (?debug=1). Priprava se ponudi stranki tudi ob delujočem
+   * webhooku — za razvoj in pregled vsebine.
    */
   internalMode: boolean;
 
@@ -72,11 +90,6 @@ export interface DeliverLeadInput {
   /** Id področja z največjim letnim zneskom (moduleEngine.findHighestModule). */
   highestModule: string | null;
   accountingCapacity?: number;
-  /**
-   * Izračunan razlog nizke zanesljivosti za strankin PDF (brezosebna oblika,
-   * lib/confidenceReason.ts) — namesto splošnega "podatki manjkajo".
-   */
-  confidenceReasonPdf?: string | null;
   /** Pokritost, kot jo vidi obiskovalec — hero znesek meri samo izbrana področja. */
   coverage: {
     measuredCount: number;
@@ -84,55 +97,116 @@ export interface DeliverLeadInput {
     unmeasured: { title: string; scoreLabel: string | null }[];
   };
   followUpSequence: FollowUpSequence;
+  /**
+   * Parametri strankinega poročila za prilogo obvestila — sestavljeni na istem
+   * mestu kot za gumb na rezultatih (CalculatorFlow.customerPdfParams), da
+   * prodaja dobi isti dokument, kot ga vidi stranka.
+   */
+  customerPdf: GeneratePdfParams;
 }
 
 export interface DeliverLeadHooks {
-  /** Prenos ene datoteke — v brskalniku sidro z blobom, v testu zabeležka. */
-  downloadFile: (file: DownloadFile) => void;
-  /** Zaporedni prenos z razmikom; brskalnik več prenosov iz ene geste zavrne. */
-  downloadSequentially: (files: DownloadFile[]) => Promise<void>;
-  /** Strankino poročilo za ponovni prenos na zahvalnem zaslonu. */
-  onCustomerFile: (file: DownloadFile) => void;
-  /** Prodajna priprava — postavi se SAMO v internem načinu. */
+  /**
+   * Priprava, kadar mora do svetovalca PREK stranke (tabela v glavi). Rezultati
+   * jo ponudijo kot gumb "Priprava v PDF" — nikoli se ne prenese sama.
+   */
   onSalesReport: (report: SalesReport) => void;
-  /** Trenutek, ko je izračun pri stranki in je oddaja opravljena. */
+  /**
+   * Oddaja je opravljena — od tu naprej se obiskovalcu smejo pokazati rezultati.
+   * Pokliče se ŠELE, ko je o pripravi odločeno: gumb, ki bi se pod obiskovalcem
+   * pojavil osem sekund po rezultatih, je zaslon, ki se premika.
+   */
   onSubmitted: () => void;
 }
 
-/** Moduli, ki jih dostava potrebuje. Ločeni zato, da jih test poda brez uvoza jsPDF. */
+/** Moduli, ki jih dostava potrebuje. Ločeni zato, da jih test poda brez omrežja. */
 export interface DeliverLeadModules {
-  buildResultsPdfFile: typeof import('./pdf').buildResultsPdfFile;
   buildSalesReport: typeof import('./salesReport').buildSalesReport;
-  buildSalesPdfFile: typeof import('./pdfSales').buildSalesPdfFile;
   buildSalesReportHtml: typeof import('./salesReportHtml').buildSalesReportHtml;
   buildLeadExportRecord: typeof import('./exportRecord').buildLeadExportRecord;
   leadWebhookUrl: typeof import('./submitLead').leadWebhookUrl;
   submitLead: typeof import('./submitLead').submitLead;
+  attachmentFromFile: typeof import('./submitLead').attachmentFromFile;
+  /** Null = kos jsPDF se ni naložil; dostava gre naprej brez prilog. */
+  buildResultsPdfFile: typeof import('./pdf').buildResultsPdfFile | null;
+  buildSalesPdfFile: typeof import('./pdfSales').buildSalesPdfFile | null;
 }
 
 /**
- * Naloži težke module. jsPDF je velik in potreben šele ob oddaji, zato se uvozi
- * tu in ne ob prvem prikazu strani.
+ * Naloži module dostave — z jsPDF vred, ker obvestilo nosi oba PDF-ja. Kos je
+ * predhodno naložen na obrazcu; če se vseeno ne naloži, generatorja ostaneta
+ * null in oddaja gre naprej brez prilog. Zavrnjen uvoz bi sicer iz
+ * handleEmailSubmit padel kot "Oddaja ni uspela" in lead bi propadel zaradi
+ * priloge.
  */
 export async function loadDeliveryModules(): Promise<DeliverLeadModules> {
-  const [pdf, salesReport, pdfSales, salesReportHtml, exportRecord, submitLead] = await Promise.all([
-    import('./pdf'),
-    import('./salesReport'),
-    import('./pdfSales'),
-    import('./salesReportHtml'),
-    import('./exportRecord'),
-    import('./submitLead'),
-  ]);
+  const [salesReport, salesReportHtml, exportRecord, submitLead, pdf, pdfSales] =
+    await Promise.all([
+      import('./salesReport'),
+      import('./salesReportHtml'),
+      import('./exportRecord'),
+      import('./submitLead'),
+      import('./pdf').catch(() => null),
+      import('./pdfSales').catch(() => null),
+    ]);
 
   return {
-    buildResultsPdfFile: pdf.buildResultsPdfFile,
     buildSalesReport: salesReport.buildSalesReport,
-    buildSalesPdfFile: pdfSales.buildSalesPdfFile,
     buildSalesReportHtml: salesReportHtml.buildSalesReportHtml,
     buildLeadExportRecord: exportRecord.buildLeadExportRecord,
     leadWebhookUrl: submitLead.leadWebhookUrl,
     submitLead: submitLead.submitLead,
+    attachmentFromFile: submitLead.attachmentFromFile,
+    buildResultsPdfFile: pdf?.buildResultsPdfFile ?? null,
+    buildSalesPdfFile: pdfSales?.buildSalesPdfFile ?? null,
   };
+}
+
+/**
+ * Zgornja meja skupne velikosti prilog (base64). Izmerjeno v brskalniku merita
+ * skupaj ≈ 130 kB (dokumenta 42 in 57 kB, base64 je tretjino večji). Meja je
+ * torej desetkratna rezerva; nad njo je dokument nepričakovano velik in prilogi
+ * odpadeta, da ne odneseta leada (rok in pomnilnik na telefonu).
+ */
+const MAX_ATTACHMENTS_BYTES = 1_500_000;
+
+/**
+ * Oba PDF-ja za prilogi obvestila: najprej poročilo za stranko, nato priprava.
+ * Nikoli ne vrže: padec enega generatorja ne odnese drugega, padec obeh ne
+ * odnese oddaje. Zaporedno, da sta v pomnilniku naenkrat največ en dokument in
+ * njegov base64. Brez priprave (ni nastala) gre samo strankino poročilo.
+ */
+async function buildAttachments(
+  input: DeliverLeadInput,
+  report: SalesReport | null,
+  modules: DeliverLeadModules,
+): Promise<LeadAttachment[]> {
+  const buildResults = modules.buildResultsPdfFile;
+  const buildSales = modules.buildSalesPdfFile;
+  if (!buildResults || !buildSales) {
+    console.warn('Obvestilo bo brez prilog: jsPDF se ni naložil.');
+    return [];
+  }
+
+  const generators: [string, () => Promise<DownloadFile>][] = [
+    ['poročilo za stranko', () => buildResults(input.customerPdf)],
+    ...(report ? [['priprava na pogovor', () => buildSales(report)] as [string, () => Promise<DownloadFile>]] : []),
+  ];
+  const attachments: LeadAttachment[] = [];
+  for (const [label, build] of generators) {
+    try {
+      attachments.push(await modules.attachmentFromFile(await build()));
+    } catch (error) {
+      console.warn(`Priloga "${label}" ni nastala:`, error);
+    }
+  }
+
+  const total = attachments.reduce((sum, attachment) => sum + attachment.base64.length, 0);
+  if (total > MAX_ATTACHMENTS_BYTES) {
+    console.warn(`Obvestilo bo brez prilog: ${total} B presega mejo ${MAX_ATTACHMENTS_BYTES} B.`);
+    return [];
+  }
+  return attachments;
 }
 
 export async function deliverLead(
@@ -141,30 +215,10 @@ export async function deliverLead(
   hooks: DeliverLeadHooks,
   now: () => Date = () => new Date(),
 ): Promise<void> {
-  // Strankino poročilo se sestavi PRVO: je edina datoteka, ki mora priti vedno,
-  // in napaka v prodajnem delu je ne sme odnesti s seboj.
-  const customerFile = await modules.buildResultsPdfFile({
-    segment: input.segment,
-    // Samo ime podjetja: poročilo gre upravi stranke, ki ve, kdo ga je izpolnil,
-    // in se posreduje interno — osebni podatki v njem so odveč.
-    companyName: input.contact.companyName,
-    employeeCount: input.employeeCount,
-    outputs: input.outputs,
-    totals: input.totals,
-    totalsRange: input.totalsRange,
-    coverage: input.coverage,
-    highestModule: input.highestModule,
-    accountingCapacity: input.accountingCapacity,
-    confidenceReason: input.confidenceReasonPdf,
-  });
-
-  // Gumb za ponovni prenos na zahvalnem zaslonu visi na tem stanju.
-  hooks.onCustomerFile(customerFile);
-
   /**
-   * Konverzija se zabeleži tu in ne na koncu: konec ima dve poti in dogodek na
-   * eni od njiju bi manjkal — v produkciji brez webhooka bi bila to prav tista
-   * pot, torej vse oddaje.
+   * Konverzija se zabeleži na začetku in ne na koncu: konec ima več poti in
+   * dogodek na eni od njih bi manjkal — v produkciji brez webhooka bi bila to
+   * prav tista pot, torej vse oddaje.
    */
   track('lm10_lead_submitted', {
     segment: input.segment.id,
@@ -176,13 +230,22 @@ export async function deliverLead(
   });
 
   const webhookUrl = modules.leadWebhookUrl();
+  /**
+   * Ali priprava pripada stranki (tabela v glavi): brez webhooka vedno, v
+   * internem načinu poleg strežnika, ob neuspeli dostavi kot rezerva.
+   */
+  let forCustomer = !webhookUrl || input.internalMode;
+  /**
+   * En sam časovni žig za pripravo IN zapis. Zapis ga je doslej bral iz priprave
+   * (`report.meta.generatedAtISO`) in je bil zato od nje odvisen — prav ta vez je
+   * ob padcu priprave odnesla tudi dostavo zapisa.
+   */
+  const generatedAtISO = now().toISOString();
   let report: SalesReport | null = null;
-  /** Priprava, kadar pripada napravi. `null` pomeni "gre samo na strežnik". */
-  let salesFile: DownloadFile | null = null;
 
   try {
     report = modules.buildSalesReport({
-      generatedAtISO: now().toISOString(),
+      generatedAtISO,
       contact: input.contact,
       consents: input.consents,
       utmSource: input.utmSource,
@@ -206,22 +269,12 @@ export async function deliverLead(
       accountingCapacity: input.accountingCapacity,
       coverage: input.coverage,
     });
-
-    // Brez webhooka o dostavi ni kaj čakati — priprava tako ali tako pripada
-    // stranki. Zato se zgradi ZDAJ in odide skupaj s poročilom, dokler gesta
-    // še velja. V internem načinu velja isto, le da gre poleg tega na strežnik.
-    if (!webhookUrl || input.internalMode) {
-      salesFile = await modules.buildSalesPdfFile(report);
-      hooks.onSalesReport(report);
-    }
-  } catch {
-    // Prodajni del je pomožen in sme odpasti; strankino poročilo gre vseeno.
+  } catch (error) {
+    // Prodajni del je pomožen in sme odpasti: zapis za prodajo in strankin PDF
+    // gresta na webhook brez njega (glej glavo), obiskovalec dobi rezultate.
+    // Glasno, ker je sicer edini znak prazen stolpec s pripravo v preglednici.
+    console.warn('Prodajna priprava ni nastala; oddaja gre naprej brez nje:', error);
   }
-
-  // OBA prenosa iz ene geste, drug za drugim. Vrstni red je pomemben: prvi prenos
-  // je edini, ki ga brskalnik dovoli brez vprašanja, zato mora biti prvo tista
-  // datoteka, ki je nujna — strankino poročilo.
-  await hooks.downloadSequentially(salesFile ? [customerFile, salesFile] : [customerFile]);
 
   // Ali je lead sploh prišel do prodaje. lm10_lead_submitted zgoraj se namerno
   // sproži pred dostavo; brez tega para bi se konverzije štele tudi takrat, ko
@@ -230,12 +283,10 @@ export async function deliverLead(
     track('lm10_delivery_failed', { reason: 'no_webhook' });
   }
 
-  // Webhook ŠELE ZDAJ: prej je njegov rok stal med obema prenosoma (glej glavo).
-  // Za obiskovalca se ne spremeni nič — datoteki ima že obe.
-  if (webhookUrl && report) {
+  if (webhookUrl) {
     try {
       const record = modules.buildLeadExportRecord({
-        timestampISO: report.meta.generatedAtISO,
+        timestampISO: generatedAtISO,
         contact: input.contact,
         consents: input.consents,
         industry: input.industry,
@@ -250,30 +301,59 @@ export async function deliverLead(
         followUpSequence: input.followUpSequence,
         utmSource: input.utmSource,
       });
+      // Prilogi šele, ko je zapis tu: brez privolitve oddaje ni in PDF-ja bi
+      // nastala zaman. Brez webhooka se ta veja sploh ne izvede.
+      const attachments = record ? await buildAttachments(input, report, modules) : [];
       const delivered = record
         ? await modules.submitLead(
-            { record, salesReportHtml: modules.buildSalesReportHtml(report) },
+            { record, salesReportHtml: salesReportHtmlOf(report, modules), attachments },
             webhookUrl,
           )
         : false;
 
       if (delivered) {
-        track('lm10_delivery_ok', { channel: 'webhook' });
+        // Število prilog in prisotnost priprave sta lastnosti dogodka in ne nov
+        // dogodek: od zunaj se vidi, ali obvestila prihajajo s PDF-jema in s
+        // pripravo ali brez njih.
+        track('lm10_delivery_ok', {
+          channel: 'webhook',
+          attachments: attachments.length,
+          salesReport: report ? 'da' : 'ne',
+        });
       } else {
         track('lm10_delivery_failed', { reason: record ? 'rejected' : 'no_record' });
-      }
-
-      // Rezerva: brez uspele dostave svetovalec do priprave nima nobene poti.
-      // `!salesFile` izloči interni način, kjer je datoteka že prenesena.
-      if (!delivered && !salesFile) {
-        hooks.onSalesReport(report);
-        hooks.downloadFile(await modules.buildSalesPdfFile(report));
+        // Rezerva: brez uspele dostave svetovalec do priprave nima nobene poti.
+        forCustomer = true;
       }
     } catch {
-      // Kot zgoraj: strankino poročilo je že preneseno in prodajni del sme odpasti.
+      // Izjema JE neuspela dostava — pravilo iz glave velja enako kot za zavrnitev.
+      // Prej je ta veja rezervo preskočila, ker bi drugi prenos iz ugasle geste
+      // tako ali tako odpadel; gumb na rezultatih te omejitve nima.
       track('lm10_delivery_failed', { reason: 'error' });
+      forCustomer = true;
     }
   }
 
+  // Najprej priprava, ŠELE NATO oddaja: rezultati se izrišejo z gumbom ali brez
+  // njega, ne pa z gumbom, ki se pojavi naknadno.
+  if (report && forCustomer) hooks.onSalesReport(report);
   hooks.onSubmitted();
+}
+
+/**
+ * HTML priprave za telo zahteve — ali prazen niz, kadar priprave ni oziroma
+ * izris pade. Prazen niz in ne izpuščeno polje: sprejemnik (Koda.gs,
+ * `SHRANI_PRIPRAVO && oddaja.salesReportHtml`) ga preskoči, oblika telesa pa
+ * ostane ista. Izris je ovit posebej, ker bi izjema v njem sicer padla v isti
+ * `catch` kot omrežna napaka in dostavo razglasila za neuspelo, čeprav zapis
+ * še ni odšel.
+ */
+function salesReportHtmlOf(report: SalesReport | null, modules: DeliverLeadModules): string {
+  if (!report) return '';
+  try {
+    return modules.buildSalesReportHtml(report);
+  } catch (error) {
+    console.warn('HTML priprave ni nastal; oddaja gre naprej brez njega:', error);
+    return '';
+  }
 }

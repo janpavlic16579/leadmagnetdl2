@@ -41,9 +41,9 @@ export const PROIZVODNJA_COPY: SegmentCopy = {
   },
 
   emailGate: {
-    title: 'PDF poročilo in trije ukrepi za vašo proizvodnjo',
+    title: 'Rezultat in PDF poročilo s tremi ukrepi za vašo proizvodnjo',
     subtitle:
-      'Isti izračun v dokumentu za upravo ali lastnika — razčlenjen po področjih, s formulo pod vsako postavko in tremi ukrepi, ki jih je v proizvodnji mogoče začeti ta teden.',
+      'Po oddaji se na zaslonu odpre vaš izračun in z njim PDF poročilo za upravo ali lastnika — razčlenjeno po področjih, s formulo pod vsako postavko in tremi ukrepi, ki jih je v proizvodnji mogoče začeti ta teden.',
   },
 
   pdf: { documentTitle: 'Analiza skritih stroškov v proizvodnji' },

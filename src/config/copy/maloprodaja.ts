@@ -43,9 +43,9 @@ export const MALOPRODAJA_COPY: SegmentCopy = {
   },
 
   emailGate: {
-    title: 'PDF poročilo in trije ukrepi za vašo trgovino',
+    title: 'Rezultat in PDF poročilo s tremi ukrepi za vašo trgovino',
     subtitle:
-      'Isti izračun v dokumentu za upravo ali lastnika — razčlenjen po področjih, s formulo pod vsako postavko in tremi ukrepi, ki jih je v trgovini mogoče začeti ta teden.',
+      'Po oddaji se na zaslonu odpre vaš izračun in z njim PDF poročilo za upravo ali lastnika — razčlenjeno po področjih, s formulo pod vsako postavko in tremi ukrepi, ki jih je v trgovini mogoče začeti ta teden.',
   },
 
   pdf: { documentTitle: 'Analiza skritih stroškov v maloprodaji' },

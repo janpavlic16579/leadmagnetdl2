@@ -52,6 +52,17 @@ preglednice. Če je obiskovalec **prosil za posvet**, se to znajde v zadevi
 (`[POSVET] Nov lead: …`) — to je edino polje obrazca, ki pove namero in ne le
 dovoljenja.
 
+Sporočilo ima **pripeta oba PDF-ja** — poročilo za stranko in pripravo na
+pogovor, isti datoteki, kot ju aplikacija zgradi za stranko oziroma svetovalca.
+Aplikacija ju pošlje v telesu zahteve kot base64 (`attachments`,
+`src/lib/submitLead.ts`), skripta ju dekodira (`pripraviPriloge`) in pripne;
+vrstica »Priloge:« v sporočilu našteje imeni datotek ali pove, da ju aplikacija
+ni poslala (starejši build, PDF v brskalniku ni nastal). Pokvarjena priloga se
+preskoči — vrstica in sporočilo nista nikoli odvisna od nje. Skupaj merita okoli
+100 kB; meja MailApp za sporočilo je 25 MB. Prilogi zahtevata **novo različico**
+skripte in aktualen build aplikacije; stara skripta polje prezre, nova brez
+njega dela naprej.
+
 **Dovoljenje za pošto morate izsiliti sami.** Google ga ne zahteva ob
 razmestitvi in ne ob zagonu poljubne funkcije, ampak šele ob prvem klicu
 `MailApp`. Web app tedaj pade z „Nimate dovoljenja", napako pa `doPost`
@@ -66,10 +77,11 @@ padel, ter koliko vrstic in stolpcev ima list. Ročni zagon je namreč videl sam
 tisti, ki je bil takrat pred zaslonom.
 
 **Ko pošte ni, ne brskajte po dnevniku** — odprite naslov `/exec` v brskalniku.
-`doGet` izpiše, ali so obvestila vklopljena, kdaj je nazadnje odšla pošta in kaj
-je bila zadnja napaka (naslovi so v izpisu zakriti, ker je odgovor javen). Te tri
-vrstice ločijo „naslov ni nastavljen" od „razmeščena je stara različica" od
-„pošiljanje je vrglo napako".
+`doGet` izpiše, ali so obvestila vklopljena, kdaj je nazadnje odšla pošta (s
+številom prilog — `(priloge: 2)` pove, da razmeščena različica prilogi pripenja)
+in kaj je bila zadnja napaka (naslovi so v izpisu zakriti, ker je odgovor javen).
+Te tri vrstice ločijo „naslov ni nastavljen" od „razmeščena je stara različica"
+od „pošiljanje je vrglo napako".
 
 Pošta gre **za** zapisom vrstice in v svojem `try/catch`: izčrpana kvota ali
 napačen naslov ne smeta pomeniti, da aplikacija dostavo razume kot neuspelo in
@@ -241,6 +253,103 @@ spremembi: *Razmesti → Upravljaj razmestitve → svinčnik → Različica: Nov
 različica → Razmesti*. Naslov ostane isti. Brez tega koraka teče stara koda in
 videti je, kot da sprememba ni imela učinka.
 
+## ActiveCampaign
+
+Vsak lead, ki pristane v vrstici, gre lahko tudi v ActiveCampaign: kontakt se
+ustvari ali posodobi po e-naslovu, doda na izbrani seznam in dobi oznake.
+Preglednica ostane popolna evidenca, v CRM gre prodajno uporaben izvleček.
+Dokler nastavitev ni, se ne zgodi nič — zbiralnik dela natanko kot doslej.
+
+### Namestitev (~20 minut, enkrat)
+
+1. **Seznam v AC.** Odprite ga in iz naslova prepišite `listid` — številka za
+   `?listid=` je id, ki ga potrebujete.
+2. **Ključ API.** V AC *Settings → Developer*. Tam sta dva podatka: **URL**
+   (oblike `https://ime.api-us1.com`) in **Key**. To NI naslov, na katerem se
+   prijavljate (`…activehosted.com`).
+3. **Lastnosti skripte.** V urejevalniku *Nastavitve projekta* (zobnik) →
+   *Lastnosti skripte* → *Dodaj lastnost*, trikrat:
+
+   | Lastnost | Vrednost |
+   |---|---|
+   | `AC_NASLOV` | URL iz *Developer*, npr. `https://ime.api-us1.com` |
+   | `AC_KLJUC` | Key iz *Developer* |
+   | `AC_SEZNAM` | id seznama iz 1. koraka |
+
+   Ključ **ne sodi v `Koda.gs`** — datoteka je v repozitoriju. Stranski dobiček
+   lastnosti skripte je, da preživijo vsako naslednje lepljenje kode; naslova za
+   obvestila je treba po vsakem prilepljanju vpisati znova, teh treh ne.
+4. **Prilepite novo različico `Koda.gs`** in shranite.
+5. **Poženite `pripraviAC`** (izberite funkcijo v urejevalniku → *Zaženi*).
+   Google bo prvič zahteval dovoljenje za klice na zunanje naslove. Funkcija
+   preveri ključ, izpiše ime seznama in v AC ustvari manjkajoča polja po meri.
+   Varno jo je pognati večkrat.
+6. **Poženite `posljiZaostaleVAC`** — pošlje leade, ki so se v preglednici
+   nabrali pred priklopom (do 30 na zagon; poženite večkrat, dokler izpis ne
+   pokaže `Poslano: 0`).
+7. **Poženite `namestiUroZaAC`** — vsakih deset minut pobere, kar ni prišlo skozi
+   takoj. Zažene se enkrat; ponovni zagon starih ur ne podvoji.
+8. **Razmestite novo različico** (*Razmesti → Upravljaj razmestitve → svinčnik →
+   Nova različica*). Brez tega ob oddajah teče stara koda.
+9. **Preverite** — odprite naslov `/exec` v brskalniku. Vrstica `ActiveCampaign:`
+   pove id seznama in število pripravljenih polj, `Zadnji v AC:` pa čas zadnjega
+   uspeha.
+
+### Kaj pride v ActiveCampaign
+
+Standardna polja: e-naslov, ime, priimek, telefon. Poleg njih štirinajst polj po
+meri z oznakami `%LM10_…%` (podjetje, panoga, zaposleni, prihodek, letni izračun,
+enkratni kapital, zanesljivost, področja, tveganja, posvet, povezava do prodajne
+priprave, sekvenca, vir, vloga) — uporabna so v personalizaciji e-pošte.
+
+Oznake so tisto, na kar se v AC obesi avtomatizacija:
+
+| Oznaka | Kdaj |
+|---|---|
+| `LM-10` | vsak lead |
+| `LM-10 panoga: …` | po dejavnosti iz vprašalnika |
+| `LM-10 sekvenca: …` | po izbrani follow-up sekvenci |
+| `LM-10 posvet` | obiskovalec je prosil za pregled številk |
+
+Predpono `LM-10` spremenite v `NASTAVITVE.AC.OSNOVNA_OZNAKA`.
+
+V CRM **ne gredo** surov JSON vnosov, triažne ocene in podrobnosti izračuna. Te
+ostanejo v preglednici; CRM ni prostor zanje.
+
+### Privolitve
+
+Na seznam pride vsak, ki odda obrazec — to je namen seznama. Naročen (status
+*active*) pa je le tisti, ki je v obrazcu privolil v ponudbe ali vsebine; ostali
+pridejo na seznam kot *unsubscribed*. Razlika ni kozmetična: kampanja, poslana na
+seznam, gre samo na naročene, zato nekdo, ki je hotel le svoj izračun, iz tega
+seznama ne more dobiti oglasnega sporočila. To je zahteva ZEKom-2 za neposredno
+trženje.
+
+`NASTAVITVE.AC.SAMO_S_PRIVOLITVIJO: false` varovalo izklopi in naroči vse. Preden
+ga izklopite, mora biti pravna podlaga zapisana drugje — skripta o njej ne ve nič.
+
+### Stolpec `activeCampaign`
+
+Vsaka vrstica ima stolpec z id-jem kontakta v AC. Prazen ali `NAPAKA: …` pomeni
+„še ni tam" in je edino, po čemer ura ve, kaj naj ponovi. Zato ga ne brišite in
+ne preimenujte; če ga izpraznite, bo lead ob naslednjem zagonu ure poslan znova
+(kar ne naredi dvojnika — `contact/sync` ujame po e-naslovu).
+
+Da stolpec pristane na svojem mestu med že zapisanimi vrsticami, enkrat poženite
+`urediStolpce`.
+
+### Zakaj se pošilja dvakrat
+
+Ob oddaji gre kontakt v AC takoj, a le, če je do tedaj poteklo manj kot 4,5
+sekunde. Aplikacija namreč čaka odgovor osem sekund in ob prekoračitvi razume
+dostavo kot neuspelo ter prodajno pripravo prenese stranki. Počasen CRM tega ne
+sme povzročiti, zato ob zamudi klic odpade in vrstico čez nekaj minut pobere ura.
+Iz istega razloga napaka v AC nikoli ne pade ven: pristane v stolpcu in gre v
+ponovni poskus.
+
+`NASTAVITVE.AC.POSILJAJ_TAKOJ: false` vročo pot izklopi in vse prepusti uri —
+lead je tedaj v CRM-ju v nekaj minutah namesto takoj.
+
 ## Kaj se zgodi ob napaki
 
 Aplikacija razume neuspešno dostavo kot „prodajna priprava ni prišla do nas" in
@@ -249,6 +358,10 @@ Skripta zato napake **ne pogoltne**: če vrstice ni mogoče zapisati, jo vrže
 naprej in aplikacija pade v rezervno pot. Če odpove samo shranjevanje priprave na
 Drive, se vrstica vseeno zapiše (lead je dragocenejši), v stolpcu
 `prodajnaPriprava` pa ostane besedilo napake.
+
+Klic v ActiveCampaign je za zapisom vrstice in v svojem `try/catch`: padel CRM
+ne sme pomeniti, da aplikacija dostavo razume kot neuspelo. Napaka pristane v
+stolpcu `activeCampaign` in gre v ponovni poskus.
 
 Dnevnik zagonov je v urejevalniku pod *Izvedbe* (*Executions*) — tam je vidna
 vsaka zahteva in razlog vsake napake.

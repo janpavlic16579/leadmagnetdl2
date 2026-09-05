@@ -142,6 +142,22 @@
   padding: var(--space-3) 0;
 }
 
+/*
+ * Napaka priprave PDF-ja — v pasu tik nad gumbom, kjer sta ob kliku pogled in
+ * kazalec (isti razlog kot povzetek zadržkov na obrazcu). Rdeča in ne siva:
+ * je edino, kar pove, da klik ni obrodil.
+ */
+.footerError {
+  margin: var(--space-3) 0 0;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-danger);
+}
+
+.footerErrorLink {
+  color: var(--color-danger);
+}
+
 .cardNote {
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
