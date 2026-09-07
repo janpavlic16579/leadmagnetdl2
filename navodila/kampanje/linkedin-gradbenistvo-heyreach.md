@@ -1,71 +1,81 @@
 # LinkedIn sekvenca — gradbeništvo → kalkulator LM-10
 
 Kampanja: HeyReach, povabilo + 4 sporočila.
-Segment kalkulatorja: `storitve` (Storitvena in projektna podjetja).
+Segment kalkulatorja: `gradbenistvo` (Gradbeništvo — lasten vprašalnik od 7. 9. 2026; do tedaj `storitve`).
 Cilj: obiskovalec izpolni kalkulator, dobi svoj izračun in sprejme 30-minutni pregled izračuna.
-Pisano po skillu `datalab-copywriting`. Stanje: 2. 9. 2026.
+Podlaga: skill `datalab-copywriting` + interni kontekst niš (v. 1.0, 7. 9. 2026).
+Različica 2 — prepisano po Katjinem kontekstu za gradbeništvo. Stanje: 7. 9. 2026.
 
 ---
 
-## 1. Diagnoza (zakaj je sekvenca taka, kot je)
+## 1. Diagnoza
 
 **Kdo bere.** Direktor ali lastnik gradbenega podjetja z 10–249 zaposlenimi. Po ICP modelu v
-`src/config/icp.ts` je to ciljni razred (vrednost 1,00), direktor/lastnik pa najvišja bližina
-odločevalcu (1,00; finance 0,80; vodja 0,60). Vodja projektov ali gradbišča je sprejemljiv drugi
-naslovnik, a odloča redkeje — če ciljate nanj, zamenjajte zadnji stavek M3.
+`src/config/icp.ts` je to ciljni razred (1,00), direktor/lastnik pa najvišja bližina odločevalcu
+(1,00; finance 0,80; vodja 0,60).
 
-**Sprožilec.** Gradbeništvo je v letošnji analizi plačilne discipline dejavnost z najslabšo plačilno
-disciplino v Sloveniji (ebonitete.si, junij 2026, na podlagi računov zadnjih 12 mesecev). To je
-vstopna točka, ker jo vsak gradbinec pozna iz lastne blagajne. Sekvenca nato premakne pogovor z
-zamude plačila na **delo, ki na račun sploh ne pride** — točno tisto, kar kalkulator meri.
+**Osrednja bolečina (iz internega konteksta, pogl. 2.3).** *Stroški projekta so znani šele po
+zaključku; plan in realizacija se primerjata ročno.* To je ostrejša in bolj gradbeniška formulacija kot
+»nezaračunano delo«, s katerim je bila napisana prva različica — nezaračunano delo je posledica, ne
+vzrok. Sekvenca zdaj vodi z vzrokom.
 
-**Stopnja zavedanja: 2 (zaveda se problema).** Ve, da mu manjka denar; ni ga razčlenil. Zato prvo
-sporočilo ne omenja produkta in ne vsebuje povezave, drugo pa vodi z ugotovitvijo, ne s kalkulatorjem.
+**Druga bolečina, ki nosi celotno alternativno različico.** *Situacije podizvajalcev in roki so
+razpršeni po Excelu in mailih* — nepregledna mreža podizvajalcev, počasno preverjanje, kdo je že
+obračunal in kdo zamuja.
 
-**Ena ideja sekvence:** delo, ki ste ga opravili in ga niste zaračunali, je največja skrita postavka —
-in v desetih minutah si jo lahko izračunate sami, brez oddaje e-naslova.
+**Zunanji sprožilec.** Gradbeništvo je v letošnji analizi plačilne discipline dejavnost z najslabšo
+plačilno disciplino v Sloveniji (ebonitete.si, junij 2026, računi zadnjih 12 mesecev). Uporabimo ga kot
+vstopno točko, ker jo vsak gradbinec pozna iz svoje blagajne — nato pogovor premaknemo z zamude plačila
+na strošek, ki ga sploh ne vidi.
 
-**Zakaj ta kalkulator sploh deluje kot vaba:** rezultat se pokaže **pred** vnosom e-naslova. To je
-edini stavek v celotni sekvenci, ki odpravi glavni ugovor proti vsakemu lead magnetu. Nikoli ga ne
-izpustite.
+**Stopnja zavedanja: 2.** Ve, da mu manjka denar; ni ga razčlenil. Zato prvo sporočilo ne omenja
+produkta in nima povezave, drugo pa vodi z ugotovitvijo, ne s kalkulatorjem.
+
+**Ena ideja sekvence:** dokler stroške projekta seštejete šele ob zaključku, je za ukrepanje prepozno —
+v desetih minutah si lahko izračunate, koliko vas to letno stane.
+
+**Zakaj ta kalkulator deluje kot vaba:** rezultat se pokaže **pred** vnosom e-naslova. To je edini
+stavek v sekvenci, ki odpravi glavni ugovor proti vsakemu lead magnetu. Nikoli ga ne izpustite.
+
+**Jezik, ki ga uporabljamo dobesedno iz vira:** *material, delo, podizvajalci in mehanizacija* ·
+*plan proti realizaciji* · *pogodbe, situacije, roki in plačila* · *hitrejši obračuni projektov* ·
+*profitabilnost projektov*. To so besede, ob katerih gradbinec ve, da pišete njemu.
 
 ---
 
 ## 2. Sekvenca
 
-Zamiki so od prejšnjega koraka. Skupno trajanje 35 dni.
-
-| # | Korak | Zamik | Namen | Ima povezavo |
+| # | Korak | Zamik | Namen | Povezava |
 |---|---|---|---|---|
 | 0 | Povabilo | — | Povezava brez prodaje | ne |
-| 1 | Sporočilo 1 | +2 dni po sprejetju | Eno vprašanje, ki odpre temo | **ne** |
+| 1 | Sporočilo 1 | +2 dni po sprejetju | Kvalifikacijsko vprašanje | **ne** |
 | 2 | Sporočilo 2 | +5 dni | Ugotovitev + kalkulator | da |
 | 3 | Sporočilo 3 | +10 dni | 30-minutni pregled izračuna | ne |
 | 4 | Sporočilo 4 | +18 dni | Zaprtje, vrata odprta | da |
 
-### Povabilo (opomba ob povezavi, do 300 znakov)
+### Povabilo (do 300 znakov)
 
-> Pozdravljeni, [Ime]. Delam pri Datalabu in se ukvarjam z gradbenimi podjetji, ki lovijo razliko med
-> opravljenim in zaračunanim delom — več dela, dodelave, zadržani zneski. Vesel bom povezave.
+> Pozdravljeni, [Ime]. Delam pri Datalabu in se z gradbenimi podjetji pogovarjam o eni stvari: kdaj
+> sploh vidijo, ali projekt drži maržo — sproti ali šele ob zaključku. Vesel bom povezave.
 
 ### Sporočilo 1 — +2 dni po sprejetju
 
 > Hvala za povezavo, [Ime].
 >
-> Zanima me eno: kadar se med izvedbo pojavijo več in dodatna dela, jih pri vas zabeležite kot
-> spremembo naročila sproti — ali se uredi šele ob situaciji?
+> Eno vprašanje: kdaj pri vas veste, ali projekt drži maržo — sproti med izvedbo ali šele ob
+> zaključnem obračunu?
 
-*Brez povezave. To sporočilo lovi odgovor, ne klika. Vprašanje je zastavljeno tako, da nanj lahko
-odgovori v treh besedah, in vsak odgovor je uporaben: »sproti« pomeni, da imajo proces, »ob situaciji«
-pomeni, da je bolečina že tam.*
+*Brez povezave. Sporočilo lovi odgovor, ne klika. Vsak odgovor je uporaben: »sproti« pomeni, da imajo
+proces in gremo v drugo bolečino (podizvajalci); »ob obračunu« pomeni, da je bolečina že tam in
+sporočilo 2 pade na pripravljena tla.*
 
 ### Sporočilo 2 — +5 dni
 
 > [Ime], ena ugotovitev iz letošnje analize plačilne discipline: gradbeništvo je dejavnost z najslabšo
 > plačilno disciplino v Sloveniji.
 >
-> Zamude plačil vidite. Kar se ne vidi, je delo, ki na račun sploh ne pride — ure nad dogovorjenim
-> obsegom, popravki po pripombah naročnika, odpisi ob obračunu.
+> Zamude plačil vidite. Kar se ne vidi, je strošek projekta, dokler projekt ni zaključen — material,
+> delo, podizvajalci in mehanizacija se seštejejo šele takrat, ko za ukrepanje ni več časa.
 >
 > Sestavili smo kalkulator, ki to sešteje v letni znesek po vaših številkah. Izračun vidite takoj,
 > e-naslov vas vpraša šele na koncu in samo, če želite PDF. Vzame okoli deset minut:
@@ -75,9 +85,10 @@ pomeni, da je bolečina že tam.*
 
 > [Ime], ponudba velja ne glede na to, ali ste kalkulator odprli.
 >
-> Vzamem 30 minut in skupaj pogledava vaše številke: kaj je pri vas nezaračunano delo, kaj zadržani
-> znesek in kaj zgolj zamik plačila. Brez predstavitve programa — urne postavke v izračunu so izpeljane
-> iz strukturne statistike plač SURS, zato se pogovarjava o vaših podatkih, ne o mojih ocenah.
+> Vzamem 30 minut in skupaj pogledava vaše številke po projektih: kaj je delo, ki ni prišlo na
+> situacijo, kaj zadržani zneski in kaj zgolj zamik plačila. Brez predstavitve programa — urne postavke
+> v izračunu so izpeljane iz strukturne statistike plač SURS, zato se pogovarjava o vaših podatkih, ne
+> o mojih ocenah.
 >
 > Naj predlagam dva termina?
 
@@ -85,134 +96,188 @@ pomeni, da je bolečina že tam.*
 
 > [Ime], zapiram temo, da vam ne sedi v predalu.
 >
-> Povezava do izračuna ostaja odprta tudi brez mene: [POVEZAVA]. Če se pri vas kaj premakne — nov večji
-> projekt, menjava programa ali priprava na obvezne e-račune med podjetji leta 2028 — mi pišite.
+> Povezava do izračuna ostaja odprta tudi brez mene: [POVEZAVA]. Če se pri vas kaj premakne — večji
+> projekt, pri katerem plana in realizacije ne boste hoteli primerjati ročno, ali priprava na obvezne
+> e-račune med podjetji leta 2028 — mi pišite.
 
 ---
 
-## 3. Povezava
+## 3. Alternativna veja: podizvajalci
 
-Sestavite jo takole:
+Druga bolečina iz vira je dovolj močna, da zasluži svojo vejo. Uporabite jo za podjetja, ki v sporočilu
+1 odgovorijo »sproti« (marže torej obvladujejo), in kot celotno različico B pri A/B testu.
 
-```
-<javni naslov objave>/?s=storitve&utm_source=linkedin&utm_campaign=gradbenistvo
-```
-
-- `?s=storitve` v Koraku 1 prednastavi dejavnost »Storitvena in projektna podjetja«. Obiskovalec jo
-  vidi in sme popraviti — kar je prav, a glej opozorilo v razdelku 6.
-- `utm_source` se zapiše v izvozni zapis, zato boste v Google Sheetu ločili LinkedIn od e-pošte.
-- Javni naslov je repozitorijska spremenljivka `VITE_PUBLIC_URL`; `base` v `vite.config.ts` je
-  `/leadmagnetdl2/`. Preverite objavljeni naslov, preden kampanjo zaženete — povezava, ki vrne 404, je
-  najdražja napaka v celotni sekvenci.
-- Skrajševalnikov ne uporabljajte: LinkedIn skrajšane povezave slabše dostavlja, vi pa izgubite
-  predogledno kartico, ki je v `index.html` že nastavljena (`og:title`, `og:description`).
-
----
-
-## 4. Kaj testirati
-
-Spremenite eno stvar naenkrat, sicer ne veste, kaj je delovalo.
-
-**Test A — povezava v sporočilu 1.** Ta sekvenca zadrži povezavo do sporočila 2, ker prvo sporočilo
-lovi odgovor. Če želite višji delež klikov na račun nižjega deleža odgovorov, zamenjajte sporočilo 1 z:
+**Sporočilo 1B**
 
 > Hvala za povezavo, [Ime].
 >
-> Sestavili smo kalkulator, ki gradbenemu podjetju izračuna letni znesek dela, ki je bilo opravljeno in
-> ni prišlo na račun. Izračun vidite takoj, e-naslov vas vpraša šele na koncu: [POVEZAVA]
+> Eno vprašanje: kje so pri vas pogodbe, situacije in roki podizvajalcev — v sistemu ali po Excelih in
+> mailih?
 
-**Test B — vstopna točka v sporočilu 2.** Namesto plačilne discipline uporabite stroškovni sprožilec:
+**Sporočilo 2B**
+
+> [Ime], pri gradbenih podjetjih se najdražji del meseca navadno skriva tam, kjer ga nihče ne meri: v
+> preverjanju, kdo od podizvajalcev je delo že obračunal, kdo zamuja in katera situacija še ni
+> potrjena.
+>
+> Sestavili smo kalkulator, ki ta čas in denar sešteje v letni znesek po vaših številkah. Izračun
+> vidite takoj, e-naslov vas vpraša šele na koncu. Vzame okoli deset minut:
+> [POVEZAVA]
+
+Sporočili 3 in 4 ostaneta enaki.
+
+---
+
+## 4. Prenos na strojegradnjo in konstrukcije
+
+Interni kontekst (pogl. 1) pravi, da je podsegment *konstrukcije in strojegradnja* najpogosteje
+projektno usmerjena proizvodnja, kjer se profitabilnost meri po projektih — torej velja isti argument.
+Isto sekvenco uporabite s tremi zamenjavami:
+
+| Kje | Iz | V |
+|---|---|---|
+| Povabilo | »gradbenimi podjetji« | »podjetji v strojegradnji in konstrukcijah« |
+| Sporočilo 2 | »material, delo, podizvajalci in mehanizacija« | »material, delo, kooperacija in strojne ure« |
+| Sporočilo 2 | ugotovitev o plačilni disciplini | ugotovitev o plačilni disciplini **ne velja** za to panogo — zamenjajte jo s testom C spodaj |
+
+Povezava za strojegradnjo ostane `?s=storitve` (ne `/gradbenistvo/`): gradbeni vprašalnik sprašuje po
+situacijah, gradbiščih in zadržkih, ki jih strojegradnja nima — projektno vodenje pokrije storitveni.
+
+⚠️ Za kovinskopredelovalno panogo obstaja referenca **ALPOS METALURGIJA d.o.o.** (ERP, MES, WMS), a je
+interni kontekst izrecno označil kot »pred javno uporabo preveri pri Katji«. Do potrditve je v
+sporočilih ne uporabljajte.
+
+---
+
+## 5. Kaj testirati
+
+Eno spremembo naenkrat.
+
+**Test A — povezava že v sporočilu 1.** Ta sekvenca jo zadrži do sporočila 2, ker prvo sporočilo lovi
+odgovor. Za višji delež klikov na račun nižjega deleža odgovorov zamenjajte sporočilo 1 z:
+
+> Hvala za povezavo, [Ime].
+>
+> Sestavili smo kalkulator, ki gradbenemu podjetju izračuna letni znesek stroškov, ki jih vidi šele ob
+> zaključku projekta. Izračun vidite takoj, e-naslov vas vpraša šele na koncu: [POVEZAVA]
+
+**Test B — veja podizvajalcev** (razdelek 3) proti veji marže po projektih.
+
+**Test C — stroškovni sprožilec namesto plačilne discipline:**
 
 > [Ime], minimalna plača je letos 1.482,00 € bruto — 15,97 % več kot lani, strošek delodajalca 11,25 %
-> več. V dejavnosti, kjer je delo največja postavka, to pomeni, da vsaka neevidentirana ura stane več
-> kot lani.
+> več. V dejavnosti, kjer je delo največja postavka projekta, se vsaka ura, ki je ne vidite sproti,
+> letos podraži.
 
-**Test C — vloga naslovnika.** Direktor proti vodji projektov. Vodji zamenjajte zadnji stavek
-sporočila 3 v: »Če o programih ne odločate vi, mi povejte, komu naj to pošljem — izračun je narejen
+**Test D — vloga naslovnika.** Direktorju pustite sporočilo 3, kot je. Vodji projektov zamenjajte
+zadnji stavek: »Če o programih ne odločate vi, mi povejte, komu naj to pošljem — izračun je narejen
 tako, da ga lahko posredujete naprej.«
 
 ---
 
-## 5. Nastavitev v HeyReach
+## 6. Nastavitev v HeyReach
 
-- **Osebne spremenljivke:** `[Ime]` je edina obvezna. Ne vstavljajte imena podjetja v vsako sporočilo —
-  pri štirih sporočilih zveni avtomatizirano.
-- **Dnevni obseg:** ostanite pri obstoječih omejitvah računa. Seznami pod 200 kontaktov se odzivajo
-  bistveno bolje kot široki — raje trije ožji segmenti kot en velik.
-- **Izhod iz sekvence ob odgovoru:** obvezno vklopljen. Nadaljevanje sekvence po odgovoru je
-  najhitrejši način, da izgubite topel lead.
-- **Seznam:** gradbena podjetja z 10–249 zaposlenimi, funkcije direktor / lastnik / prokurist /
-  vodja financ. Podjetja pod 10 zaposlenih po ICP modelu dobijo 0,35 — ne izključujte jih, a ne dajte
-  jim prednosti.
+- **Spremenljivke:** `[Ime]` je edina obvezna. Imena podjetja ne vstavljajte v vsako sporočilo — pri
+  štirih sporočilih zveni avtomatizirano.
+- **Izhod iz sekvence ob odgovoru:** obvezno vklopljen.
+- **Seznam:** gradbena podjetja z 10–249 zaposlenimi; funkcije direktor / lastnik / prokurist / vodja
+  financ. Seznami pod 200 kontaktov se odzivajo bistveno bolje — raje tri ožje veje kot ena široka.
+- **Kvalifikacijski signal (Katjin, pogl. 6 konteksta):** podjetja, ki zaloge in evidence še vodijo v
+  Excelu, so sama po sebi signal nizke digitalne zrelosti. Kjer to vidite iz objav ali spletne strani,
+  dajte kontaktu prednost.
 - **Merilo uspeha:** ne število povezav, ampak število oddanih vprašalnikov z e-naslovom. Vsak oddani
   vprašalnik prinese ICP oceno in prodajno pripravo; povezava brez izračuna ne prinese ničesar.
 
 ---
 
-## 6. Tri stvari, ki jih je vredno urediti pred zagonom
+## 7. Meje — česa v teh sporočilih ne smete
 
-**1. Gradbeništva ni v spustnem seznamu dejavnosti.** `src/config/industries.ts` gradbinca pošlje čez
-»Drugo« → »Zaračunavamo ure, projekte ali storitve«. Komentar v datoteki to celo izrecno pove.
-Kampanjska povezava `?s=storitve` sicer prednastavi pravi vprašalnik, a obiskovalec vidi oznako
-»Storitvena in projektna podjetja« in se v njej morda ne prepozna — prav na prvem koraku, kjer je
-opustitev najcenejša zanj in najdražja za vas. Popravek je ena vrstica v `INDUSTRIES`:
+Iz internega konteksta, pogl. 6 in 7:
 
-```ts
-{ id: 'gradbenistvo', label: 'Gradbeništvo', segment: 'storitve' },
+1. **Nobene reference in nobene številke iz gradbeništva.** Vir izrecno pravi, da ju nimamo — ne
+   obstaja niti ena zgodba prej/potem. Vse trditve v sekvenci zato stojijo na **zunanjih** virih
+   (plačilna disciplina, SURS, ZIERDED). Ne dodajajte »naše stranke so prihranile …«.
+2. **Imen ALPOS in PharmaLinea ne uporabljajte javno,** dokler Katja ne potrdi.
+3. **Ozkih grl PANTHEON-a proti konkurenci se ne dotikajte** — na to vprašanje odgovora še ni, zato
+   primerjav s Saop, miniMAX ali Business Central v tej sekvenci ni.
+4. **Stiropor kot niše ne uporabljajte** — priporočilo ni utemeljeno.
+5. **Interni kontekst je zaupen.** Nič iz njega ne gre v sporočilo dobesedno kot citat vira; uporabljena
+   je samo vsebina bolečin.
+
+---
+
+## 8. Tri stvari pred zagonom
+
+**1. Katja še ni potrdila, da gradbeništvo gre v isti outbound val kot proizvodnja** (odprto vprašanje
+št. 8 v internem kontekstu). Preverite, preden zaženete — sicer lahko dve kampanji trkata v isti
+seznam.
+
+**2. Gradbeništvo je od 7. 9. 2026 v spustnem seznamu dejavnosti kalkulatorja** — z lastnim
+vprašalnikom (`src/config/modules/gradbenistvo.ts`): marža projekta, situacije in dodatna dela, ure in
+material na gradbišču, podizvajalci in zadržki, plačila in zadržana sredstva. Kampanjska povezava naj
+uporabi pot `/gradbenistvo/` (§9): obiskovalec preskoči uvodni zaslon in pristane na koraku z
+zaposlenimi z že izbranim gradbeništvom. Vprašanje iz sporočila 1 (»kdaj veste, ali projekt drži
+maržo«) je hkrati prvo vprašanje področja Marža projekta — sekvenca in vprašalnik govorita isto.
+
+**3. V izvoznem zapisu ni ICP ocene** (`docs/icp-ocena.md`, 6.3). Če boste kampanjo merili po kakovosti
+leadov, dodajte `icpTotal` in `icpBand` v `LeadExportRecord` prej — sicer po 50 vnosih ni česa umeriti.
+
+---
+
+## 9. Povezava
+
+```
+<javni naslov objave>/gradbenistvo/?utm_source=linkedin&utm_campaign=gradbenistvo
 ```
 
-Datoteka je zasnovana točno za to: »marketing lahko doda dejavnost brez poseganja v logiko.«
+Pot `/gradbenistvo/` preskoči uvodni zaslon; `?s=gradbenistvo` dejavnost samo prednastavi in uvodni zaslon
+pusti (README, razdelek Segmenti). Za vejo podizvajalcev uporabite `utm_campaign=gradbenistvo-podizvajalci`,
+za strojegradnjo `?s=storitve&utm_campaign=strojegradnja` — sicer v Google Sheetu ne boste ločili, katera veja
+je delovala.
 
-**2. V izvoznem zapisu ni ICP ocene.** Po `docs/icp-ocena.md` (razdelek 6.3) ocena obstaja samo v PDF-ju
-na napravi obiskovalca. Če boste to kampanjo merili po kakovosti leadov in ne le po številu, dodajte
-`icpTotal` in `icpBand` v `LeadExportRecord`, preden zaženete — sicer po 50 vnosih ne boste imeli česa
-umeriti.
-
-**3. Manjka številka stranke.** Sekvenca stoji na zunanjih virih (plačilna disciplina, SURS, minimalna
-plača), ker svojih rezultatov še nimate. Prva gradbena stranka, ki pove »po izračunu smo našli X € letno
-nezaračunanega dela«, je vredna več kot vsi trije viri skupaj — takoj ko jo imate, gre v sporočilo 2.
+Javni naslov je repozitorijska spremenljivka `VITE_PUBLIC_URL`; `base` v `vite.config.ts` je
+`/leadmagnetdl2/`. Preverite objavljeni naslov pred zagonom. Skrajševalnikov ne uporabljajte — izgubite
+predogledno kartico, ki je v `index.html` že nastavljena.
 
 ---
 
-## 7. Pravno
+## 10. Pravno
 
-- **LinkedIn ni e-pošta.** Pravila ZEKom-2 o nezaželenih komercialnih sporočilih se nanašajo na
-  elektronsko pošto, SMS in klice; sporočila znotraj LinkedIna pod ta člen ne padejo. Velja pa GDPR za
-  obdelavo osebnih podatkov, ki jih o kontaktu hranite v HeyReachu in CRM-ju.
-- **Odklonitev spoštujte takoj.** Kdor odgovori »ne« ali »ne zanima me«, gre iz sekvence in iz
-  ponovnega ciljanja. V trgu te velikosti se vztrajanje vrne.
-- **Trditve v sekvenci so preverljive.** Plačilna disciplina: ebonitete.si, junij 2026. Minimalna plača
-  2026: 1.482,00 € bruto. Obvezni e-računi med podjetji: 1. 1. 2028 (ZIERDED, sprejet 23. 10. 2025) —
-  nikoli ne pišite 2026 ali 2027. Urne postavke v kalkulatorju: SURS, strukturna statistika plač,
-  oktober 2025.
+- **LinkedIn ni e-pošta.** Člen 226 ZEKom-2 o nezaželenih komercialnih sporočilih se nanaša na
+  elektronsko pošto, SMS in klice; sporočila v LinkedInu podenj ne padejo. GDPR pa velja za osebne
+  podatke, ki jih o kontaktu hranite v HeyReachu in CRM-ju.
+- **Odklonitev spoštujte takoj.** Kdor odgovori »ne«, gre iz sekvence in iz ponovnega ciljanja.
+- **Preverljivost trditev.** Plačilna disciplina: ebonitete.si, junij 2026. Minimalna plača 2026:
+  1.482,00 € bruto. Obvezni e-računi med podjetji: 1. 1. 2028 (ZIERDED, sprejet 23. 10. 2025) — nikoli
+  2026 ali 2027. Urne postavke: SURS, strukturna statistika plač, oktober 2025.
 
 ---
 
-## 8. QA — opravljeno
+## 11. QA — opravljeno
 
 | Kontrola | Stanje |
 |---|---|
 | Ena ideja, izrekljiva v enem stavku | ✓ |
-| Vsaka trditev ima vir | ✓ |
-| Nobene besede s prepovedanega seznama | ✓ |
+| Vsaka trditev ima zunanji vir | ✓ |
+| Nobene besede s prepovedanega seznama (tudi »na enem mestu« iz vira je zamenjano z »v sistemu«) | ✓ |
 | Razmerje vi : mi nad 3 : 1 | ✓ |
-| Nobene trditve o borzi, »91.501 uporabnikov«, »št. 1« | ✓ |
+| Nobene reference brez potrditve | ✓ |
 | Datum e-računov 1. 1. 2028 | ✓ |
 | Dosledno vikanje, vi/vaš z malo začetnico | ✓ |
 | CTA v velelniku 2. os. mn. | ✓ |
 | Ena prošnja na sporočilo | ✓ |
 | Sporočilo 1 brez povezave | ✓ |
-| Brez umetne nujnosti in odštevalnikov | ✓ |
-| Strah ni poimenovan | ✓ |
+| Brez umetne nujnosti | ✓ |
 | Tipografija: 1.482,00 €, 15,97 %, 1. 1. 2028 | ✓ |
 
-Odprto: test 5 sekund. Pokažite povabilo in sporočilo 2 nekomu iz gradbeništva, ki Datalaba ne pozna, in
-ga vprašajte, kaj mu ponujate. Če ne zna odgovoriti, je težava v sporočilu 2.
+Odprto: test 5 sekund — pokažite povabilo in sporočilo 2 nekomu iz gradbeništva, ki Datalaba ne pozna.
 
 ---
 
 ## Viri
 
+- Interni kontekst ciljnih niš, v. 1.0, 7. 9. 2026 (Katja Pirnat, e-pošta »Gradbeniki«, 8. 5. 2026) —
+  zaupno, ni za stranke
 - Plačilna disciplina 2026 — https://www.ebonitete.si/placilna-disciplina-slovenskih-podjetij-2026/
 - Kalkulator LM-10: `README.md`, `docs/icp-ocena.md`, `src/config/industries.ts`,
-  `src/config/copy/storitve.ts`, `src/config/modules/storitve.ts`
+  `src/config/copy/gradbenistvo.ts`, `src/config/modules/gradbenistvo.ts`

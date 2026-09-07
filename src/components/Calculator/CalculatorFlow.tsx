@@ -56,8 +56,15 @@ import { ResultsView } from '../Results/ResultsView';
 import { EmailGate } from '../Results/EmailGate';
 
 interface CalculatorFlowProps {
-  /** Dejavnost, ki jo prednastavi kampanjski ?s= — obiskovalec jo v Koraku 1 vidi in sme popraviti. */
+  /** Dejavnost, ki jo prednastavi kampanjski ?s= — obiskovalec jo na uvodnem zaslonu vidi in sme popraviti. */
   initialIndustry: string;
+  /**
+   * Dejavnost je izbrala povezava s potjo (`/proizvodnja/`, App.tsx): tok se
+   * začne na prvem oštevilčenem koraku (zaposleni), uvodni zaslon z izbiro pa
+   * ostane dosegljiv z "Nazaj" — kar je povezava predpostavila, sme obiskovalec
+   * še vedno popraviti. Brez popolne initialIndustry nima učinka.
+   */
+  skipIndustryStep?: boolean;
   utmSource: string | null;
   /**
    * Interni način (?debug=1): prodajna priprava se na rezultatih ponudi tudi ob
@@ -71,6 +78,7 @@ interface CalculatorFlowProps {
 
 export function CalculatorFlow({
   initialIndustry,
+  skipIndustryStep = false,
   utmSource,
   internalMode = false,
   onActiveSegmentChange,
@@ -96,8 +104,17 @@ export function CalculatorFlow({
    */
   const useRestoredIndustry = Boolean(restored?.basicInfo.industry);
   const startingIndustry = useRestoredIndustry ? restored!.basicInfo.industry : initialIndustry;
+  /**
+   * Povezava s potjo preskoči uvodni zaslon — a po istem pravilu kot zgoraj le,
+   * dokler obiskovalec dejavnosti ni izbral sam: obnovljena seja se nadaljuje
+   * tam, kjer je obstala, tudi če je bila odprta prek povezave.
+   */
+  const startedByLink =
+    skipIndustryStep && !useRestoredIndustry && isCompleteIndustryChoice(startingIndustry);
 
-  const [step, setStep] = useState<FlowStep>(restored?.step ?? 'industry');
+  const [step, setStep] = useState<FlowStep>(
+    startedByLink ? 'employeeCount' : (restored?.step ?? 'industry'),
+  );
   const [basicInfo, setBasicInfo] = useState<BasicInfo>(() => ({
     ...(restored?.basicInfo ?? { employeeCount: 0 }),
     industry: startingIndustry,
@@ -403,6 +420,24 @@ export function CalculatorFlow({
 
   const stepLabel = (current: FlowStep, pageIndex = 0) =>
     `Korak ${stepNumber(current, pageIndex)} od ${totalSteps}`;
+
+  /**
+   * Dejavnost s povezave gre v lijak enako kot ročna potrditev na uvodnem
+   * zaslonu — PRED prvim prikazom koraka (učinek stoji pred trackStepView, učinki
+   * tečejo po vrsti) in z izvorom 'link'. Sprejemnik (Koda.gs, opisiObisk) po tem
+   * dogodku loči obisk, ki se je zaradi povezave začel na koraku zaposlenih, od
+   * nadaljevanja po osvežitvi, ki se prav tako ne začne na uvodnem zaslonu.
+   * Enkrat na obisk: obe odvisnosti sta stalnici prvega izrisa, vrnitev na uvodni
+   * zaslon in ročna potrditev pa sprožita svoj dogodek.
+   */
+  useEffect(() => {
+    if (!startedByLink) return;
+    track('lm10_industry_selected', {
+      industry: startingIndustry,
+      segment: getSegmentForIndustry(startingIndustry),
+      source: 'link',
+    });
+  }, [startedByLink, startingIndustry]);
 
   /**
    * Lijak (lib/analytics.ts). Korak, segment in razredi, nič osebnega — brez

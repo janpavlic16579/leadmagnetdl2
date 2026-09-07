@@ -275,7 +275,7 @@ function spineHtml() {
   const drugo = `<div class="box step spine-box" id="k1b">
 <div class="step-k">Korak 1b · samo ob izbiri »Drugo«</div>
 <h4>${esc(data.subIndustryQuestion)}</h4>
-<p class="intro">Vprašanje po poslovnem modelu, ne po panogi — gradbinec ali agencija se tu prepoznata kot storitveno-projektno podjetje.</p>
+<p class="intro">Vprašanje po poslovnem modelu, ne po panogi — agencija ali IT-hiša se tu prepoznata kot storitveno-projektno podjetje.</p>
 <ul class="opts opts-col">${data.drugoSubs
     .map((i) => `<li><span class="v">${esc(i.id)}</span>${esc(i.label)} <span class="ce">→ ${esc(i.segment)}</span></li>`)
     .join('')}</ul>

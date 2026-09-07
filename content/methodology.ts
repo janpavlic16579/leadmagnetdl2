@@ -67,6 +67,122 @@ export const MODULE_METHODOLOGY: Record<string, ModuleMethodology> = {
       'Kjer podjetje ne pozna lastne cene naloga ali nima sledljivosti, natančnega zneska ni mogoče izračunati — prav to je težava. Navidezno natančna številka bi jo skrila, zato prikazujemo stopnjo tveganja in ne evrov.',
   },
 
+  // --- Živilstvo ------------------------------------------------------------
+  donos_zivilstvo: {
+    formula:
+      'kalo = letna vrednost surovin × delež odstopanja donosa; beleženje šarž in ponovna predelava = ure × strošek proizvodne ure × 12',
+    rationale:
+      'Odstopanje donosa je surovina, ki je odtekla in je ni na nobenem kontu, ure beleženja in predelave pa so že plačan čas ekipe — zato so ločeni. Šteje se samo izguba nad tehnološko nujnim kalom, ki ga receptura že upošteva; odpisi zaradi roka so v področju Roki uporabnosti, sicer bi bila ista surovina šteta dvakrat.',
+  },
+  roki_zivilstvo: {
+    formula:
+      'letno = odpisi zaradi roka + inventurne razlike; enkratno = povprečna zaloga × ocenjen delež znižanja',
+    rationale:
+      'Odpis zaradi roka in inventurna razlika sta dva različna odliva: prvi je izdelek, ki je potekel, drugi je surovina, ki je ni, ne da bi kdo vedel, kam je šla. Sprostljiv kapital je enkraten učinek in se z letnimi zneski nikoli ne sešteva — sicer bi ena velika hladilnica povozila vse ostalo.',
+  },
+  sledljivost_zivilstvo: {
+    formula:
+      '(sestavljanje sledljivosti + reševanje reklamacij) × strošek administrativne ure × 12; + letni dobropisi in vračila; + letni stroški odpoklicev',
+    rationale:
+      'Ure so kapaciteta, dobropisi in odpoklic pa denar, ki je odtekel — zato so ločeni. Strošek odpoklica ima mejo naslovljivosti: sledljivost odpoklic omeji na eno šaržo, ne prepreči ga, ker je vzrok v surovini ali procesu in ne v evidenci.',
+  },
+  kakovost_zivilstvo: {
+    formula:
+      'HACCP evidence × strošek proizvodne ure × 12; priprava na presoje (ure na leto) × strošek administrativne ure; deklaracije × strošek administrativne ure × 12; + letni stroški napačnih etiket',
+    rationale:
+      'Zapis na kontrolni točki opravi operater na liniji, zato gre po proizvodni uri; priprava na presojo in deklaracije sta delo tehnologa po administrativni. HACCP ure imajo mejo naslovljivosti: zapis ostane obvezen tudi elektronsko, odpade le prepis, iskanje in arhiviranje.',
+  },
+  narocila_zivilstvo: {
+    formula:
+      '(vnos naročil + planiranje in naročanje surovin) × strošek administrativne ure × 12; + ekspresne nabave in dostave; + penali in odbitki trgovcev',
+    rationale:
+      'Ure so kapaciteta, doplačila in odbitki pa denar, ki je odtekel — zato so ločeni. Šteje se samo doplačilo nad redno ceno in samo odbitki zaradi količin in rokov; dobropisi zaradi kakovosti so v področju Sledljivost, sicer bi bil isti dobropis štet dvakrat.',
+  },
+  diagnostika_zivilstvo: {
+    formula: 'ocena tveganja iz štirih odgovorov — brez zneska',
+    rationale:
+      'Kjer podjetje ne pozna donosa in lastne cene izdelka ali šarže ne izsledi v eni uri, natančnega zneska ni mogoče izračunati — prav to je težava. Navidezno natančna številka bi jo skrila, zato prikazujemo stopnjo tveganja in ne evrov.',
+  },
+
+  // --- Predelava plastike ---------------------------------------------------
+  stroji_plastika: {
+    formula:
+      'menjave = menjav/teden × minute na menjavo / 60 × 52/12 × strošek strojne ure × 12; ročno javljanje = ure × strošek administrativne ure × 12',
+    rationale:
+      'Menjava je čas, ko stroj z operaterjem stoji, zato gre po strojni uri, ki vključuje energijo in amortizacijo; javljanje in prepis podatkov je delo ob stroju po administrativni uri. Menjava ima fizično dno — sistem naslovi število menjav prek zaporedja nalogov in pripravo nanje, ne montaže same — zato ima postavka mejo naslovljivosti.',
+  },
+  granulat_plastika: {
+    formula: 'izmet = letna vrednost granulata × delež izmeta; + letni stroški reklamacij zaradi kakovosti',
+    rationale:
+      'Izmet in reklamacije sta denar, ki je odtekel. Regranulat, ki se vrne v proces, ni izmet — šteje se samo material, ki gre iz hiše. Izmet ima tehnološko dno (zagon serije, dolivki, vzorčenje), zato ima mejo naslovljivosti; doplačila zaradi zamud so v področju Planiranje, sicer bi bil isti evro štet dvakrat.',
+  },
+  planiranje_plastika: {
+    formula:
+      '(planiranje in usklajevanje + prepisovanje naročil in odpoklicov) × strošek administrativne ure × 12; + ekspresni prevozi, penali in popusti zaradi zamud',
+    rationale:
+      'Ure so že plačan čas planerja in prodaje in zato kapaciteta, doplačila in penali pa denar, ki je odtekel — zato sta ločena. Šteje se samo doplačilo nad redno izvedbo in samo zaradi rokov; reklamacije zaradi kakovosti so v področju Granulat, ročno javljanje proizvodnje v področju Stroji.',
+  },
+  orodja_plastika: {
+    formula:
+      'nenačrtovani zastoji = strojne ure × strošek strojne ure × 12; + letni stroški nenačrtovanih popravil in nadomestnih delov',
+    rationale:
+      'Zastoj je stroj z operaterjem, ki stoji, zato gre po strojni uri; popravila so denar, ki je odtekel. Obe postavki imata mejo naslovljivosti 0,2: načrtovano vzdrževanje in števci ciklov zmanjšajo nenačrtovane zastoje za 10–20 %, orodje pa se obrabi ne glede na evidenco. Menjave orodij so v področju Stroji, čakanje na material v področju Zaloge.',
+  },
+  zaloge_plastika: {
+    formula:
+      'letno = odpisi zaloge in inventurne razlike; kapaciteta = strojne ure čakanja na material × strošek strojne ure × 12; enkratno = povprečna zaloga × ocenjen delež znižanja',
+    rationale:
+      'Področje meri dva nasprotna problema hkrati: preveč granulata in premalo pravega tipa ali barve. Sprostljiv kapital je enkraten učinek in se z letnimi zneski nikoli ne sešteva — sicer bi ena velika zaloga granulata povozila vse ostalo. Izmet iz proizvodnje je v področju Granulat.',
+  },
+  diagnostika_plastika: {
+    formula: 'ocena tveganja iz treh parov odgovorov — brez zneska',
+    rationale:
+      'Kjer podjetje ne pozna stroška kosa, serije ne poveže s šaržo granulata ali sestave materiala ne zna dokazati po uredbi PPWR, natančnega zneska ni mogoče izračunati — prav to je težava. Navidezno natančna številka bi jo skrila, zato prikazujemo stopnjo tveganja in ne evrov.',
+  },
+
+  // --- Kovinarstvo ----------------------------------------------------------
+  nalog_kovinarstvo: {
+    formula:
+      'ure ročnega evidentiranja × strošek administrativne ure × 12; + letna razlika med potrjeno ceno in kalkulirano lastno ceno (nezaslužena marža)',
+    rationale:
+      'Prepis podatkov o proizvodnji je že plačan čas ekipe, zato je kapaciteta. Cena pod lastno ceno je prodaja po napačni ceni in ne odtekel denar — prikazana je ločeno kot nezaslužena marža, ker stoji na predpostavki, da bi kupec pravo ceno plačal. Presežna poraba in ure, ki nalog podražijo, so v drugih področjih, sicer bi bil isti evro štet dvakrat.',
+  },
+  material_kovinarstvo: {
+    formula:
+      'presežna poraba = letna vrednost materiala × delež odstopanja od normativa; ponovna izdelava = ure × strošek proizvodne ure × 12',
+    rationale:
+      'Material nad normativom je denar, ki je odtekel in ga ni na nobenem kontu, ure ponovne izdelave pa so že plačan čas ekipe — zato so ločeni. Odstopanje ima tehnološko dno (izplen razreza), zato je naslovljiva največ polovica; manko ob inventuri je v področju Zaloge, sicer bi bil isti material štet dvakrat.',
+  },
+  zaloge_kovinarstvo: {
+    formula:
+      'letno = inventurne razlike in odpisi + doplačila za nujne nabave; kapaciteta = ure zastojev zaradi materiala × strošek proizvodne ure × 12; enkratno = povprečna zaloga × ocenjen delež znižanja',
+    rationale:
+      'Področje meri dva nasprotna problema hkrati: preveč zaloge in premalo pravega materiala. Sprostljiv kapital je enkraten učinek in se z letnimi zneski nikoli ne sešteva — sicer bi ena velika zaloga jekla povozila vse ostalo.',
+  },
+  sledljivost_kovinarstvo: {
+    formula:
+      '(iskanje certifikatov in dokumentacije + obravnava reklamacij) × strošek administrativne ure × 12; + letni neposredni stroški reklamacij',
+    rationale:
+      'Ure so kapaciteta, dobropisi in sortiranje pri kupcu pa denar, ki je odtekel — zato so ločeni. Šteje se samo reklamacija zaradi kakovosti; prevozi in popusti zaradi zamud so v področju Plan, ure ponovne izdelave pa v področju Material.',
+  },
+  kooperacija_kovinarstvo: {
+    formula:
+      'administracija oddaj × strošek administrativne ure × 12; čakanje na vračilo × strošek proizvodne ure × 12; + letne izgube pri kooperantih',
+    rationale:
+      'Oddajo pripravi pisarna, na vračilo čaka stroj — zato dve urni postavki. Izguba pri kooperantu je samo razlika, ugotovljena ob vračilu, in neuveljavljena reklamacija; manko, ki se pokaže šele ob inventuri, je v področju Zaloge.',
+  },
+  plan_kovinarstvo: {
+    formula:
+      '(ure čakanja na plan ali risbo + nadure) × strošek proizvodne ure × 12; + letni penali, popusti in dodatni prevozi zaradi zamud',
+    rationale:
+      'Ure, ko proizvodnja čaka na prioriteto, risbo ali pravo verzijo, so plačane, a ne ustvarijo ničesar. Čakanje na material in kooperanta tu ne šteje — merita ga področji Zaloge in Kooperacija, sicer bi bila ista ura šteta dvakrat.',
+  },
+  diagnostika_kovinarstvo: {
+    formula: 'ocena tveganja iz štirih odgovorov — brez zneska',
+    rationale:
+      'Kjer podjetje ne javlja operacij sproti, nima ene veljavne verzije kosovnice ali je odvisno od enega tehnologa, natančnega zneska ni mogoče izračunati — prav to je težava. Navidezno natančna številka bi jo skrila, zato prikazujemo stopnjo tveganja in ne evrov.',
+  },
+
   // --- Logistika in transport -----------------------------------------------
   obracun_logistika: {
     formula:
@@ -190,6 +306,43 @@ export const MODULE_METHODOLOGY: Record<string, ModuleMethodology> = {
       'Kjer trgovec ne pozna dejanske zaloge na polici ali marže po artiklu, natančnega zneska ni mogoče izračunati — prav to je težava. Navidezno natančna številka bi jo skrila, zato prikazujemo stopnjo tveganja in ne evrov.',
   },
 
+  // --- Inženiring in izvedba na ključ ----------------------------------------
+  marza_inzeniring: {
+    formula:
+      'razporejanje ur × strošek administrativne ure × 12; delo nad lastno kalkulacijo × strošek inženirske ure × 12; sestavljanje stanja marže × strošek administrativne ure × 12',
+    rationale:
+      'Vse tri postavke so že plačan čas ekipe, zato so kapaciteta in ne neposredna izguba. Delo nad lastno kalkulacijo se namenoma vrednoti po strošku ure in ne po ceni: za to delo ni bilo dogovora, da bo plačano, zato ni izgubljenega prihodka. Dodatna dela po zahtevi naročnika so v področju Spremembe obsega, sicer bi bila ista ura šteta dvakrat.',
+  },
+  aneksi_inzeniring: {
+    formula:
+      'nezaračunana dodatna dela (letni znesek po ponudbi); dokazovanje sprememb in iskanje kalkulacij × strošek administrativne ure × 12',
+    rationale:
+      'Dodatno delo brez aneksa je edina postavka v tej dejavnosti, vrednotena po ponudbeni vrednosti in ne po strošku: delo je opravljeno, oprema vgrajena, manjka samo račun — to je izgubljen prihodek. Ure dokazovanja in iskanja so nasprotno interno delo in zato kapaciteta.',
+  },
+  oprema_inzeniring: {
+    formula:
+      'enkratno = oprema brez projekta × ocenjen sprostljiv delež; letno = ekspresne dobave in kazni + čakanje na terenu × strošek inženirske ure × 12 + usklajevanje × strošek administrativne ure × 12',
+    rationale:
+      'Oprema brez projekta je vezan denar in ne strošek — sprostljiv kapital je enkraten učinek in se z letnimi zneski nikoli ne sešteva. Ekspresne dobave in kazni so denar, ki je odtekel; čakanje na terenu je plačan čas monterjev in zato kapaciteta po inženirski uri, usklajevanje pa pisarniško delo po administrativni.',
+  },
+  obracun_inzeniring: {
+    formula:
+      '(letna vrednost projektov / 365) × dni od faze do računa × strošek financiranja; + neobračunani servisni posegi; situacije × strošek administrativne ure × 12; enkratno = zapadli zadržki in garancije',
+    rationale:
+      'Do situacije podjetje predfinancira tudi opremo in podizvajalce, zato je osnova celotna letna vrednost projektov in ne le lastno delo; brez odgovora o prihodku je znesek 0, ker si ga ne izmišljamo. Zapadli zadržki so enkraten, v celoti sprostljiv znesek in se z letnimi ne seštevajo. Neobračunan servis je izgubljen prihodek; garancijska popravila na lasten strošek so v področju Reklamacije in poprodajni servis, sicer bi bil isti poseg štet dvakrat.',
+  },
+  dokumentacija_inzeniring: {
+    formula:
+      '(iskanje dokumentov + zbiranje ob predaji + teren brez podatkov) × strošek inženirske ure × 12; razpisna dokumentacija × strošek administrativne ure × 12',
+    rationale:
+      'Vse štiri postavke so plačan čas ljudi, ki v tem času ne projektirajo in ne montirajo — zato kapaciteta in ne neposredna izguba. Iskanje in zbiranje opravijo inženirji in monterji, razpise pisarna, zato dve postavki. Čakanje na opremo je v področju Oprema, sicer bi bila ista ura na terenu šteta dvakrat.',
+  },
+  diagnostika_inzeniring: {
+    formula: 'ocena tveganja iz štirih odgovorov — brez zneska',
+    rationale:
+      'Kjer podjetje ne ve, koliko ur je inženir porabil za projekt, ali oprema ni vezana na projekt, natančnega zneska izgubljene marže ni mogoče izračunati — prav to je težava. Navidezno natančna številka bi jo skrila, zato prikazujemo stopnjo tveganja in ne evrov.',
+  },
+
   // --- Storitve in projekti -------------------------------------------------
   projekti_storitve: {
     formula:
@@ -224,6 +377,43 @@ export const MODULE_METHODOLOGY: Record<string, ModuleMethodology> = {
     formula: 'ocena tveganja iz štirih odgovorov — brez zneska',
     rationale:
       'Kjer podjetje ne pozna marže projekta ali nima zapisanega dogovorjenega obsega, natančnega zneska ni mogoče izračunati — prav to je težava. Navidezno natančna številka bi jo skrila, zato prikazujemo stopnjo tveganja in ne evrov.',
+  },
+
+  // --- Gradbeništvo ---------------------------------------------------------
+  marza_gradbenistvo: {
+    formula:
+      'ure primerjave plana in realizacije × strošek vodstvene ure × 12; + marža, izgubljena zaradi prepozne informacije',
+    rationale:
+      'Ure seštevanja stroškov po projektu so plačan čas pisarne in zato kapaciteta. Izgubljena marža je prikazana ločeno kot nezaslužena marža, ne kot odliv: stoji na predpostavki, da bi jo pravočasna informacija rešila. Neobračunana dodatna dela, izginuli material in preplačila podizvajalcem sem ne sodijo — te merijo svoja področja, sicer bi bil isti odstop od kalkulacije štet dvakrat.',
+  },
+  situacije_gradbenistvo: {
+    formula:
+      '(priprava situacij + popravki vrnjenih situacij) × strošek vodstvene ure × 12; + neobračunana dodatna dela',
+    rationale:
+      'Neobračunano dodatno delo je neposredna izguba in ne nezaslužena marža: delo je opravljeno in strošek zanj že nastal, manjka samo račun. Dnevi do potrditve situacije pri nadzoru so vprašani, a v znesek ne vstopajo — potrjuje nadzor, ne izvajalec, in tega noben program ne skrajša.',
+  },
+  gradbisce_gradbenistvo: {
+    formula:
+      'čakanje ekipe × strošek delavčeve ure × 12; (pripis ur projektom + klici in čakanje na podatke s terena) × strošek vodstvene ure × 12; + material brez vgradnje in vračila',
+    rationale:
+      'Čakanje ekipe gre po delavčevi uri, ker stoji tisti, ki dela; pripis ur in klici s terena po vodstveni, ker ju opravita pisarna in vodja gradbišča. Šteje se samo pripis ur PROJEKTU kot podlaga za stroške projekta — evidenca prisotnosti za plačo je v področju Kadri in plače, sicer bi bila ista ura šteta dvakrat. Material se vpiše kot razlika med dobavljenim na gradbišče ter vgrajenim in vrnjenim; strojne ure v splošnih stroških niso strošek, ampak popačenje marže, zato so vprašane brez zneska.',
+  },
+  podizvajalci_gradbenistvo: {
+    formula:
+      'ure preverjanja situacij podizvajalcev × strošek vodstvene ure × 12; + preplačane in dvojno obračunane situacije',
+    rationale:
+      'Vpisuje se samo, kar je bilo dejansko plačano preveč. Penali zaradi zamud podizvajalcev so vprašani, a v znesek ne vstopajo: povzroči jih podizvajalec in urejena evidenca jih ne prepreči — znesek bi obljubljal prihranek, ki ga ni mogoče dostaviti.',
+  },
+  placila_gradbenistvo: {
+    formula:
+      'letna vrednost del ÷ 365 × dni prekoračitve roka × strošek financiranja; + odpisane terjatve; opominjanje × strošek vodstvene ure × 12; enkratno = zadržana sredstva × ocenjen delež sprostitve',
+    rationale:
+      'Šteje se samo prekoračitev NAD dogovorjenim plačilnim rokom — financiranje roka, ki ga je izvajalec naročniku sam odobril, je normalno poslovanje. Brez odgovora o letni vrednosti del ostane postavka neocenjena: prometa si ne izmišljamo. Sprostljiva zadržana sredstva so enkraten učinek in se z letnimi zneski nikoli ne seštevajo.',
+  },
+  diagnostika_gradbenistvo: {
+    formula: 'ocena tveganja iz štirih odgovorov — brez zneska',
+    rationale:
+      'Kjer stroški niso pripisani projektu ali sprememba obsega ni zapisana, natančnega zneska ni mogoče izračunati — prav to je težava. Navidezno natančna številka bi jo skrila, zato prikazujemo stopnjo tveganja in ne evrov.',
   },
 
   // --- Računovodski servis ---------------------------------------------------

@@ -667,7 +667,7 @@ function paketi(kdo, dogodki, naPaket = dogodki.length) {
 }
 
 /**
- * Šest značilnih obiskov; v vrstnem redu, v katerem gredo paketi na webhook.
+ * Sedem značilnih obiskov; v vrstnem redu, v katerem gredo paketi na webhook.
  * Segment `proizvodnja` ima korake industry(1) → employeeCount(2) → context(3) →
  * triage(4) → costBasis(5) → inputs/zaloge(6) → inputs/nacrtovanje(7) →
  * emailGate(8) → results(9).
@@ -726,6 +726,15 @@ function obiskiZaLijak() {
     [120, ...prikaz('inputs', 6, L, 'vozni-park')],
   ]);
 
+  // Obisk s kampanjske povezave /proizvodnja/: uvodnega zaslona ni, dejavnost
+  // pošlje aplikacija pred prvim prikazom z izvorom 'link'. Je nov obisk, ne
+  // nadaljevanje, čeprav se prav tako ne začne na uvodnem koraku. Odneha na kontekstu.
+  const povezava = paketi(obisk('obisk-povezava', { utmSource: 'linkedin' }), [
+    [0, 'lm10_industry_selected', { industry: 'proizvodnja', segment: P, source: 'link' }],
+    [0, ...prikaz('employeeCount', 2, P)],
+    [15, ...prikaz('context', 3, P)],
+  ]);
+
   // Nadaljevanje po osvežitvi: prvi prikazani korak ni uvodni. Odda, dostava pade.
   const nadaljevanje = paketi(obisk('obisk-nadaljevanje', { device: 'mobile', utmSource: 'google' }), [
     [0, ...prikaz('inputs', 6, P, 'zaloge')],
@@ -775,7 +784,7 @@ function obiskiZaLijak() {
     [190, 'lm10_form_blocked', { field: 'phone' }],
   ]);
 
-  return [poln[1], poln[0], ...triaza, ...vnosi, ...nadaljevanje, ...interni, ...blokada];
+  return [poln[1], poln[0], ...triaza, ...vnosi, ...povezava, ...nadaljevanje, ...interni, ...blokada];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1099,7 +1108,7 @@ test('doPost z events + visit pripne dogodke na list Dogodki', () => {
   assert.deepEqual(dnevnik.warn, []);
 });
 
-test('sestaviLijak iz šestih obiskov sestavi list Lijak s pravimi števili', () => {
+test('sestaviLijak iz sedmih obiskov sestavi list Lijak s pravimi števili', () => {
   const { skripta, preglednica, lastnosti, dnevnik } = naloziSkripto();
 
   obiskiZaLijak().forEach((paket) => post(skripta, paket));
@@ -1107,7 +1116,7 @@ test('sestaviLijak iz šestih obiskov sestavi list Lijak s pravimi števili', ()
   const vrsticDogodkov = dogodki.getLastRow();
 
   const izid = skripta.sestaviLijak();
-  assert.equal(izid, 'Lijak sestavljen: 4 začetih obiskov, 1 nadaljevanj, 1 izpuščenih, 1 oddaj.');
+  assert.equal(izid, 'Lijak sestavljen: 5 začetih obiskov, 1 nadaljevanj, 1 izpuščenih, 1 oddaj.');
   assert.ok(lastnosti.get('LIJAK_ZADNJI').endsWith(' — ' + izid), 'izid je viden v doGet');
   assert.equal(dogodki.getLastRow(), vrsticDogodkov, 'brez DOGODKI_HRANI_DNI se dogodki ne brišejo');
 
@@ -1115,37 +1124,38 @@ test('sestaviLijak iz šestih obiskov sestavi list Lijak s pravimi števili', ()
   assert.ok(lijak, 'list Lijak nastane sam');
   assert.match(lijak.getRange('A2').getValue(), /Obdobje: vsi dogodki/);
 
-  // Kartice: začetih so samo obiski z uvodnega koraka (brez nadaljevanja in
-  // internega); prenosov štejeta poln obisk in nadaljevanje, interni ne.
+  // Kartice: začetih so obiski z uvodnega koraka in obisk s povezave (brez
+  // nadaljevanja in internega); prenosov štejeta poln obisk in nadaljevanje, interni ne.
   assert.deepEqual(lijak.getRange(4, 1, 2, 10).getValues(), [
     ['ZAČETIH OBISKOV', '', 'DO OBRAZCA', '', 'ODDAJ', '', 'DELEŽ ODDAJ', '', 'PRENOSOV POROČILA', ''],
-    [4, '', 2, '', 1, '', 0.25, '', 2, ''],
+    [5, '', 2, '', 1, '', 0.2, '', 2, ''],
   ]);
 
   // Lijak čez vse segmente: obiskov, delež začetnih, končalo tu, odpad, mediana
   // časa v sekundah. Mediana šteje samo obiske, ki so šli naprej; 40 minut med
-  // vnosi in obrazcem pri polnem obisku je izpuščenih.
+  // vnosi in obrazcem pri polnem obisku je izpuščenih. Uvodni zaslon je pod
+  // sto odstotki: obisk s povezave ga ni videl, začetih pa šteje.
   const glavaLijaka = ['Korak', 'Obiskov', 'Delež začetnih', 'Končalo tu', 'Odpad', 'Mediana časa'];
   assert.deepEqual(tabela(lijak, 'LIJAK — VSI SEGMENTI', glavaLijaka), [
-    ['Dejavnost (uvod)', 4, 1, 0, 0, 25],
-    ['Zaposleni', 4, 1, 0, 0, 20],
-    ['Nekaj o vas (kontekst)', 4, 1, 0, 0, 20],
-    ['Triaža področij', 4, 1, 1, 0.25, 25],
-    ['Stroškovna osnova', 3, 0.75, 0, 0, 20],
-    ['Vnosi (vse strani skupaj)', 3, 0.75, 1, 1 / 3, 35],
-    ['      · vozni-park', 1, 0.25, 1, 1, ''],
-    ['      · zaloge', 2, 0.5, 0, 0, 25],
-    ['      · nacrtovanje', 2, 0.5, 0, 0, 20],
-    ['Obrazec s kontaktom', 2, 0.5, 1, 0.5, 30],
-    ['Rezultati', 1, 0.25, 1, 1, ''],
+    ['Dejavnost (uvod)', 4, 0.8, 0, 0, 25],
+    ['Zaposleni', 5, 1, 0, 0, 20],
+    ['Nekaj o vas (kontekst)', 5, 1, 1, 0.2, 20],
+    ['Triaža področij', 4, 0.8, 1, 0.25, 25],
+    ['Stroškovna osnova', 3, 0.6, 0, 0, 20],
+    ['Vnosi (vse strani skupaj)', 3, 0.6, 1, 1 / 3, 35],
+    ['      · vozni-park', 1, 0.2, 1, 1, ''],
+    ['      · zaloge', 2, 0.4, 0, 0, 25],
+    ['      · nacrtovanje', 2, 0.4, 0, 0, 20],
+    ['Obrazec s kontaktom', 2, 0.4, 1, 0.5, 30],
+    ['Rezultati', 1, 0.2, 1, 1, ''],
   ]);
 
   // Podatki za graf desno: korak in obiskov, v vrstnem redu toka.
   assert.equal(lijak.getRange(4, 14).getValue(), 'PODATKI ZA GRAF — ne brišite');
   assert.deepEqual(lijak.getRange(5, 14, 8, 2).getValues(), [
     ['Dejavnost (uvod)', 4],
-    ['Zaposleni', 4],
-    ['Nekaj o vas (kontekst)', 4],
+    ['Zaposleni', 5],
+    ['Nekaj o vas (kontekst)', 5],
     ['Triaža področij', 4],
     ['Stroškovna osnova', 3],
     ['Vnosi (vse strani skupaj)', 3],
@@ -1155,9 +1165,9 @@ test('sestaviLijak iz šestih obiskov sestavi list Lijak s pravimi števili', ()
   assert.equal(lijak.getCharts().length, 1);
 
   // Po segmentih: največji najprej; logistika ima en sam obisk, ki obtiči na vnosih.
-  const proizvodnja = tabela(lijak, 'LIJAK — PROIZVODNJA (3 obiskov)', glavaLijaka);
-  assert.deepEqual(proizvodnja.find((v) => v[0] === 'Triaža področij').slice(1, 4), [3, 1, 1]);
-  assert.deepEqual(proizvodnja.find((v) => v[0] === 'Rezultati'), ['Rezultati', 1, 1 / 3, 1, 1, '']);
+  const proizvodnja = tabela(lijak, 'LIJAK — PROIZVODNJA (4 obiskov)', glavaLijaka);
+  assert.deepEqual(proizvodnja.find((v) => v[0] === 'Triaža področij').slice(1, 4), [3, 0.75, 1]);
+  assert.deepEqual(proizvodnja.find((v) => v[0] === 'Rezultati'), ['Rezultati', 1, 0.25, 1, 1, '']);
   const logistika = tabela(lijak, 'LIJAK — LOGISTIKA (1 obiskov)', glavaLijaka);
   assert.deepEqual(logistika.find((v) => v[0] === 'Vnosi (vse strani skupaj)'), [
     'Vnosi (vse strani skupaj)', 1, 1, 1, 1, '',
@@ -1170,16 +1180,16 @@ test('sestaviLijak iz šestih obiskov sestavi list Lijak s pravimi števili', ()
 
   const glavaSkupin = ['', 'Začetih', 'Do obrazca', 'Oddaj', 'Delež oddaj'];
   assert.deepEqual(tabela(lijak, 'PO SEGMENTIH', glavaSkupin), [
-    ['proizvodnja', 3, 2, 1, 1 / 3],
+    ['proizvodnja', 4, 2, 1, 0.25],
     ['logistika', 1, 0, 0, 0],
   ]);
   assert.deepEqual(tabela(lijak, 'PO VIRU OBISKA (utm_source)', glavaSkupin), [
-    ['linkedin', 2, 1, 1, 0.5],
+    ['linkedin', 3, 1, 1, 1 / 3],
     ['(brez)', 1, 0, 0, 0],
     ['google', 1, 1, 0, 0],
   ]);
   assert.deepEqual(tabela(lijak, 'PO ZASLONU', glavaSkupin), [
-    ['desktop', 2, 1, 1, 0.5],
+    ['desktop', 3, 1, 1, 1 / 3],
     ['mobile', 2, 1, 0, 0],
   ]);
 
@@ -1195,19 +1205,20 @@ test('sestaviLijak iz šestih obiskov sestavi list Lijak s pravimi števili', ()
     ['padla: rejected', 1],
   ]);
 
-  // Nadaljevanja posebej, interni izpuščen.
+  // Nadaljevanja posebej, obisk s povezave med začetimi, interni izpuščen.
   assert.deepEqual(tabela(lijak, 'NADALJEVANJA IN IZPUŠČENI OBISKI', ['', 'Obiskov']), [
     ['Nadaljevanja po osvežitvi (prvi korak ni uvodni)', 1],
     ['   … od tega oddaj', 1],
+    ['Začeli s povezavo /dejavnost (uvodni zaslon preskočen, štejejo kot začeti)', 1],
     ['Izpuščeni: interni način (?debug=1) ali brez prikaza koraka', 1],
   ]);
 
   // Po dnevih: 30 vrstic z datumom; vsi obiski so prejeti danes, zato je vsota
-  // začetih 4 in oddaj 1 (katera vrstica je „danes", je odvisno od ure zagona).
+  // začetih 5 in oddaj 1 (katera vrstica je „danes", je odvisno od ure zagona).
   const poDnevih = tabela(lijak, 'PO DNEVIH — zadnjih 30 dni', ['Dan', 'Začetih', 'Oddaj']);
   assert.equal(poDnevih.length, 30);
   assert.ok(poDnevih.every((v) => jeDatum(v[0])));
-  assert.equal(poDnevih.reduce((n, v) => n + v[1], 0), 4);
+  assert.equal(poDnevih.reduce((n, v) => n + v[1], 0), 5);
   assert.equal(poDnevih.reduce((n, v) => n + v[2], 0), 1);
 
   // Ponovni zagon list sestavi na novo: en graf in ena zaščita, ne dva sloja.

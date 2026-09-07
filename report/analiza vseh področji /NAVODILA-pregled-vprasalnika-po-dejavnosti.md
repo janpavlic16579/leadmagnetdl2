@@ -41,6 +41,7 @@ Model naj pred zagonom izpolni to vrstico za izbrano dejavnost.
 | Segment | Prikazno ime | Raziskava (mapa v bazi znanja) | Modul | Kontekst |
 |---|---|---|---|---|
 | `proizvodnja` | Proizvodnja 10–249 zaposlenih | `proizvodnja/proizvodnja.md` | `proizvodnja.ts` | `contexts/proizvodnja.ts` |
+| `kovinarstvo` | Kovinarstvo | `research/files/Datalab_raziskava_KOVINSKA_INDUSTRIJA_model.xlsx` (izpeljava: `navodila/kovinarstvo/`) | `kovinarstvo.ts` | `contexts/kovinarstvo.ts` |
 | `logistika` | Logistika in transport 10–249 | `logistika/Logisticna_in_transportna_nisa_celovita_baza_znanja.md` | `logistika.ts` | `contexts/logistika.ts` |
 | `trgovina` | Veleprodaja in distribucija | `veleprodaja/Deep_research_veleprodaja_distribucija.md` | `trgovina.ts` | `contexts/trgovina.ts` |
 | `maloprodaja` | Maloprodaja | `maloprodaja/Raziskava_maloprodaja_PANTHEON.md` | `maloprodaja.ts` | `contexts/maloprodaja.ts` |
@@ -55,6 +56,7 @@ Vsaka mapa ima poleg `.md` še `.xlsx` s strukturiranimi registri (bolečine, KP
 | Segment | Panožni moduli | Horizontale | Vedno |
 |---|---|---|---|
 | `proizvodnja` | planiranje · material · zaloge · nalogi · zamude | vseh 5 | diagnostika · E |
+| `kovinarstvo` | nalog · material · zaloge · sledljivost · kooperacija · plan *(6!)* | analitika · finance · kadri · dokumenti | diagnostika_kovinarstvo · E |
 | `logistika` | odprema · napake · skladisce · dokumentacija · roki | analitika · finance · kadri | diagnostika_logistika · E |
 | `trgovina` | narocila · skladisce · zaloge · odprema · terjatve | vseh 5 | diagnostika_trgovina · E |
 | `maloprodaja` | razpolozljivostMp · zalogeMp · marzeMp · blagajnaMp · prevzemMp · kanaliMp *(6!)* | vseh 5 | diagnostikaMp · E |

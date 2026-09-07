@@ -1,11 +1,16 @@
 import type { SegmentId } from '../segmentTypes';
+import { INZENIRING_CONTEXT } from './inzeniring';
+import { KOVINARSTVO_CONTEXT } from './kovinarstvo';
 import { LOGISTIKA_CONTEXT } from './logistika';
 import { MALOPRODAJA_CONTEXT } from './maloprodaja';
+import { PLASTIKA_CONTEXT } from './plastika';
 import { PROIZVODNJA_CONTEXT } from './proizvodnja';
 import { RACUNOVODSTVO_CONTEXT } from './racunovodstvo';
 import { SPLOSNO_CONTEXT } from './splosno';
 import { STORITVE_CONTEXT } from './storitve';
+import { GRADBENISTVO_CONTEXT } from './gradbenistvo';
 import { TRGOVINA_CONTEXT } from './trgovina';
+import { ZIVILSTVO_CONTEXT } from './zivilstvo';
 import {
   FALLBACK_SYSTEM_GAP,
   type SystemGap,
@@ -24,10 +29,15 @@ import {
  */
 export const SEGMENT_CONTEXTS: Partial<Record<SegmentId, SegmentContext>> = {
   proizvodnja: PROIZVODNJA_CONTEXT,
+  zivilstvo: ZIVILSTVO_CONTEXT,
+  kovinarstvo: KOVINARSTVO_CONTEXT,
+  plastika: PLASTIKA_CONTEXT,
   logistika: LOGISTIKA_CONTEXT,
   trgovina: TRGOVINA_CONTEXT,
   maloprodaja: MALOPRODAJA_CONTEXT,
   storitve: STORITVE_CONTEXT,
+  gradbenistvo: GRADBENISTVO_CONTEXT,
+  inzeniring: INZENIRING_CONTEXT,
   racunovodstvo: RACUNOVODSTVO_CONTEXT,
   splosno: SPLOSNO_CONTEXT,
 };

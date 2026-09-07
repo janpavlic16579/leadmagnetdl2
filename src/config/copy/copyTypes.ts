@@ -141,8 +141,12 @@ export interface SegmentCopy {
      */
     directLoss: FigureCopy & { note: string };
     lostMargin?: { title?: string; note?: string };
-    /** note se izpiše ZA predpono "X h/mesec. " — ure doda izrisovalec, ne besedilo. */
-    capacity?: { title?: string; note?: string };
+    /**
+     * note se izpiše ZA predpono "X h/mesec. " — ure doda izrisovalec, ne besedilo.
+     * shortNote je tu zato, ker so pri predelavi plastike v isti vsoti STROJNE in
+     * delovne ure — nevtralna opomba v PDF-ju ("zaposleni ostane") bi jih razglasila za plače.
+     */
+    capacity?: FigureCopy;
     oneTimeCapital?: { title?: string; note?: string };
     potential?: { title?: string; note?: string };
   };

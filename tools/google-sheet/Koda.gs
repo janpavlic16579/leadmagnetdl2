@@ -2897,8 +2897,15 @@ var KORAKI_LIJAKA = [
   ['results', 'Rezultati'],
 ];
 
-/** Korak, s katerim se začne vsak nov obisk; obisk z drugim prvim korakom je nadaljevanje. */
+/**
+ * Korak, s katerim se začne vsak nov obisk; obisk z drugim prvim korakom je
+ * nadaljevanje po osvežitvi — razen kadar je dejavnost pred prvim prikazom
+ * izbrala povezava s potjo (`<objava>/proizvodnja/`): tak obisk uvodni zaslon
+ * preskoči in se začne na koraku zaposlenih, aplikacija pa pred prikazom pošlje
+ * lm10_industry_selected z izvorom IZVOR_POVEZAVA (CalculatorFlow.tsx).
+ */
 var UVODNI_KORAK = 'industry';
+var IZVOR_POVEZAVA = 'link';
 
 /** Prvi stolpec podatkov za graf na listu Lijak (N); levo od njega je pogled za človeka. */
 var LIJAK_PODATKI_STOLPEC = 14;
@@ -3227,6 +3234,12 @@ function sestaviLijakList() {
           return o.oddal;
         }),
       ],
+      [
+        'Začeli s povezavo /dejavnost (uvodni zaslon preskočen, štejejo kot začeti)',
+        prestej(zacetni, function (o) {
+          return o.zacelaPovezava;
+        }),
+      ],
       ['Izpuščeni: interni način (?debug=1) ali brez prikaza koraka', izpusceni],
     ],
     [null, '#.##0'],
@@ -3345,6 +3358,18 @@ function opisiObisk(ob) {
   var prikazi = ob.dogodki.filter(function (d) {
     return d.dogodek === 'lm10_step_view' && d.korak;
   });
+  // Dejavnost je pred prvim prikazom izbrala povezava s potjo: obisk se ne
+  // začne na uvodnem zaslonu, a ni nadaljevanje. Izbira ZA prvim prikazom je
+  // ročna (vrnitev na uvodni zaslon) in tega ne pove.
+  var zacelaPovezava =
+    prikazi.length > 0 &&
+    ob.dogodki.some(function (d) {
+      return (
+        d.dogodek === 'lm10_industry_selected' &&
+        d.lastnosti.source === IZVOR_POVEZAVA &&
+        d.zaporedje < prikazi[0].zaporedje
+      );
+    });
   var o = {
     id: ob.id,
     interni: ob.interni,
@@ -3353,7 +3378,8 @@ function opisiObisk(ob) {
     segment: ob.segment || '(neznan)',
     zacetek: ob.zacetek,
     prikazov: prikazi.length,
-    nadaljevanje: prikazi.length > 0 && prikazi[0].korak !== UVODNI_KORAK,
+    zacelaPovezava: zacelaPovezava,
+    nadaljevanje: prikazi.length > 0 && prikazi[0].korak !== UVODNI_KORAK && !zacelaPovezava,
     dosegel: {},
     indeks: {},
     cas: {},

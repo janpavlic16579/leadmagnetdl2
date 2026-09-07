@@ -1,20 +1,30 @@
 import { useState } from 'react';
 import { getSegmentFromUrlParam, type SegmentId } from './config/segments';
-import { FALLBACK_SEGMENT, getIndustryForSegment, getSegmentForIndustry } from './config/industries';
+import {
+  FALLBACK_SEGMENT,
+  getIndustryForPath,
+  getIndustryForSegment,
+  getSegmentForIndustry,
+} from './config/industries';
 import { CalculatorFlow } from './components/Calculator/CalculatorFlow';
 import { Header } from './components/Layout/Header';
 import { applyTheme, readStoredTheme, type Theme } from './lib/theme';
 
 /**
- * Kampanjski ?s= ne določa segmenta mimo vprašalnika, ampak prednastavi dejavnost
- * v Koraku 1. Segment ima s tem en sam vir — izbrano dejavnost — in se ne more
- * razhajati z njo, kot se je, dokler je obstajal ročni override.
+ * Povezava dejavnost pove na dva načina. Kampanjski ?s= je ne določa mimo
+ * vprašalnika, ampak jo prednastavi na uvodnem zaslonu — segment ima s tem en sam
+ * vir, izbrano dejavnost, in se ne more razhajati z njo, kot se je, dokler je
+ * obstajal ročni override. Pot `<objava>/proizvodnja/` gre korak dlje: dejavnost
+ * izbere in uvodni zaslon preskoči (config/industries.ts, INDUSTRY_PATHS). Ob obeh
+ * hkrati velja pot, ker je določnejša.
  */
 function readInitialParams() {
   const params = new URLSearchParams(window.location.search);
+  const pathIndustry = getIndustryForPath(window.location.pathname, import.meta.env.BASE_URL);
   const segment = getSegmentFromUrlParam(params.get('s'));
   return {
-    industry: segment ? getIndustryForSegment(segment.id) : '',
+    industry: pathIndustry || (segment ? getIndustryForSegment(segment.id) : ''),
+    skipIndustryStep: pathIndustry !== '',
     utmSource: params.get('utm_source'),
     // Interni način: prodajna priprava se prenese na napravo. Namenjen razvoju in
     // preverjanju vsebine; obiskovalec ga po nesreči ne vklopi.
@@ -45,6 +55,7 @@ function App() {
       <main>
         <CalculatorFlow
           initialIndustry={initial.industry}
+          skipIndustryStep={initial.skipIndustryStep}
           utmSource={initial.utmSource}
           internalMode={initial.internalMode}
           onActiveSegmentChange={setActiveSegmentId}

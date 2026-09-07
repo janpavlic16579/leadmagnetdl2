@@ -42,6 +42,15 @@ export type PantheonBrand = 'enterprise' | 'retail' | 'manufacture' | 'accountin
 
 export const PANTHEON_BRAND: Record<SegmentId, PantheonBrand> = {
   proizvodnja: 'manufacture',
+  // Živilska proizvodnja je proizvodnja: šarže, recepture in roki uporabnosti
+  // so v Manufacture. Ločene znamke za živilstvo Datalab nima.
+  zivilstvo: 'manufacture',
+  // Kovinarstvo je proizvodnja: delovni nalogi z obračunom, kosovnice, šarže in
+  // kooperacijske operacije so v Manufacture.
+  kovinarstvo: 'manufacture',
+  // Predelava plastike je proizvodnja: delovni nalogi, normativi, šarže in
+  // terminali MT so v Manufacture. Ločene znamke zanjo Datalab nima.
+  plastika: 'manufacture',
   // Ločenega logotipa za logistiko ni, ker Datalab zanjo nima ločene licence:
   // pokrivata jo SE in ME, torej ista znamka kot splošni poslovni paket. Namesto
   // izmišljenega ali napačno pripisanega (Retail) uporabimo Enterprise. Če
@@ -56,6 +65,13 @@ export const PANTHEON_BRAND: Record<SegmentId, PantheonBrand> = {
   // zato stoji tu Enterprise. Ob prejemu pravega sredstva zamenjaj oboje in dodaj
   // temno različico (#231F20 -> #ECE8E5), enako kot pri ostalih.
   storitve: 'enterprise',
+  // Gradbeništvo nima ne svoje licence ne vertikale (content/sales/licences.ts):
+  // pokrivata ga SE in ME, torej ista znamka kot logistiko in splošni segment.
+  gradbenistvo: 'enterprise',
+  // ZAČASNO, iz istega razloga kot storitve: inženiring nima svoje znamke, pokrivata
+  // ga Enterprise izdaji SE in ME (projektno stroškovno mesto, evidenca ur, zaloga
+  // po projektu so v jedru). Ob prejemu pravega sredstva zamenjaj samo ta vnos.
+  inzeniring: 'enterprise',
   racunovodstvo: 'accounting',
   splosno: 'enterprise',
 };
@@ -69,10 +85,15 @@ const BY_BRAND: Record<PantheonBrand, PantheonLogo> = {
 
 export const PANTHEON_LOGOS: Record<SegmentId, PantheonLogo> = {
   proizvodnja: BY_BRAND[PANTHEON_BRAND.proizvodnja],
+  zivilstvo: BY_BRAND[PANTHEON_BRAND.zivilstvo],
+  kovinarstvo: BY_BRAND[PANTHEON_BRAND.kovinarstvo],
+  plastika: BY_BRAND[PANTHEON_BRAND.plastika],
   logistika: BY_BRAND[PANTHEON_BRAND.logistika],
   trgovina: BY_BRAND[PANTHEON_BRAND.trgovina],
   maloprodaja: BY_BRAND[PANTHEON_BRAND.maloprodaja],
   storitve: BY_BRAND[PANTHEON_BRAND.storitve],
+  gradbenistvo: BY_BRAND[PANTHEON_BRAND.gradbenistvo],
+  inzeniring: BY_BRAND[PANTHEON_BRAND.inzeniring],
   racunovodstvo: BY_BRAND[PANTHEON_BRAND.racunovodstvo],
   splosno: BY_BRAND[PANTHEON_BRAND.splosno],
 };

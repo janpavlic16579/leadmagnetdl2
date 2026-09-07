@@ -374,7 +374,7 @@ Aplikacije ni treba spreminjati: dogodki gredo na `VITE_LEAD_WEBHOOK_URL`, ki je
 | `PO SEGMENTIH`, `PO VIRU OBISKA`, `PO ZASLONU` | Začetih, do obrazca, oddaj, delež oddaj po skupinah |
 | `OBRAZEC — KATERO POLJE USTAVI ODDAJO` | Blokade validacije po polju: kolikokrat in koliko obiskov |
 | `DOSTAVA LEADA` | Uspele in padle dostave po razlogu (`no_webhook`, `rejected`, `error`) |
-| `NADALJEVANJA IN IZPUŠČENI OBISKI` | Obiski po osvežitvi, oddaje med njimi, interni obiski (`?debug=1`) |
+| `NADALJEVANJA IN IZPUŠČENI OBISKI` | Obiski po osvežitvi, oddaje med njimi, obiski prek poti `/dejavnost/`, interni obiski (`?debug=1`) |
 | `PO DNEVIH` | Zadnjih 30 dni: začetih in oddaj — vir za graf trenda |
 
 **Kako brati.** *Obisk* je ena naložena stran, ne obiskovalec: id obiska živi samo
@@ -384,7 +384,10 @@ naredi nov obisk, ki se začne sredi toka; take obiske („nadaljevanja": prvi
 prikazani korak ni uvodni) lijak **ne** šteje, pove pa, koliko jih je in koliko
 jih je oddalo. Pravi delež dokončanih je med številko brez nadaljevanj in
 številko z njimi. Gib „Nazaj" na telefonu strani ne osveži (zgodovina je v
-aplikaciji), zato je nadaljevanj malo.
+aplikaciji), zato je nadaljevanj malo. Obisk prek kampanjske poti
+(`<objava>/proizvodnja/`) se prav tako ne začne na uvodnem koraku, a ni
+nadaljevanje: aplikacija pred prvim prikazom pošlje `lm10_industry_selected`
+z `source: link` in lijak ga šteje kot začetega.
 
 *Končalo tu* pomeni, da obisk ni prišel **dlje** od tega koraka — vrnitev nazaj
 ni odnehanje, šteje najdlje doseženi korak. Pri rezultatih pomeni dokončan
