@@ -44,7 +44,7 @@ export const LOGISTIKA_COPY: SegmentCopy = {
   emailGate: {
     title: 'Rezultat in PDF poročilo s tremi ukrepi za vašo logistiko',
     subtitle:
-      'Po oddaji se na zaslonu odpre vaš izračun in z njim PDF poročilo za upravo ali lastnika — razčlenjeno po področjih, s formulo pod vsako postavko in tremi ukrepi, ki jih je v obračunu, dokumentaciji in skladišču mogoče začeti ta teden.',
+      'Po oddaji se na zaslonu odpre vaš izračun, PDF poročilo za upravo ali lastnika pa prejmete na vpisani e-naslov — razčlenjeno po področjih, s formulo pod vsako postavko in tremi ukrepi, ki jih je v obračunu, dokumentaciji in skladišču mogoče začeti ta teden.',
   },
 
   pdf: { documentTitle: 'Analiza skritih stroškov v logistiki' },

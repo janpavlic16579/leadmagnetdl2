@@ -33,7 +33,7 @@ import { assessHoursPlausibility, hoursPlausibilityWarning } from '../../lib/pla
 import { selectFollowUpSequence } from '../../lib/followUp';
 import { triageScoreLabel } from '../../lib/answerLabels';
 import { track } from '../../lib/analytics';
-import { deliverLead, loadDeliveryModules } from '../../lib/deliverLead';
+import { deliverLead, loadDeliveryModules, type CustomerReportDelivery } from '../../lib/deliverLead';
 import { readProgress, saveProgress } from '../../lib/progressStorage';
 import type { ModuleDefinition } from '../../config/modules/moduleTypes';
 import type { SalesReport } from '../../lib/salesReport';
@@ -140,6 +140,15 @@ export function CalculatorFlow({
    * lib/deliverLead.ts); rezultati jo tedaj ponudijo kot gumb.
    */
   const [salesReport, setSalesReport] = useState<SalesReport | null>(null);
+  /**
+   * Kam je šlo strankino poročilo (druga tabela v lib/deliverLead.ts): po
+   * e-pošti — rezultati pokažejo obvestilo — ali s prenosom kot rezervo. Po
+   * osvežitvi ostane samo zastavica iz shrambe (naslov je kontakt in tja ne
+   * sodi): obvestilo tedaj pove "na vaš e-naslov", brez naslova.
+   */
+  const [customerReport, setCustomerReport] = useState<CustomerReportDelivery | null>(() =>
+    restored?.reportSent ? { emailedTo: null, downloadOffered: internalMode, reason: 'emailed' } : null,
+  );
 
   /**
    * Segment ima en sam vir: izbrano dejavnost. Prej je obstajal še ročni override
@@ -198,7 +207,7 @@ export function CalculatorFlow({
   /**
    * Napredek preživi osvežitev strani.
    *
-   * Shranjuje se tudi po oddaji — z zastavico `submitted` in brez kontakta. Prej
+   * Shranjuje se tudi po oddaji — z zastavicama `submitted` in `reportSent`, brez kontakta. Prej
    * se je zapis ob oddaji pobrisal, ker je bil tok končan; zdaj oddaji sledijo
    * rezultati in osvežitev na njih ne sme vrniti vprašalnika. Zapis umre s sejo
    * zavihka (sessionStorage), zato naslednji obiskovalec istega računalnika ne
@@ -214,8 +223,9 @@ export function CalculatorFlow({
       triageSelection,
       inputsModuleId,
       submitted,
+      reportSent: customerReport?.reason === 'emailed',
     });
-  }, [step, basicInfo, profile, moduleInputs, triageScores, triageSelection, inputsModuleId, submitted]);
+  }, [step, basicInfo, profile, moduleInputs, triageScores, triageSelection, inputsModuleId, submitted, customerReport]);
 
   /**
    * Gumb "Nazaj" v brskalniku (in gib "swipe back" na telefonu) pelje korak
@@ -721,8 +731,9 @@ export function CalculatorFlow({
       modules,
       {
         onSalesReport: setSalesReport,
-        onSubmitted: () => {
+        onSubmitted: ({ customerReport: delivery }) => {
           setLead(submission);
+          setCustomerReport(delivery);
           setSubmitted(true);
           // Rezultati NADOMESTIJO vnos obrazca v zgodovini: brskalnikov "Nazaj"
           // (in gib "swipe back") z rezultatov pelje v vnose, ne na oddan obrazec.
@@ -734,9 +745,10 @@ export function CalculatorFlow({
   }
 
   /**
-   * Strankin PDF ob kliku na rezultatih — iz TRENUTNEGA stanja in ne iz datoteke,
-   * poslane ob oddaji: po "Nazaj na vnos" mora poročilo ustrezati zaslonu.
-   * Po osvežitvi ime podjetja ni znano (glej lead).
+   * Strankin PDF ob kliku na rezultatih — REZERVA, kadar poročilo ni šlo po
+   * e-pošti (ali v internem načinu, za pregled). Iz TRENUTNEGA stanja in ne iz
+   * datoteke, poslane ob oddaji: po "Nazaj na vnos" mora poročilo ustrezati
+   * zaslonu. Po osvežitvi ime podjetja ni znano (glej lead).
    */
   async function downloadCustomerPdf() {
     const [{ buildResultsPdfFile }, { downloadFile }] = await Promise.all([
@@ -744,8 +756,12 @@ export function CalculatorFlow({
       import('../../lib/download'),
     ]);
     downloadFile(await buildResultsPdfFile(customerPdfParams(lead?.contact.companyName ?? '')));
-    // Koliko obiskovalcev poročilo sploh vzame — vsak prenos je ročen.
-    track('lm10_report_download', { segment: segment.id });
+    // Gumb je rezerva: dogodek pove, zakaj je bil sploh na voljo (lib/analytics.ts).
+    track('lm10_report_download', {
+      segment: segment.id,
+      reason:
+        customerReport === null ? 'unknown' : customerReport.reason === 'emailed' ? 'internal' : customerReport.reason,
+    });
   }
 
   if (step === 'industry') {
@@ -944,6 +960,7 @@ export function CalculatorFlow({
           openInputsAt(id);
         }}
         onDownloadPdf={downloadCustomerPdf}
+        customerReport={customerReport}
         consultingRequested={lead?.consents.consentConsulting ?? false}
         internalMode={internalMode}
         followUpSequenceDebug={followUpSequence}

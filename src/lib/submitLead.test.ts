@@ -46,6 +46,9 @@ const RECORD = buildLeadExportRecord({
 
 const SUBMISSION: LeadSubmission = { record: RECORD, salesReportHtml: '<!doctype html>' };
 
+/** Odgovor sprejemnika s telesom, kot ga vrne Apps Script (`ContentService`, JSON). */
+const odgovor = (body: unknown) => ({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(body)) });
+
 describe('buildLeadExportRecord', () => {
   it('sestavi zapis z oznako dejavnosti, velikostnim razredom in vsemi koši', () => {
     expect(RECORD.industryLabel).toBe('Trgovina, veleprodaja in distribucija');
@@ -91,11 +94,11 @@ describe('leadWebhookUrl', () => {
 });
 
 describe('submitLead', () => {
-  it('POST-a JSON celotne oddaje in ob 200 vrne true', async () => {
+  it('POST-a JSON celotne oddaje; ob 200 brez berljivega telesa dostavo potrdi, o pošti stranki pa ne ve nič', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200 });
-    const delivered = await submitLead(SUBMISSION, 'https://crm.example/hook', fetchImpl as never);
+    const result = await submitLead(SUBMISSION, 'https://crm.example/hook', fetchImpl as never);
 
-    expect(delivered).toBe(true);
+    expect(result).toEqual({ delivered: true, customerReport: { sent: false, reason: 'unknown' } });
     const [url, init] = fetchImpl.mock.calls[0];
     expect(url).toBe('https://crm.example/hook');
     expect(init.method).toBe('POST');
@@ -163,8 +166,8 @@ describe('submitLead', () => {
   it('prilogi gresta v telo nespremenjeni, keepalive pa zaradi velikosti odpade', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200 });
     const attachments: LeadAttachment[] = [
-      { filename: 'porocilo.pdf', contentType: 'application/pdf', base64: 'A'.repeat(70_000) },
-      { filename: 'priprava.pdf', contentType: 'application/pdf', base64: 'QQ==' },
+      { filename: 'porocilo.pdf', contentType: 'application/pdf', base64: 'A'.repeat(70_000), audience: 'customer' },
+      { filename: 'priprava.pdf', contentType: 'application/pdf', base64: 'QQ==', audience: 'sales' },
     ];
 
     await submitLead({ ...SUBMISSION, attachments }, 'https://x', fetchImpl as never);
@@ -174,22 +177,82 @@ describe('submitLead', () => {
     expect(init.keepalive).toBe(false);
   });
 
-  it('napaka strežnika ali omrežja NIKOLI ne vrže — vrne false', async () => {
+  it('napaka strežnika ali omrežja NIKOLI ne vrže — dostava je neuspela', async () => {
     const serverError = vi.fn().mockResolvedValue({ ok: false, status: 500 });
-    expect(await submitLead(SUBMISSION, 'https://x', serverError as never)).toBe(false);
+    expect((await submitLead(SUBMISSION, 'https://x', serverError as never)).delivered).toBe(false);
 
     const networkError = vi.fn().mockRejectedValue(new Error('offline'));
-    expect(await submitLead(SUBMISSION, 'https://x', networkError as never)).toBe(false);
+    expect((await submitLead(SUBMISSION, 'https://x', networkError as never)).delivered).toBe(false);
+  });
+
+  /**
+   * Sprejemnik (Koda.gs) v telesu pove, ali je strankino poročilo odšlo na
+   * e-naslov iz obrazca. Od tega je odvisno, ali rezultati pokažejo obvestilo
+   * ali gumb za prenos — zato se telo bere, ne le status.
+   */
+  it('iz telesa prebere izid pošte stranki', async () => {
+    const sent = vi.fn().mockResolvedValue(odgovor({ ok: true, customerReport: { sent: true } }));
+    expect(await submitLead(SUBMISSION, 'https://x', sent as never)).toEqual({
+      delivered: true,
+      customerReport: { sent: true },
+    });
+
+    const skipped = vi
+      .fn()
+      .mockResolvedValue(odgovor({ ok: true, customerReport: { sent: false, reason: 'no_attachment' } }));
+    expect(await submitLead(SUBMISSION, 'https://x', skipped as never)).toEqual({
+      delivered: true,
+      customerReport: { sent: false, reason: 'no_attachment' },
+    });
+  });
+
+  it('odgovor starejšega sprejemnika, neznan razlog ali neberljivo telo: dostava uspela, pošta neznana', async () => {
+    const unknown = { delivered: true, customerReport: { sent: false, reason: 'unknown' } };
+
+    const old = vi.fn().mockResolvedValue(odgovor({ ok: true }));
+    expect(await submitLead(SUBMISSION, 'https://x', old as never)).toEqual(unknown);
+
+    const strange = vi
+      .fn()
+      .mockResolvedValue(odgovor({ ok: true, customerReport: { sent: false, reason: 'teapot' } }));
+    expect(await submitLead(SUBMISSION, 'https://x', strange as never)).toEqual(unknown);
+
+    const unreadable = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.reject(new Error('prekinjen tok')),
+    });
+    expect(await submitLead(SUBMISSION, 'https://x', unreadable as never)).toEqual(unknown);
+  });
+
+  /**
+   * Apps Script napako skripte vrne kot HTML s statusom 200 — status laže, telo
+   * ne. Dokler se je gledal samo status, je taka oddaja štela kot uspešna in
+   * priprava ni šla ne stranki ne na Drive.
+   */
+  it('berljivo telo, ki ni JSON z ok: true, je neuspela dostava', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const html = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve('<!doctype html><title>Napaka</title>'),
+    });
+    expect((await submitLead(SUBMISSION, 'https://x', html as never)).delivered).toBe(false);
+
+    const notOk = vi.fn().mockResolvedValue(odgovor({ ok: false }));
+    expect((await submitLead(SUBMISSION, 'https://x', notOk as never)).delivered).toBe(false);
+    warn.mockRestore();
   });
 });
 
 describe('attachmentFromFile', () => {
-  it('pretvori datoteko generatorja v base64 z imenom in tipom PDF', async () => {
+  it('pretvori datoteko generatorja v base64 z imenom, tipom PDF in občinstvom', async () => {
     const file = { filename: 'x.pdf', blob: new Blob([Uint8Array.from([0x25, 0x50, 0x44, 0x46])]) };
-    expect(await attachmentFromFile(file)).toEqual({
+    expect(await attachmentFromFile(file, 'customer')).toEqual({
       filename: 'x.pdf',
       contentType: 'application/pdf',
       base64: 'JVBERg==',
+      audience: 'customer',
     });
   });
 
@@ -199,7 +262,7 @@ describe('attachmentFromFile', () => {
    */
   it('večjo datoteko pretvori po kosih brez izgube', async () => {
     const bytes = Uint8Array.from({ length: 100_000 }, (_, i) => (i * 7) & 0xff);
-    const { base64 } = await attachmentFromFile({ filename: 'x.pdf', blob: new Blob([bytes]) });
+    const { base64 } = await attachmentFromFile({ filename: 'x.pdf', blob: new Blob([bytes]) }, 'sales');
 
     const decoded = atob(base64);
     expect(decoded.length).toBe(bytes.length);
@@ -209,12 +272,13 @@ describe('attachmentFromFile', () => {
 
 describe('requestTimeoutMs', () => {
   /**
-   * Rok raste s telesom: samo HTML ostane pri osmih sekundah kot doslej, s
-   * prilogama (≈ 175 kB) pa počasna mobilna povezava dobi čas za prenos —
-   * prekoračitev namreč pošlje prodajno pripravo stranki.
+   * Rok raste s telesom: samo HTML ostane pri desetih sekundah, s prilogama
+   * (≈ 175 kB) pa počasna mobilna povezava dobi čas za prenos — prekoračitev
+   * namreč pošlje prodajno pripravo stranki in ponudi prenos poročila, ki je
+   * po e-pošti morda že na poti.
    */
-  it('samo HTML ≈ 8 s, s prilogama ≈ 12 s', () => {
-    expect(requestTimeoutMs(10_000)).toBe(8_200);
-    expect(requestTimeoutMs(175_000)).toBe(11_500);
+  it('samo HTML ≈ 10 s, s prilogama ≈ 13,5 s', () => {
+    expect(requestTimeoutMs(10_000)).toBe(10_200);
+    expect(requestTimeoutMs(175_000)).toBe(13_500);
   });
 });

@@ -21,7 +21,8 @@ const PRIVACY_POLICY_URL = '';
  * ("Nato znova kliknite …") — dva zapisa bi se ob prepisu razšla.
  *
  * "Pokaži rezultate" in ne "Prenesi poročilo": ob oddaji se ne prenese nič,
- * poročilo prenese gumb na rezultatih (zakaj — lib/deliverLead.ts).
+ * poročilo gre na vpisani e-naslov, gumb na rezultatih je rezerva (zakaj —
+ * lib/deliverLead.ts).
  */
 const SUBMIT_LABEL = 'Pokaži rezultate';
 
@@ -199,7 +200,7 @@ export function EmailGate({ copy, stepLabel, onSubmit, onBack }: EmailGateProps)
         {copy.title}
       </h1>
       {/*
-        Podnaslov pove, kaj sledi oddaji: izračun na zaslonu in PDF poročilo.
+        Podnaslov pove, kaj sledi oddaji: izračun na zaslonu, PDF poročilo po e-pošti.
         Obrazec stoji PRED rezultatom, zato stavka "izračun je na voljo tudi brez
         tega koraka" ni več nikjer — ne tu ne na uvodu (SHARED_COPY.landingOffer);
         obljuba, ki je ne držimo, je slabša od poštene prošnje za kontakt.
@@ -289,7 +290,7 @@ export function EmailGate({ copy, stepLabel, onSubmit, onBack }: EmailGateProps)
               autoComplete="email"
               required
               aria-invalid={showErrors && errors.email ? true : undefined}
-              aria-describedby={showErrors && errors.email ? `${fieldId}-email-error` : undefined}
+              aria-describedby={showErrors && errors.email ? `${fieldId}-email-error` : `${fieldId}-email-hint`}
               value={email}
               onChange={(event) => setEmail(event.target.value)}
             />
@@ -297,7 +298,15 @@ export function EmailGate({ copy, stepLabel, onSubmit, onBack }: EmailGateProps)
               <p id={`${fieldId}-email-error`} className={styles.error}>
                 {errors.email}
               </p>
-            ) : null}
+            ) : (
+              /*
+                Namig pove, čemu naslov služi: poročilo gre TJA. Kdor bi vpisal
+                naslov "kar tako", ga tu popravi — pred oddajo, ne po njej.
+              */
+              <p id={`${fieldId}-email-hint`} className={styles.hint}>
+                Na ta naslov vam pošljemo PDF poročilo.
+              </p>
+            )}
           </div>
 
           <div className={styles.formRow}>

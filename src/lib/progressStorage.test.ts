@@ -22,6 +22,7 @@ const PROGRESS: StoredProgress = {
   triageSelection: ['zamude'],
   inputsModuleId: 'zamude',
   submitted: false,
+  reportSent: false,
 };
 
 describe('progressStorage', () => {
@@ -75,6 +76,23 @@ describe('progressStorage', () => {
     for (const field of ['email', 'firstName', 'lastName', 'phone', 'taxNumber', 'consent']) {
       expect(raw, field).not.toContain(field);
     }
+  });
+
+  it('poslano poročilo preživi osvežitev — brez naslova', () => {
+    saveProgress({ ...PROGRESS, step: 'results', submitted: true, reportSent: true });
+    expect(readProgress()?.reportSent).toBe(true);
+    // Naslov je kontakt; zastavica pove le, da je poročilo odšlo.
+    expect(store.get('lm10-napredek') ?? '').not.toContain('@');
+  });
+
+  it('zapis brez zastavice o poslanem poročilu pomeni, da poročilo ni odšlo', () => {
+    // Dodano brez dviga sheme: zapis iz prejšnje različice orodja se ne zavrže,
+    // rezultati pa mu ponudijo gumb za prenos — varna razlaga manjkajočega polja.
+    saveProgress(PROGRESS);
+    const stored = JSON.parse(store.get('lm10-napredek') ?? '{}') as Record<string, unknown>;
+    delete stored.reportSent;
+    store.set('lm10-napredek', JSON.stringify(stored));
+    expect(readProgress()?.reportSent).toBe(false);
   });
 
   it('clearProgress zapis odstrani', () => {

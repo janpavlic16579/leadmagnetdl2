@@ -6,6 +6,12 @@ interface NextStepsProps {
   /** Obiskovalec je na obrazcu obkljukal poziv za svetovanje. */
   consultingRequested: boolean;
   /**
+   * Strankino poročilo je odšlo po e-pošti (obvestilo je v nogi rezultatov).
+   * Tu samo pot, kadar ga v nabiralniku ni: svetovalec ga ima v prilogi
+   * obvestila in ga zna posredovati.
+   */
+  reportEmailed?: boolean;
+  /**
    * Prenos priprave za svetovalca. Prikaže se, kadar priprava pripada stranki —
    * brez webhooka, ob neuspeli dostavi ali v internem načinu (?debug=1); glej
    * tabelo v lib/deliverLead.ts. Ob delujočem webhooku ostane skrit.
@@ -27,6 +33,7 @@ interface NextStepsProps {
  */
 export function NextSteps({
   consultingRequested,
+  reportEmailed = false,
   onDownloadSalesPdf,
   internalMode = false,
   followUpSequenceDebug,
@@ -48,6 +55,13 @@ export function NextSteps({
             </button>
           </div>
         </div>
+      ) : null}
+
+      {reportEmailed ? (
+        <p className={styles.note}>
+          Če poročila v nekaj minutah ni, preverite mapo z neželeno pošto ali pišite na {SALES_CONTACT.email} —
+          svetovalec ga ima.
+        </p>
       ) : null}
 
       {/*

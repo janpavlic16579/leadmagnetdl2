@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { deliverLead, loadDeliveryModules, type DeliverLeadInput, type DeliverLeadModules } from './deliverLead';
+import {
+  deliverLead,
+  loadDeliveryModules,
+  type CustomerReportDelivery,
+  type DeliverLeadInput,
+  type DeliverLeadModules,
+} from './deliverLead';
 import type { DownloadFile } from './download';
-import type { LeadSubmission } from './submitLead';
+import type { LeadSubmission, SubmitLeadResult } from './submitLead';
 import { computeModules, findHighestModule, resolveInputs } from './moduleEngine';
 import { aggregateResults, assessConfidence, buildComputeContext } from './potential';
 import { getModules } from '../config/modules';
@@ -87,6 +93,12 @@ function fakePdf(filename: string): () => Promise<DownloadFile> {
   return async () => ({ filename, blob: new Blob(['%PDF-1.4 testni dokument']) });
 }
 
+/** Sprejemnik je zapis zavrnil — tako danes odgovori submitLead na 500 ali izpad. */
+const rejected = async (): Promise<SubmitLeadResult> => ({
+  delivered: false,
+  customerReport: { sent: false, reason: 'unknown' },
+});
+
 /** Prestrežene poti navzven: webhook in stanje. */
 function harness(overrides: Partial<DeliverLeadModules>, real: DeliverLeadModules) {
   /** Vrstni red poti navzven — lovi, ali se rezultati odklenejo pred odločitvijo o pripravi. */
@@ -94,13 +106,15 @@ function harness(overrides: Partial<DeliverLeadModules>, real: DeliverLeadModule
   const posted: LeadSubmission[] = [];
   let salesReportSet = false;
   let submitted = false;
+  let customerReport: CustomerReportDelivery | null = null;
 
   const merged: DeliverLeadModules = {
     ...real,
     leadWebhookUrl: () => null,
+    // Privzeto sprejemnik nove različice: zapis sprejet, poročilo stranki poslano.
     submitLead: async (submission) => {
       posted.push(submission);
-      return true;
+      return { delivered: true, customerReport: { sent: true } };
     },
     buildResultsPdfFile: fakePdf('porocilo.pdf'),
     buildSalesPdfFile: fakePdf('priprava.pdf'),
@@ -122,9 +136,10 @@ function harness(overrides: Partial<DeliverLeadModules>, real: DeliverLeadModule
       order.push('salesReport');
       salesReportSet = true;
     },
-    onSubmitted: () => {
+    onSubmitted: (outcome: { customerReport: CustomerReportDelivery }) => {
       order.push('submitted');
       submitted = true;
+      customerReport = outcome.customerReport;
     },
   };
 
@@ -133,7 +148,7 @@ function harness(overrides: Partial<DeliverLeadModules>, real: DeliverLeadModule
     hooks,
     order,
     posted,
-    state: () => ({ salesReportSet, submitted }),
+    state: () => ({ salesReportSet, submitted, customerReport }),
   };
 }
 
@@ -169,7 +184,7 @@ describe('Dostava po oddaji', () => {
     const h = harness(
       {
         leadWebhookUrl: () => 'https://example.test/webhook',
-        submitLead: async () => false,
+        submitLead: rejected,
       },
       real,
     );
@@ -293,14 +308,11 @@ describe('Dostava po oddaji', () => {
 
   /**
    * Rezultati se izrišejo z gumbom za pripravo ali brez njega — ne pa z gumbom,
-   * ki se pod obiskovalcem pojavi osem sekund pozneje, ko webhook obupa.
+   * ki se pod obiskovalcem pojavi deset sekund pozneje, ko webhook obupa.
    */
   it('rezultati se odklenejo šele, ko je o pripravi odločeno', async () => {
     const real = await loadDeliveryModules();
-    const h = harness(
-      { leadWebhookUrl: () => 'https://example.test/webhook', submitLead: async () => false },
-      real,
-    );
+    const h = harness({ leadWebhookUrl: () => 'https://example.test/webhook', submitLead: rejected }, real);
 
     await deliverLead(scenario(), h.modules, h.hooks);
 
@@ -409,5 +421,106 @@ describe('Dostava po oddaji', () => {
 
     expect(built).toBe(0);
     expect(h.posted).toHaveLength(0);
+  });
+
+  /**
+   * Druga tabela v glavi deliverLead.ts: KAM GRE STRANKINO POROČILO. Prenos je
+   * rezerva — gumb se pokaže šele, ko poti po e-pošti ni.
+   */
+  describe('strankino poročilo', () => {
+    it('sprejemnik potrdi pošto: poročilo gre na e-naslov iz obrazca, gumba za prenos ni', async () => {
+      const real = await loadDeliveryModules();
+      const h = harness({ leadWebhookUrl: () => 'https://example.test/webhook' }, real);
+
+      await deliverLead(scenario(), h.modules, h.hooks);
+
+      expect(h.state().customerReport).toEqual({
+        emailedTo: 'test@example.com',
+        downloadOffered: false,
+        reason: 'emailed',
+      });
+    });
+
+    it('sprejemnik pošte NI poslal: gumb za prenos in razlog sprejemnika', async () => {
+      const real = await loadDeliveryModules();
+      const h = harness(
+        {
+          leadWebhookUrl: () => 'https://example.test/webhook',
+          submitLead: async () => ({ delivered: true, customerReport: { sent: false, reason: 'no_attachment' } }),
+        },
+        real,
+      );
+
+      await deliverLead(scenario(), h.modules, h.hooks);
+
+      expect(h.state().customerReport).toEqual({
+        emailedTo: null,
+        downloadOffered: true,
+        reason: 'not_sent',
+        detail: 'no_attachment',
+      });
+      // Dostava JE uspela: priprava ostane na strežniku.
+      expect(h.state().salesReportSet).toBe(false);
+    });
+
+    it('star sprejemnik brez odgovora o pošti: gumb, brez vrstice o napaki', async () => {
+      const real = await loadDeliveryModules();
+      const h = harness(
+        {
+          leadWebhookUrl: () => 'https://example.test/webhook',
+          submitLead: async () => ({ delivered: true, customerReport: { sent: false, reason: 'unknown' } }),
+        },
+        real,
+      );
+
+      await deliverLead(scenario(), h.modules, h.hooks);
+
+      expect(h.state().customerReport).toEqual({ emailedTo: null, downloadOffered: true, reason: 'unknown' });
+    });
+
+    it('brez webhooka: gumb, brez e-naslova', async () => {
+      const real = await loadDeliveryModules();
+      const h = harness({}, real);
+
+      await deliverLead(scenario(), h.modules, h.hooks);
+
+      expect(h.state().customerReport).toEqual({ emailedTo: null, downloadOffered: true, reason: 'no_webhook' });
+    });
+
+    it('neuspela dostava: gumb za poročilo IN priprava se ponudi (nespremenjeno)', async () => {
+      const real = await loadDeliveryModules();
+      const h = harness({ leadWebhookUrl: () => 'https://example.test/webhook', submitLead: rejected }, real);
+
+      await deliverLead(scenario(), h.modules, h.hooks);
+
+      expect(h.state().customerReport).toEqual({
+        emailedTo: null,
+        downloadOffered: true,
+        reason: 'delivery_failed',
+      });
+      expect(h.state().salesReportSet).toBe(true);
+    });
+
+    it('interni način: poročilo gre po e-pošti IN gumb ostane za pregled', async () => {
+      const real = await loadDeliveryModules();
+      const h = harness({ leadWebhookUrl: () => 'https://example.test/webhook' }, real);
+
+      await deliverLead({ ...scenario(), internalMode: true }, h.modules, h.hooks);
+
+      expect(h.state().customerReport).toEqual({
+        emailedTo: 'test@example.com',
+        downloadOffered: true,
+        reason: 'emailed',
+      });
+    });
+
+    it('prilogi nosita občinstvo: strankino poročilo kot customer, priprava kot sales', async () => {
+      const real = await loadDeliveryModules();
+      const h = harness({ leadWebhookUrl: () => 'https://example.test/webhook' }, real);
+
+      await deliverLead(scenario(), h.modules, h.hooks);
+
+      expect(h.posted[0]?.attachments?.map((attachment) => attachment.audience)).toEqual(['customer', 'sales']);
+    });
   });
 });

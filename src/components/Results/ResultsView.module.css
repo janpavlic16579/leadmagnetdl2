@@ -158,6 +158,22 @@
   color: var(--color-danger);
 }
 
+/*
+ * Obvestilo o poslanem poročilu (in vrstica ob neuspeli pošti) stoji tam, kjer je
+ * sicer gumb za prenos: isti pas, isti odmik kot napaka zgoraj, le umirjena barva.
+ */
+.footerNote {
+  margin: var(--space-3) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.footerNoteStrong {
+  color: var(--color-text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
 .cardNote {
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);

@@ -44,6 +44,13 @@ export interface StoredProgress {
   inputsModuleId: string | null;
   /** Obrazec je oddan — edino, kar se iz obrazca shrani (glej glavo). */
   submitted: boolean;
+  /**
+   * Sprejemnik je strankino poročilo poslal na e-naslov iz obrazca. Brez naslova
+   * (ta je kontakt in v shrambo ne sodi): po osvežitvi rezultati povedo "poslali
+   * smo ga na vaš e-naslov" namesto gumba za prenos. Dodano brez dviga sheme —
+   * star zapis brez polja pomeni false, torej gumb, in nič se ne razlaga napačno.
+   */
+  reportSent: boolean;
 }
 
 interface Envelope extends StoredProgress {
@@ -100,6 +107,7 @@ export function readProgress(): StoredProgress | null {
       triageSelection: envelope.triageSelection ?? null,
       inputsModuleId: envelope.inputsModuleId ?? null,
       submitted: envelope.submitted ?? false,
+      reportSent: envelope.reportSent ?? false,
     };
   } catch {
     return null;

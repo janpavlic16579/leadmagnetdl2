@@ -20,6 +20,14 @@ import type { DownloadFile } from './download';
  */
 
 /**
+ * Komu je priloga namenjena — po tem sprejemnik izbere, kaj gre stranki po
+ * e-pošti. 'customer' je poročilo za stranko, 'sales' priprava na pogovor, ki
+ * stranki ne gre nikoli. Sprejemnik odloča po tej oznaki in ne po imenu
+ * datoteke (ime je le rezerva za starejši build brez oznake).
+ */
+export type LeadAttachmentAudience = 'customer' | 'sales';
+
+/**
  * Datoteka za prilogo e-obvestila. Base64 zato, ker telo potuje kot JSON v
  * `text/plain` (glej POST) in binarnega dela ne more nositi drugače; sprejemnik
  * jo dekodira z `Utilities.base64Decode`.
@@ -28,6 +36,29 @@ export interface LeadAttachment {
   filename: string;
   contentType: 'application/pdf';
   base64: string;
+  audience: LeadAttachmentAudience;
+}
+
+/**
+ * Zakaj sprejemnik poročila stranki NI poslal — ključi iz Koda.gs
+ * (`RAZLOGI_POROCILA_STRANKI`); 'unknown' = odgovor tega ne pove (star
+ * sprejemnik, neberljivo telo, neznan ključ).
+ */
+export type CustomerReportReason =
+  | 'disabled'
+  | 'no_address'
+  | 'invalid_address'
+  | 'no_attachment'
+  | 'send_failed'
+  | 'unknown';
+
+export type CustomerReportOutcome = { sent: true } | { sent: false; reason: CustomerReportReason };
+
+export interface SubmitLeadResult {
+  /** Zapis je prišel do sprejemnika in vrstica je zapisana. */
+  delivered: boolean;
+  /** Ali je sprejemnik strankino poročilo poslal na e-naslov iz obrazca. */
+  customerReport: CustomerReportOutcome;
 }
 
 export interface LeadSubmission {
@@ -40,8 +71,9 @@ export interface LeadSubmission {
   salesReportHtml: string;
   /**
    * PDF-ja za prilogi obvestila: najprej poročilo za stranko, nato priprava na
-   * pogovor (lib/deliverLead.ts). Neobvezno — sprejemnik brez njiju dela naprej,
-   * starejši sprejemnik ju prezre.
+   * pogovor (lib/deliverLead.ts). Strankino sprejemnik pošlje še stranki — po
+   * oznaki `audience`. Neobvezno — sprejemnik brez njiju dela naprej (stranki
+   * tedaj ne pošlje nič in to pove v odgovoru), starejši sprejemnik ju prezre.
    */
   attachments?: LeadAttachment[];
 }
@@ -80,17 +112,19 @@ export { leadWebhookUrl } from './webhookUrl';
  * čas za prenos telesa (requestTimeoutMs).
  *
  * Brez omejitve je viseč strežnik pomenil, da obiskovalec gleda vrteči se gumb,
- * dokler ne obupa. Osem sekund je krepko čez vsak zdrav odziv na majhno telo; s
+ * dokler ne obupa. Deset sekund je krepko čez vsak zdrav odziv na majhno telo; s
  * prilogama (≈ 175 kB) pa gre na počasni mobilni povezavi nekaj sekund samo za
  * prenos, preden strežnik telo sploh dobi. Prekoračitev ni le čas: dostava se šteje kot
  * neuspela in prodajna priprava gre stranki (deliverLead.ts), zato je daljši rok
- * cenejši od lažnega padca.
+ * cenejši od lažnega padca. Z osmih na deset sekund, odkar sprejemnik pred
+ * odgovorom pošlje še dve sporočili (stranki in prodaji): lažen padec zdaj
+ * pomeni tudi gumb za prenos ob pošti, ki je že na poti.
  */
-const REQUEST_TIMEOUT_MS = 8_000;
+const REQUEST_TIMEOUT_MS = 10_000;
 /** Počasna mobilna povezava, s katero računamo prenos telesa: ~50 kB/s. */
 const SLOW_UPLINK_BYTES_PER_MS = 50;
 
-/** Rok zahteve glede na velikost telesa: samo HTML ≈ 8 s, s prilogama ≈ 12 s. */
+/** Rok zahteve glede na velikost telesa: samo HTML ≈ 10 s, s prilogama ≈ 13,5 s. */
 export function requestTimeoutMs(bodyBytes: number): number {
   return REQUEST_TIMEOUT_MS + Math.ceil(bodyBytes / SLOW_UPLINK_BYTES_PER_MS);
 }
@@ -108,16 +142,40 @@ export function requestTimeoutMs(bodyBytes: number): number {
  */
 const KEEPALIVE_MAX_BYTES = 60_000;
 
+const UNKNOWN_OUTCOME: CustomerReportOutcome = { sent: false, reason: 'unknown' };
+const CUSTOMER_REPORT_REASONS: readonly CustomerReportReason[] = [
+  'disabled',
+  'no_address',
+  'invalid_address',
+  'no_attachment',
+  'send_failed',
+];
+
+/**
+ * Izid pošte stranki iz telesa odgovora `{ ok, customerReport: { sent, reason } }`.
+ * Vse, kar ni te oblike — odgovor starejšega sprejemnika `{ ok: true }`, neznan
+ * ključ razloga — je 'unknown': o pošti ni znano nič in rezultati ponudijo prenos.
+ */
+export function parseCustomerReport(body: unknown): CustomerReportOutcome {
+  if (typeof body !== 'object' || body === null) return UNKNOWN_OUTCOME;
+  const report = (body as { customerReport?: unknown }).customerReport;
+  if (typeof report !== 'object' || report === null) return UNKNOWN_OUTCOME;
+  const { sent, reason } = report as { sent?: unknown; reason?: unknown };
+  if (sent === true) return { sent: true };
+  const known = CUSTOMER_REPORT_REASONS.find((candidate) => candidate === reason);
+  return { sent: false, reason: known ?? 'unknown' };
+}
+
 /**
  * Pošlje zapis. Nikoli ne vrže: napaka omrežja ali strežnika ne sme pokvariti
- * prenosa strankinega poročila, zato se dostava le sporoči kot false in klicatelj
- * pade nazaj na lokalne prenose.
+ * prikaza rezultatov, zato se dostava le sporoči kot neuspela in klicatelj pade
+ * nazaj na rezervne poti (prenosi na rezultatih).
  */
 export async function submitLead(
   submission: LeadSubmission,
   url: string,
   fetchImpl: typeof fetch = fetch,
-): Promise<boolean> {
+): Promise<SubmitLeadResult> {
   try {
     const payload: LeadWirePayload = {
       ...submission,
@@ -141,13 +199,47 @@ export async function submitLead(
     });
     if (!response.ok) {
       console.warn(`Oddaja leada ni uspela: ${response.status}`);
-      return false;
+      return { delivered: false, customerReport: UNKNOWN_OUTCOME };
     }
-    return true;
+    return readReceipt(response);
   } catch (error) {
     console.warn('Oddaja leada ni uspela:', error);
-    return false;
+    return { delivered: false, customerReport: UNKNOWN_OUTCOME };
   }
+}
+
+/**
+ * Telo odgovora ob statusu 200.
+ *
+ * NEBERLJIVO telo (odgovor brez `text`, prekinjen tok) ne spremeni ničesar:
+ * dostava velja po statusu kot doslej, o pošti stranki pa ni znano nič.
+ * BERLJIVO telo, ki ni JSON z `ok: true`, pa je Googlova stran z napako: Apps
+ * Script napako skripte (žeton, prazno telo, nezapisana vrstica) vrne kot HTML s
+ * statusom 200 — status tu laže, telo ne. Dokler se je gledal samo status, je
+ * taka oddaja štela kot uspešna in priprava ni šla ne stranki ne na Drive.
+ */
+async function readReceipt(response: Response): Promise<SubmitLeadResult> {
+  let text: string;
+  try {
+    if (typeof response.text !== 'function') throw new Error('odgovor brez telesa');
+    text = await response.text();
+  } catch {
+    return { delivered: true, customerReport: UNKNOWN_OUTCOME };
+  }
+
+  let body: unknown;
+  try {
+    body = JSON.parse(text) as unknown;
+  } catch {
+    console.warn('Sprejemnik ni odgovoril z JSON — dostava šteje kot neuspela:', text.slice(0, 200));
+    return { delivered: false, customerReport: UNKNOWN_OUTCOME };
+  }
+  const ok = typeof body === 'object' && body !== null && (body as { ok?: unknown }).ok === true;
+  if (!ok) {
+    console.warn('Sprejemnik dostave ni potrdil:', text.slice(0, 200));
+    return { delivered: false, customerReport: UNKNOWN_OUTCOME };
+  }
+  return { delivered: true, customerReport: parseCustomerReport(body) };
 }
 
 /**
@@ -157,12 +249,15 @@ export async function submitLead(
  * sta v brskalniku in v node enaka. Binarni niz nastaja po kosih, ker
  * `String.fromCharCode(...bytes)` z več sto tisoč argumenti preseže mejo sklada.
  */
-export async function attachmentFromFile(file: DownloadFile): Promise<LeadAttachment> {
+export async function attachmentFromFile(
+  file: DownloadFile,
+  audience: LeadAttachmentAudience,
+): Promise<LeadAttachment> {
   const bytes = new Uint8Array(await file.blob.arrayBuffer());
   const CHUNK = 0x8000;
   let binary = '';
   for (let offset = 0; offset < bytes.length; offset += CHUNK) {
     binary += String.fromCharCode(...bytes.subarray(offset, offset + CHUNK));
   }
-  return { filename: file.filename, contentType: 'application/pdf', base64: btoa(binary) };
+  return { filename: file.filename, contentType: 'application/pdf', base64: btoa(binary), audience };
 }

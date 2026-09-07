@@ -22,6 +22,10 @@
  *     nadaljevanje po osvežitvi in interni obisk posebej.
  *  4. Paket brez id-ja obiska (pa tudi brez dogodkov ali telo brez zapisa) vrže
  *     napako in ne pusti sledi.
+ *  5. Poročilo stranki po e-pošti (posljiPorociloStranki): s prilogama gre
+ *     stranki natanko eno sporočilo s samo njenim PDF-jem, priprava nikoli —
+ *     tudi z napačnim imenom; brez naslova, brez priloge, ob izklopu in ob padli
+ *     pošti odgovor pove razlog, vrstica in obvestilo prodaji pa ostaneta.
  *
  * Kaj ponaredek NAMENOMA ne posnema: razlage vrednosti v pravi preglednici. Niz
  * "'+386 …" ostane z uvodnim opuščajem, "true" ostane niz — kaj bi preglednica
@@ -31,8 +35,9 @@
  * preizkus meri njeno logiko, ne pasti. Stolpci čez rob lista pa vržejo napako
  * tako kot pri Googlu — brez tega bi `zagotoviStolpce` lahko tiho izginil.
  *
- * Nepokrito ostane: Drive (shraniPripravo), pošta, ActiveCampaign. Vse troje je v
- * doPost za vrstico in v svojem try/catch; tu so prazni objekti.
+ * Nepokrito ostane: Drive (shraniPripravo) in ActiveCampaign. Oboje je v doPost
+ * za vrstico in v svojem try/catch; tu sta prazna objekta. MailApp je ponarejen:
+ * sporočila se zbirajo v `posta`, da test vidi naslovnika, prilogi in besedilo.
  */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -353,6 +358,8 @@ function ustvariGoogle() {
   const preglednica = ustvariPreglednico();
   const lastnosti = new Map();
   const dnevnik = { log: [], warn: [] };
+  /** Vsa sporočila, ki bi jih skripta poslala — stranki in prodaji, po vrsti. */
+  const posta = [];
   const kljucavnica = { waitLock() {}, tryLock: () => true, releaseLock() {}, hasLock: () => true };
   const skriptneLastnosti = {
     getProperty: (ime) => (lastnosti.has(ime) ? lastnosti.get(ime) : null),
@@ -407,6 +414,12 @@ function ustvariGoogle() {
     Utilities: {
       formatDate,
       formatString: (vzorec, ...argumenti) => vzorec.replace(/%s/g, () => String(argumenti.shift())),
+      base64Encode: (podatki) => Buffer.from(podatki).toString('base64'),
+      base64Decode: (niz) => Array.from(Buffer.from(String(niz), 'base64')),
+      // Blob, kolikor ga pošta potrebuje: ime, tip, bajti.
+      newBlob(bajti, tip, ime) {
+        return { getName: () => ime, getContentType: () => tip, getBytes: () => bajti };
+      },
     },
     // Isti časovni pas, kot ga ima Date v tem procesu — tako je tudi v Apps
     // Scriptu, kjer je lokalni čas skripte njen časovni pas.
@@ -419,7 +432,12 @@ function ustvariGoogle() {
       },
     },
     Charts: { ChartType: { COLUMN: 'COLUMN', BAR: 'BAR', PIE: 'PIE', LINE: 'LINE' } },
-    MailApp: {},
+    MailApp: {
+      sendEmail(sporocilo) {
+        posta.push(sporocilo);
+      },
+      getRemainingDailyQuota: () => 100,
+    },
     DriveApp: {},
     UrlFetchApp: {},
     console: {
@@ -431,7 +449,7 @@ function ustvariGoogle() {
     // skripta zapiše, ne bi prestali `instanceof Date` na tej strani.
     Date,
   };
-  return { globali, preglednica, lastnosti, dnevnik };
+  return { globali, preglednica, lastnosti, dnevnik, posta };
 }
 
 /** Naloži Koda.gs v svež kontekst; funkcije skripte so lastnosti vrnjenega objekta. */
@@ -557,9 +575,35 @@ const LEAD = {
   annualRevenueSource: 'entered',
 };
 
-/** Telo oddaje: `record` za rezervno pot in `sheet` z glavo ter vrstico. */
-function oddaja(lead) {
+/**
+ * Prilogi, kot ju sestavi `buildAttachments` v src/lib/deliverLead.ts: najprej
+ * strankino poročilo, nato priprava — vsaka s svojo oznako občinstva.
+ */
+const PDF = (besedilo) => Buffer.from(`%PDF-1.4 ${besedilo}`).toString('base64');
+function prilogi() {
+  return [
+    {
+      filename: 'datalab-analiza-skritih-stroskov-kovinar-doo-2026-09-05.pdf',
+      contentType: 'application/pdf',
+      base64: PDF('poročilo za stranko'),
+      audience: 'customer',
+    },
+    {
+      filename: 'datalab-priprava-na-pogovor-kovinar-doo-2026-09-05.pdf',
+      contentType: 'application/pdf',
+      base64: PDF('priprava na pogovor'),
+      audience: 'sales',
+    },
+  ];
+}
+
+/**
+ * Telo oddaje: `record` za rezervno pot in `sheet` z glavo ter vrstico;
+ * `dodatki` (npr. `attachments`) gredo zraven nespremenjeni.
+ */
+function oddaja(lead, dodatki = {}) {
   return {
+    ...dodatki,
     record: {
       timestampISO: lead.timestampISO,
       segment: lead.segment,
@@ -767,7 +811,11 @@ test('ponaredek: setValues preveri obliko obsega, oblike ne premaknejo getLastRo
 test('doPost z record + sheet zapiše lead na list Leadi z izpeljanima stolpcema', () => {
   const { skripta, preglednica, dnevnik } = naloziSkripto();
 
-  assert.deepEqual(post(skripta, oddaja(LEAD)), { ok: true });
+  // Brez prilog stranki ni kaj poslati: odgovor to pove, aplikacija ponudi prenos.
+  assert.deepEqual(post(skripta, oddaja(LEAD)), {
+    ok: true,
+    customerReport: { sent: false, reason: 'no_attachment' },
+  });
 
   const leadi = preglednica.getSheetByName('Leadi');
   assert.ok(leadi, 'list Leadi nastane sam');
@@ -808,6 +856,7 @@ test('doPost z record + sheet zapiše lead na list Leadi z izpeljanima stolpcema
   assert.equal(v.kliciTakoj, 'DA');
   assert.equal(v.letno, 12000 + 8000 + 5000, 'odliv + nezaslužena marža + vrednost časa');
   assert.equal(v.activeCampaign, '', 'prazna celica, da ima ura kam pisati');
+  assert.equal(v.porociloStranki, 'ni poslano: aplikacija ni poslala strankinega PDF-ja');
   assert.equal(v.poklicano, '');
   assert.equal(v.sestanek, '');
   assert.equal(v.opombe, '');
@@ -832,7 +881,10 @@ test('doPost z record + sheet zapiše lead na list Leadi z izpeljanima stolpcema
     lostMarginEUR: '',
     capacityEUR: '',
   };
-  assert.deepEqual(post(skripta, oddaja(drugi)), { ok: true });
+  assert.deepEqual(post(skripta, oddaja(drugi)), {
+    ok: true,
+    customerReport: { sent: false, reason: 'no_attachment' },
+  });
   assert.equal(leadi.getLastRow(), 3);
   assert.deepEqual(vrstice(leadi)[0], glava, 'druga oddaja glave ne spremeni');
   const v2 = poImenih(leadi, 3);
@@ -842,6 +894,148 @@ test('doPost z record + sheet zapiše lead na list Leadi z izpeljanima stolpcema
   assert.equal(v2.letno, 0, 'prazna polja so 0 in ne NaN');
 
   assert.deepEqual(dnevnik.warn, [], 'nobena stranska pot (oprema vrstice, pošta, AC) ni opozorila');
+});
+
+test('doPost s prilogama pošlje strankino poročilo na e-naslov iz oddaje — samo njen PDF, priprava nikoli', () => {
+  const { skripta, preglednica, lastnosti, dnevnik, posta } = naloziSkripto();
+  skripta.NASTAVITVE.E_NASLOV_ZA_OBVESTILA = 'prodaja@primer.si';
+
+  const odgovor = post(
+    skripta,
+    oddaja({ ...LEAD, companyName: 'Kovinar <b>d.o.o.</b>' }, { attachments: prilogi() }),
+  );
+  assert.deepEqual(odgovor, { ok: true, customerReport: { sent: true } });
+
+  // Najprej stranka, nato prodaja: obvestilo prodaji izid stranke že pozna.
+  assert.equal(posta.length, 2);
+  const [stranki, prodaji] = posta;
+
+  assert.equal(stranki.to, 'ana@kovinar.si');
+  assert.equal(stranki.name, 'Datalab');
+  assert.equal(stranki.replyTo, 'prodaja@datalab.si');
+  assert.equal(stranki.subject, 'Analiza skritih stroškov — Kovinar <b>d.o.o.</b>');
+  assert.equal(stranki.attachments.length, 1, 'stranka dobi natanko eno prilogo');
+  assert.match(stranki.attachments[0].getName(), /^datalab-analiza-skritih-stroskov/);
+  assert.equal(stranki.attachments[0].getContentType(), 'application/pdf');
+  assert.equal(Buffer.from(stranki.attachments[0].getBytes()).toString(), '%PDF-1.4 poročilo za stranko');
+  assert.ok(!JSON.stringify(stranki).includes('priprava'), 'priprave stranka ne sme videti nikjer');
+  assert.match(stranki.body, /^Pozdravljeni, Ana,/);
+  assert.match(stranki.body, /Označili ste, da želite pogovor s svetovalcem/);
+  assert.match(stranki.body, /01 252 89 50/);
+  assert.ok(!stranki.htmlBody.includes('<b>d.o.o.</b>'), 'vrednosti z webhooka so v HTML ubežane');
+  assert.ok(stranki.htmlBody.includes('Kovinar &lt;b&gt;d.o.o.&lt;/b&gt;'));
+
+  assert.equal(prodaji.to, 'prodaja@primer.si');
+  assert.equal(prodaji.attachments.length, 2, 'prodaja dobi oba PDF-ja');
+  assert.match(prodaji.body, /Poročilo stranki: poslano na ana@kovinar\.si/);
+
+  // Sled: vrstica, lastnosti (zakrit naslov, ker je doGet javen), brez opozoril.
+  const v = poImenih(preglednica.getSheetByName('Leadi'), 2);
+  assert.match(String(v.porociloStranki), /^poslano \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+  assert.match(lastnosti.get('ZADNJA_POSTA_STRANKI'), /→ a\*\*\*@kovinar\.si$/);
+  assert.equal(lastnosti.has('ZADNJA_NAPAKA_POSTE_STRANKI'), false);
+  assert.match(skripta.doGet().getContent(), /Zadnje poročilo stranki: .*a\*\*\*@kovinar\.si/);
+  assert.deepEqual(dnevnik.warn, []);
+});
+
+test('stara aplikacija brez oznake občinstva: strankino poročilo se prepozna po imenu datoteke', () => {
+  const { skripta, posta } = naloziSkripto();
+  const brezOznake = prilogi().map(({ audience: _audience, ...vnos }) => vnos);
+
+  assert.deepEqual(post(skripta, oddaja(LEAD, { attachments: brezOznake })), {
+    ok: true,
+    customerReport: { sent: true },
+  });
+  assert.equal(posta.length, 1, 'brez naslova prodaje gre samo pošta stranki');
+  assert.equal(posta[0].to, 'ana@kovinar.si');
+  assert.deepEqual(
+    izSkripte(posta[0].attachments).map((priloga) => priloga.getName()),
+    ['datalab-analiza-skritih-stroskov-kovinar-doo-2026-09-05.pdf'],
+  );
+});
+
+test('oznaka občinstva prevlada nad imenom: priprava se stranki ne pošlje, tudi če je poimenovana kot poročilo', () => {
+  const { skripta, posta } = naloziSkripto();
+  const [, priprava] = prilogi();
+  const zamaskirana = { ...priprava, filename: 'datalab-analiza-skritih-stroskov-kovinar.pdf' };
+
+  assert.deepEqual(post(skripta, oddaja(LEAD, { attachments: [zamaskirana] })), {
+    ok: true,
+    customerReport: { sent: false, reason: 'no_attachment' },
+  });
+  assert.equal(posta.length, 0);
+});
+
+test('brez e-naslova ali z neveljavnim: poročilo ne gre, vrstica in obvestilo prodaji ostaneta', () => {
+  const { skripta, preglednica, posta } = naloziSkripto();
+  skripta.NASTAVITVE.E_NASLOV_ZA_OBVESTILA = 'prodaja@primer.si';
+
+  assert.deepEqual(post(skripta, oddaja({ ...LEAD, email: '' }, { attachments: prilogi() })), {
+    ok: true,
+    customerReport: { sent: false, reason: 'no_address' },
+  });
+  assert.deepEqual(post(skripta, oddaja({ ...LEAD, email: 'ana@' }, { attachments: prilogi() })), {
+    ok: true,
+    customerReport: { sent: false, reason: 'invalid_address' },
+  });
+
+  const leadi = preglednica.getSheetByName('Leadi');
+  assert.equal(leadi.getLastRow(), 3, 'obe vrstici sta zapisani');
+  assert.equal(poImenih(leadi, 2).porociloStranki, 'ni poslano: v oddaji ni e-naslova');
+  assert.equal(poImenih(leadi, 3).porociloStranki, 'ni poslano: e-naslov ni videti veljaven');
+  assert.equal(posta.length, 2, 'samo obvestili prodaji');
+  assert.ok(posta.every((sporocilo) => sporocilo.to === 'prodaja@primer.si'));
+  assert.match(posta[0].body, /Poročilo stranki: NI poslano \(v oddaji ni e-naslova\)/);
+});
+
+test('padla pošta stranki ne ustavi ne vrstice ne obvestila prodaji', () => {
+  const { skripta, preglednica, lastnosti, dnevnik, posta } = naloziSkripto();
+  skripta.NASTAVITVE.E_NASLOV_ZA_OBVESTILA = 'prodaja@primer.si';
+  const pravi = skripta.MailApp.sendEmail;
+  let prvi = true;
+  skripta.MailApp.sendEmail = (sporocilo) => {
+    if (prvi) {
+      prvi = false;
+      throw new Error('Service invoked too many times for one day: email');
+    }
+    pravi(sporocilo);
+  };
+
+  assert.deepEqual(post(skripta, oddaja(LEAD, { attachments: prilogi() })), {
+    ok: true,
+    customerReport: { sent: false, reason: 'send_failed' },
+  });
+  const leadi = preglednica.getSheetByName('Leadi');
+  assert.equal(leadi.getLastRow(), 2);
+  assert.equal(poImenih(leadi, 2).porociloStranki, 'ni poslano: pošiljanje je vrglo napako');
+  assert.equal(posta.length, 1, 'obvestilo prodaji je šlo kljub temu');
+  assert.match(posta[0].body, /Poročilo stranki: NI poslano \(pošiljanje je vrglo napako\)/);
+  assert.match(lastnosti.get('ZADNJA_NAPAKA_POSTE_STRANKI'), /too many times/);
+  assert.equal(dnevnik.warn.length, 1);
+  assert.match(dnevnik.warn[0], /Poročila stranki ni bilo mogoče poslati/);
+});
+
+test('POSLJI_POROCILO_STRANKI: false — stranki nič, odgovor pove razlog', () => {
+  const { skripta, posta } = naloziSkripto();
+  skripta.NASTAVITVE.POSLJI_POROCILO_STRANKI = false;
+
+  assert.deepEqual(post(skripta, oddaja(LEAD, { attachments: prilogi() })), {
+    ok: true,
+    customerReport: { sent: false, reason: 'disabled' },
+  });
+  assert.equal(posta.length, 0);
+});
+
+test('preizkusPorocilaStranki pošlje vzorec na prvi naslov prodaje in zahteva vpisan naslov', () => {
+  const { skripta, posta } = naloziSkripto();
+  assert.throws(() => skripta.preizkusPorocilaStranki(), /E_NASLOV_ZA_OBVESTILA je prazen/);
+
+  skripta.NASTAVITVE.E_NASLOV_ZA_OBVESTILA = 'prodaja@primer.si, jan@primer.si';
+  skripta.preizkusPorocilaStranki();
+  assert.equal(posta.length, 1);
+  assert.equal(posta[0].to, 'prodaja@primer.si');
+  assert.equal(posta[0].attachments.length, 1);
+  assert.match(Buffer.from(posta[0].attachments[0].getBytes()).toString(), /^%PDF-1\.1/);
 });
 
 test('doPost z events + visit pripne dogodke na list Dogodki', () => {

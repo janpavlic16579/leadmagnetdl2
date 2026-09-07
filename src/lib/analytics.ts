@@ -54,9 +54,19 @@ export type AnalyticsEvent =
   | 'lm10_lead_submitted'
   /**
    * Prenos strankinega poročila z rezultatov. Vsak prenos je ročen (ob oddaji se
-   * ne prenese nič), zato dogodek pove, koliko obiskovalcev poročilo sploh vzame.
+   * ne prenese nič). Odkar gre poročilo stranki po e-pošti, je gumb REZERVA:
+   * `reason` pove, zakaj je bil sploh na voljo (no_webhook, delivery_failed,
+   * not_sent, unknown, internal), zato dogodek meri odpovedi pošte, ne zanimanja.
    */
   | 'lm10_report_download'
+  /** Sprejemnik je strankino poročilo poslal na e-naslov iz obrazca. */
+  | 'lm10_report_emailed'
+  /**
+   * Sprejemnik je zapis sprejel, poročila stranki pa NI poslal (`reason`: razlog
+   * sprejemnika — no_attachment, send_failed …). Stranka ima tedaj na rezultatih
+   * gumb za prenos. Par z lm10_report_emailed, kot lm10_delivery_ok/failed.
+   */
+  | 'lm10_report_email_failed'
   /** Zaključena finančna osnova — vir vsake postavke (vneseno/povprečje/razpon/prazno). */
   | 'lm10_cost_basis_done'
   /** Validacija je ustavila oddajo — katero polje ustavi največ ljudi. */
