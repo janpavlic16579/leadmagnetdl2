@@ -84,6 +84,140 @@ export const ACTION_PLANS: Record<string, ActionPlanEntry> = {
       'Kupca obvestite o zamudi takoj, ko jo predvidite — penali in popusti so pogosto posledica molka, ne zamude same.',
     ],
   },
+  // --- Živilstvo ------------------------------------------------------------
+  donos_zivilstvo: {
+    headline: 'Največji strošek: odstopanje donosa in kalo',
+    actions: [
+      'Za deset izdelkov z največjo porabo surovin en mesec primerjajte teoretični donos po recepturi z dejanskim izhodom šarže — odstopanje je praviloma sistematično, ne naključno.',
+      'Preverite, katera verzija recepture je v proizvodnji in katera v kalkulaciji; kjer se razlikujeta, je kalkulacija napačna, ne proizvodnja.',
+      'Na eni liniji dva tedna zahtevajte vnos izhoda in izgube ob zaključku vsake šarže — brez tega podatka kala ni mogoče pripisati vzroku.',
+    ],
+  },
+  roki_zivilstvo: {
+    headline: 'Največji strošek: potekli roki in odpisi',
+    actions: [
+      'Vsak teden izpišite zalogo z rokom pod 30 dni po vrednosti — akcijska razprodaja je cenejša od odpisa samo, dokler je rok še tam.',
+      'Za 20 najbolj kritičnih surovin določite minimalno zalogo in točko naročanja glede na rok, ne le na porabo.',
+      'Uvedite ciklično štetje v hladilnicah po skupinah, vsak mesec ena — letna inventura razliko pokaže, ko je vzrok že pozabljen.',
+    ],
+  },
+  sledljivost_zivilstvo: {
+    headline: 'Največji strošek: sledljivost in reklamacije',
+    actions: [
+      'Izvedite vajo odpoklica za eno naključno šaržo in izmerite čas do seznama kupcev — to je številka, ki jo bo zahteval presojevalec in trgovec.',
+      'Ob prevzemu surovine zahtevajte zapis šarže dobavitelja brez izjeme; prevzem brez šarže je najpogostejša luknja v sledljivosti.',
+      'Vsaki reklamaciji pripišite šaržo in vzrok, preden jo zaprete — reklamacija brez šarže se ponovi.',
+    ],
+  },
+  kakovost_zivilstvo: {
+    headline: 'Največji strošek: HACCP evidence in presoje',
+    actions: [
+      'Popišite vse kontrolne točke z lastnikom, pogostostjo zapisa in mestom hrambe — večina ur priprave na presojo je iskanje zapisov, ki obstajajo.',
+      'Za zadnjo spremembo recepture preverite, ali je bila posodobljena tudi deklaracija; kjer ni, uvedite pravilo, da sprememba recepture sproži pregled etikete.',
+      'Dokazila za presojo hranite sproti na enem mestu, ne zbirajte jih teden dni pred presojo — stalno pripravljen paket presojo skrajša za dneve.',
+    ],
+  },
+  narocila_zivilstvo: {
+    headline: 'Največji strošek: naročila, planiranje in nujne dobave',
+    actions: [
+      'En teden zabeležite, po katerem kanalu pride vsako naročilo in koliko minut vzame vnos — to je znesek, ki ga odpravi elektronsko naročanje.',
+      'Za vsako ekspresno nabavo zadnjih treh mesecev zapišite vzrok — večina jih izvira iz prepoznega naročila surovine, ne iz kupčeve spremembe.',
+      'Za tri največje trgovce preverite pogodbene penale za nedobavo in jih primerjajte z dejanskimi odbitki na računih — pogosto so višji, kot vodstvo misli.',
+    ],
+  },
+
+  // --- Predelava plastike ---------------------------------------------------
+  stroji_plastika: {
+    headline: 'Največji strošek: menjave orodij in ročno javljanje',
+    actions: [
+      'Na dveh strojih dva tedna merite vsako menjavo od zadnjega dobrega kosa do prvega dobrega — brez te številke ne veste, ali je težava v pripravi ali v montaži.',
+      'Za naslednji teden razporedite serije po orodju in barvi tako, da si sledijo sorodne — vsaka izognjena menjava je ura strojnega časa.',
+      'Na eni izmeni en mesec javljajte kose in izmet ob koncu vsake serije namesto ob koncu izmene — pokaže, koliko prepisa je mogoče odpraviti.',
+    ],
+  },
+  granulat_plastika: {
+    headline: 'Največji strošek: izmet in poraba granulata',
+    actions: [
+      'Za deset izdelkov z največjo porabo en mesec po vsaki seriji primerjajte dejansko porabo granulata z normativom — odstopanje je praviloma sistematično, ne naključno.',
+      'Zahtevajte vzrok pri vsakem javljenem izmetu, vezan na stroj in orodje; izmet brez vzroka se ponovi.',
+      'Preverite, ali so normativi in recepture ažurni in ali je regranulat v njih — zastarel normativ tiho ustvarja presežno porabo.',
+    ],
+  },
+  planiranje_plastika: {
+    headline: 'Največji strošek: planiranje strojev in odpoklici',
+    actions: [
+      'En teden zabeležite, po katerem kanalu pride vsak odpoklic in koliko minut vzame prepis — to je znesek, ki ga odpravi EDI ali portal kupca.',
+      'Zamrznite plan strojev za prvih 48 ur; spremembe odpoklicev uvrščajte šele za tem oknom.',
+      'Za vsako ekspresno dostavo zadnjih treh mesecev zapišite vzrok — večina jih izvira iz orodja, ki ni bilo prosto, ne iz kupčeve spremembe.',
+    ],
+  },
+  orodja_plastika: {
+    headline: 'Največji strošek: okvare orodij in nenačrtovani zastoji',
+    actions: [
+      'Na petih najbolj obremenjenih orodjih uvedite števec ciklov in prag za servis — okvara sredi serije je najdražja oblika vzdrževanja.',
+      'En mesec beležite vsak nenačrtovan zastoj z vzrokom in trajanjem po stroju; večina ur odpade na nekaj ponavljajočih se okvar.',
+      'Za zadnjih deset popravil preverite, ali je bil nadomestni del na zalogi — vsako čakanje na del je bilo mogoče preprečiti s servisnim intervalom.',
+    ],
+  },
+  zaloge_plastika: {
+    headline: 'Največji strošek: zaloga granulata in gotovih izdelkov',
+    actions: [
+      'Popišite tipe in barve granulata brez porabe v zadnjih 12 mesecih in določite datum za prodajo ali odpis.',
+      'Za 20 najbolj kritičnih tipov granulata določite minimalno zalogo in točko naročanja iz odpoklicev, ne iz občutka.',
+      'Vsak zastoj stroja zaradi manjkajočega ali nepravega materiala zabeležite z vzrokom — pokažejo, kje minimalne zaloge ali šarže manjkajo.',
+    ],
+  },
+
+  // --- Kovinarstvo ----------------------------------------------------------
+  nalog_kovinarstvo: {
+    headline: 'Največji strošek: delovni nalog brez dejanskega stroška',
+    actions: [
+      'Za deset zadnjih zaključenih nalogov primerjajte kalkulacijo z dejanskim materialom, urami in nastavitvijo — brez te primerjave ne veste, kateri izdelki vas stanejo več, kot zanje dobite.',
+      'Ločite nastavitev od izdelave kot samostojno operacijo na nalogu, vsaj na enem stroju za en mesec — male serije pokažejo pravo ceno šele takrat.',
+      'Uvedite sprotno javljanje kosov in časa na eni delovni postaji, preden ga razširite; prepis s papirja ob koncu dneva je vir napak in zamude v podatkih.',
+    ],
+  },
+  material_kovinarstvo: {
+    headline: 'Največji strošek: poraba materiala nad normativom',
+    actions: [
+      'Za deset izdelkov z največjo porabo materiala en mesec primerjajte izdano na nalog z normativom iz kosovnice — odstopanje je praviloma sistematično, ne naključno.',
+      'Preverite, katera verzija kosovnice je v proizvodnji in katera v kalkulaciji; kjer se razlikujeta, je kalkulacija napačna, ne proizvodnja.',
+      'Tehtajte in knjižite ostružke in ostanke po vrsti odpadka — prihodek od odpadka je edini del presežne porabe, ki se vrne.',
+    ],
+  },
+  zaloge_kovinarstvo: {
+    headline: 'Največji strošek: zaloge materiala in zastoji',
+    actions: [
+      'Vsak zastoj zaradi materiala en mesec zabeležite z vzrokom — ni na zalogi, ni pravega, ni certifikata — brez tega ne veste, ali manjka nabava ali evidenca.',
+      'Za 20 najbolj kritičnih materialov določite minimalno zalogo in točko naročanja iz odprtih nalogov, ne iz občutka.',
+      'Prepovejte izdajo materiala brez naloga in uvedite mesečno ciklično štetje izbranih artiklov — letna inventura razliko pokaže, ko je vzrok že pozabljen.',
+    ],
+  },
+  sledljivost_kovinarstvo: {
+    headline: 'Največji strošek: sledljivost, certifikati in reklamacije',
+    actions: [
+      'Izvedite test na živo: za pet naključnih dobav izmerite čas do certifikata 3.1 in izvorne šarže — to je številka, ki jo bosta zahtevala presojevalec in kupec.',
+      'Ob prevzemu materiala zahtevajte zapis šarže in certifikata brez izjeme; prevzem brez šarže je najpogostejša luknja v sledljivosti.',
+      'Vsaki reklamaciji pripišite šaržo, vzrok in strošek, preden jo zaprete — reklamacija brez vzroka se ponovi.',
+    ],
+  },
+  kooperacija_kovinarstvo: {
+    headline: 'Največji strošek: kooperacija in zunanje operacije',
+    actions: [
+      'Za vsako oddajo v kooperacijo izdajte izdajni dokument s količino in rokom, ob vračilu pa količine preštejte — razlika, ki ni zapisana, se ne uveljavi.',
+      'Vodite zalogo pri kooperantu kot ločeno skladišče, da material med oddajo in vračilom ne izgine iz evidence.',
+      'Kooperacijsko operacijo vnesite v tehnološki postopek z rokom, da plan upošteva čas pri kooperantu, ne le lastnih strojev.',
+    ],
+  },
+  plan_kovinarstvo: {
+    headline: 'Največji strošek: plan, kapacitete in roki',
+    actions: [
+      'Teden dni beležite vsak zastoj z vzrokom — prioriteta, risba, verzija, material, kooperant — brez tega ne veste, katero področje vas res stane.',
+      'Pred sprostitvijo naloga preverite razpoložljivost materiala, veljavno verzijo risbe in rok kooperanta, ne po njej.',
+      'Kupca obvestite o zamudi takoj, ko jo predvidite — penali in popusti so pogosto posledica molka, ne zamude same.',
+    ],
+  },
+
   // --- Logistika in transport -----------------------------------------------
   obracun_logistika: {
     headline: 'Največji strošek: obračun in nezaračunane storitve',
@@ -226,6 +360,48 @@ export const ACTION_PLANS: Record<string, ActionPlanEntry> = {
     ],
   },
 
+  // --- Inženiring in izvedba na ključ ----------------------------------------
+  marza_inzeniring: {
+    headline: 'Največji strošek: marža projekta in ure brez projekta',
+    actions: [
+      'Za tri zadnje zaključene projekte primerjajte kalkulacijo z dejanskimi stroški po vrstah (ure, oprema, podizvajalci) — odstopanje je praviloma sistematično pri isti vrsti, ne naključno.',
+      'En mesec zahtevajte vpis ur s projektom in fazo na dan izvedbe; ure, razporejene ob koncu meseca po spominu, so tiste, ki pristanejo na "splošnem".',
+      'Določite dan v mesecu, ko vodja projekta prejme stanje stroškov vsakega odprtega projekta — marža, znana ob zaključku, je podatek za arhiv, ne za odločitev.',
+    ],
+  },
+  aneksi_inzeniring: {
+    headline: 'Največji strošek: dodatna dela brez aneksa',
+    actions: [
+      'Za tekoče projekte popišite vsa dodatna dela zadnjih treh mesecev in ob vsakem označite: aneks pred izvedbo, aneks za nazaj ali brez aneksa — tretji stolpec je vaša izhodiščna številka.',
+      'Uvedite pravilo, da vsaka sprememba obsega dobi zapis z oceno vrednosti in statusom, preden gre na teren — tudi če je na koncu ne zaračunate.',
+      'Za pet zadnjih ponudb preverite, katere cene opreme so bile prepisane iz stare datoteke brez poizvedbe — tam nastane razlika med kalkulacijo in realizacijo.',
+    ],
+  },
+  oprema_inzeniring: {
+    headline: 'Največji strošek: oprema brez projekta in zamude dobav',
+    actions: [
+      'Popišite skladišče po projektih: vsak kos opreme dobi oznako projekta ali oznako "brez projekta" — drugi seznam je vezan denar, ki ga lahko vgradite drugje ali vrnete.',
+      'Za vsako ekspresno dobavo in vsak zastoj na terenu v zadnjih treh mesecih zapišite vzrok — večina jih izvira iz naročila, oddanega prepozno glede na terminski plan, ne iz dobavitelja.',
+      'Za tri največje podizvajalce primerjajte prejete situacije s pogodbenim obsegom in dejansko izvedbo zadnjega projekta — dvojni obračun se skriva v postavkah, ki jih nihče ne primerja.',
+    ],
+  },
+  obracun_inzeniring: {
+    headline: 'Največji strošek: faze brez računa, zadržki in neobračunan servis',
+    actions: [
+      'Za deset zadnjih zaključenih faz izpišite datum zapisnika o prevzemu in datum računa — razlika v dneh je denar, ki ga financirate namesto naročnika.',
+      'Sestavite koledar vseh zadržkov in bančnih garancij z datumom sprostitve in odgovorno osebo — postavke po roku zahtevajte ta teden.',
+      'En mesec beležite vsak servisni klic na prevzetem sistemu s pripisom: garancija, pogodba ali zaračunljivo — tretji stolpec brez računa je izgubljen prihodek.',
+    ],
+  },
+  dokumentacija_inzeniring: {
+    headline: 'Največji strošek: iskanje dokumentov in teren brez podatkov',
+    actions: [
+      'Izmerite čas do dokumenta: za tri naključne projekte poiščite veljavni načrt, zadnjo meritev in dobavnico glavne opreme — če traja več kot uro, je težava v hrambi, ne v ljudeh.',
+      'Za zadnji prevzem popišite, katera dokazila (meritve, CE izjave, zagonska poročila) so nastala drugje in kdo jih je moral zbrati — vsako dobi mesto in lastnika ob nastanku, ne ob predaji.',
+      'Sestavite knjižnico referenc iz zaključenih projektov (potrdilo, opis, fotografije, vrednost) enkrat — naslednji razpis se začne z izborom, ne z zbiranjem.',
+    ],
+  },
+
   // --- Storitve in projekti -------------------------------------------------
   projekti_storitve: {
     headline: 'Največji strošek: čakanje in prerazporejanje ekipe',
@@ -265,6 +441,48 @@ export const ACTION_PLANS: Record<string, ActionPlanEntry> = {
       'Popišite projekte, kjer je od opravljenega dela do računa minilo več kot 30 dni — to je vaš najhitreje sprostljiv denar.',
       'Uvedite obračun po mejnikih namesto ob zaključku pri vseh projektih, daljših od dveh mesecev.',
       'Naročnika obvestite o zamudi takoj, ko jo predvidite — kazni in popusti so pogosto posledica molka, ne zamude same.',
+    ],
+  },
+
+  // --- Gradbeništvo ---------------------------------------------------------
+  marza_gradbenistvo: {
+    headline: 'Največji strošek: marža, ki jo izveste prepozno',
+    actions: [
+      'En mesec vsak račun, dobavnico in evidenco ur označite s številko projekta, preden gre v knjiženje — brez projektne oznake marže ni mogoče izračunati, z njo je preprost seštevek.',
+      'Za tri tekoče projekte enkrat na teden primerjajte porabljeno s kalkulacijo — ne ob koncu, ko ni več kaj rešiti.',
+      'Za zadnjih pet zaključenih projektov zapišite, v katerem mesecu izvedbe bi odstopanje že lahko videli; ta številka pove, koliko zamika je treba odpraviti.',
+    ],
+  },
+  situacije_gradbenistvo: {
+    headline: 'Največji strošek: ročne situacije in neobračunana dodatna dela',
+    actions: [
+      'Pred oddajo vsake situacije preverite kontrolni seznam prilog — večina vrnjenih situacij se vrne zaradi manjkajočega dokazila, ne zaradi napačne količine.',
+      'Uvedite pravilo, da dodatno delo dobi pisno potrditev ali vsaj e-pošto naročnika, preden ekipa začne — nepotrjeno delo je edino, ki ga zagotovo ne boste obračunali.',
+      'Za tri gradbišča vodite popis del v eni preglednici s količinami iz izmer; situacija je potem izpis, ne prepis.',
+    ],
+  },
+  gradbisce_gradbenistvo: {
+    headline: 'Največji strošek: ure, material in stroji brez projekta',
+    actions: [
+      'Za en mesec uvedite obvezno prevzemnico s številko projekta za vsako izdajo materiala na gradbišče — razlika naročeno–vgrajeno se pokaže šele, ko je vhod zapisan.',
+      'Vodje gradbišč naj ure delavcev po projektih oddajo tedensko, ne ob koncu meseca; ure, rekonstruirane po spominu, so tiste, ki pristanejo brez projekta.',
+      'Popišite, katere podatke vodje gradbišč najpogosteje kličejo v pisarno — vsak od njih je kandidat za dostop s terena.',
+    ],
+  },
+  podizvajalci_gradbenistvo: {
+    headline: 'Največji strošek: situacije in zadržki podizvajalcev',
+    actions: [
+      'Za deset zadnjih situacij podizvajalcev primerjajte obračunane količine s pogodbo in izmerami — večina preplačil je sistematična, ne naključna.',
+      'Zberite pogodbe, situacije in zadržke vseh podizvajalcev na eno mesto, vezano na projekt; kar ni zapisano, se ne odbije.',
+      'Vsakemu zadržku in garanciji podizvajalca določite datum in nosilca sprostitve — pozabljen zadržek je denar, ki ostane pri vas iz napačnega razloga.',
+    ],
+  },
+  placila_gradbenistvo: {
+    headline: 'Največji strošek: zamude plačil in zadržana sredstva',
+    actions: [
+      'Izpišite zadržke in garancije po datumu zapadlosti — praviloma je večina zapadlih zneskov pri nekaj naročnikih in nihče jih ni terjal.',
+      'Prvi opomin pošljite na fiksen dan po zapadlosti situacije, brez izjem — nedosleden ritem naročnika nauči, da rok ni resen.',
+      'Pred sprejemom novega posla preverite stanje odprtih postavk naročnika; odločitev o novem projektu je najcenejša takrat, ne po zapadlosti.',
     ],
   },
 

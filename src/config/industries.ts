@@ -1,4 +1,6 @@
-import type { SegmentId } from './segmentTypes';
+// S končnico, ker to datoteko uvaža tudi vite.config.ts (INDUSTRY_PATHS): Vite jo
+// naloži nativno v Nodu, ki relativni uvoz brez končnice zavrne.
+import type { SegmentId } from './segmentTypes.ts';
 
 /**
  * Dejavnosti, med katerimi obiskovalec izbira v Koraku 1, in preslikava v segment.
@@ -24,9 +26,43 @@ export interface IndustryOption {
 
 export const INDUSTRIES: IndustryOption[] = [
   { id: 'proizvodnja', label: 'Proizvodnja', segment: 'proizvodnja' },
+  // Prva PANOŽNA dejavnost pod splošno proizvodnjo. Mesar, mlekar in pek so
+  // proizvajalci, a njihova bolečina ni izmet in delovni nalog, ampak donos šarže,
+  // rok uporabnosti in sledljivost ob odpoklicu — splošni proizvodni vprašalnik
+  // teh treh sploh ne vpraša. Vprašalnik sledi raziskavi panoge (SKD C10 in C11);
+  // glej config/modules/zivilstvo.ts. Oznaka v oklepaju je za obiskovalca, ki
+  // besede "živilstvo" ne poveže s pijačami (C11).
+  { id: 'zivilstvo', label: 'Živilstvo (hrana in pijača)', segment: 'zivilstvo' },
+  // Druga PANOŽNA dejavnost pod splošno proizvodnjo. Kovinar je podizvajalec
+  // izvozne verige brez cenovne moči in njegova bolečina je dejanski strošek
+  // delovnega naloga — odstopanje porabe od normativa, kooperacija, certifikati
+  // 3.1 in šarže, ki jih splošni proizvodni vprašalnik ne vpraša. Vprašalnik
+  // sledi raziskavi panoge (SKD C25 in C28); glej config/modules/kovinarstvo.ts.
+  { id: 'kovinarstvo', label: 'Kovinarstvo', segment: 'kovinarstvo' },
+  // Druga PANOŽNA dejavnost pod proizvodnjo. Predelovalec plastike je
+  // proizvajalec, a njegova enota ni delovni nalog, ampak serija na stroju: tišči
+  // ga izkoriščenost strojev, menjava orodja, poraba granulata proti normi in od
+  // avgusta 2026 uredba PPWR o sestavi embalaže — splošni proizvodni vprašalnik
+  // teh štirih ne vpraša. Vprašalnik sledi raziskavi panoge
+  // (Datalab_raziskava_PLASTIKA_model.xlsx); glej config/modules/plastika.ts.
+  { id: 'plastika', label: 'Predelava plastike', segment: 'plastika' },
   { id: 'trgovina', label: 'Trgovina, veleprodaja in distribucija', segment: 'trgovina' },
   { id: 'racunovodstvo', label: 'Računovodski servisi', segment: 'racunovodstvo' },
   { id: 'storitve', label: 'Storitvena in projektna podjetja', segment: 'storitve' },
+  // Gradbinec je projektno podjetje, a njegova bolečina ni nezaračunana ura: je
+  // marža, ki jo izve šele ob zaključnem obračunu, situacija iz Excela in
+  // podizvajalci. Storitveni vprašalnik teh treh ne vpraša, zato ima gradbeništvo
+  // svoj segment (config/modules/gradbenistvo.ts). Do septembra 2026 je gradbinca
+  // sem pripeljalo "Drugo" → storitve in kampanja ga v tej oznaki ni prepoznala.
+  { id: 'gradbenistvo', label: 'Gradbeništvo', segment: 'gradbenistvo' },
+  // Prva PANOŽNA dejavnost pod storitvami. Inženiring in izvedba na ključ je
+  // projektno podjetje, a njegova bolečina ni nezaračunana ura: skozi knjige
+  // prevalja opremo in podizvajalce (279.000 EUR prihodkov na zaposlenega po
+  // raziskavi panoge), zato ga tišči marža projekta, faza brez računa in oprema,
+  // ki ni vezana na projekt — storitveni vprašalnik teh treh ne vpraša.
+  // Vprašalnik sledi raziskavi (Datalab_raziskava_INZENIRING_model.xlsx); glej
+  // config/modules/inzeniring.ts. Projektantski biro brez izvedbe ostane v storitvah.
+  { id: 'inzeniring', label: 'Inženiring', segment: 'inzeniring' },
   // Maloprodaja meri druge stvari kot veleprodaja: polica, blagajna in manko proti
   // pošiljki, plačilnemu roku in komisioniranju. Skupen segment bi enega od obeh
   // spraševal po številkah, ki jih sploh ne vodi.
@@ -48,7 +84,7 @@ export const INDUSTRIES: IndustryOption[] = [
  * Pod-dejavnosti, ki se prikažejo šele po izbiri "Drugo".
  *
  * Velik del obiskovalcev, ki izberejo "Drugo", NI zunaj obstoječih segmentov —
- * gradbinec, agencija in IT-hiša so storitveno-projektna podjetja, izberejo pa
+ * agencija in IT-hiša sta storitveno-projektni podjetji, izbereta pa
  * "Drugo", ker v seznamu ni njihove PANOGE, čeprav obstaja njihov POSLOVNI MODEL.
  * Vprašanje je zato zastavljeno po modelu in ne po panogi: seznama panog ni
  * mogoče dopolniti do popolnosti, modelov pa je malo.
@@ -152,4 +188,38 @@ export function getIndustryForSegment(segmentId: SegmentId): string {
     (industry) => industry.segment === segmentId && industry.id !== DRUGO_ID,
   );
   return match?.id ?? '';
+}
+
+/**
+ * Dejavnosti, ki jih kampanjska povezava izbere s POTJO: `<objava>/proizvodnja/`
+ * pripelje obiskovalca naravnost na prvi oštevilčeni korak (zaposleni) z izbrano
+ * proizvodnjo, uvodni zaslon z izbiro pa preskoči. To je edina pot v tok mimo
+ * uvodnega zaslona; `?s=` dejavnost samo prednastavi (getIndustryForSegment).
+ *
+ * Samo glavne dejavnosti iz spustnega seznama, brez 'drugo': sam ni popoln
+ * odgovor, pod-dejavnosti pa nosijo oznako "Drugo — …", ki prodajniku pove, da
+ * se obiskovalec ni prepoznal v nobeni panogi — o obiskovalcu s povezave pa tega
+ * ne vemo. Nova dejavnost v INDUSTRIES dobi povezavo sama.
+ *
+ * Isti seznam bere vite.config.ts (industryEntryPages): za vsako pot ob gradnji
+ * nastane `<pot>/index.html`, da naslov postreže tudi statični strežnik brez
+ * pravila za SPA. Vrednosti so hkrati imena map v objavi, zato brez šumnikov.
+ */
+export const INDUSTRY_PATHS: string[] = INDUSTRIES.filter(
+  (industry) => industry.id !== DRUGO_ID,
+).map((industry) => industry.id);
+
+/**
+ * Dejavnost iz poti naslova ali prazen niz.
+ *
+ * `base` je pot objave (import.meta.env.BASE_URL, npr. '/leadmagnetdl2/'); šteje
+ * prvi segment za njo, z zaključno poševnico ali brez nje — kampanjska povezava
+ * je lahko napisana na oba načina, strežnik pa `/proizvodnja` sam preusmeri na
+ * `/proizvodnja/`. Ujemanje je dobesedno: mape v objavi so z malimi črkami in
+ * GitHub Pages `/Proizvodnja/` ne bi postregel, zato ga tudi tu ne priznamo.
+ */
+export function getIndustryForPath(pathname: string, base: string): string {
+  if (!pathname.startsWith(base)) return '';
+  const slug = pathname.slice(base.length).split('/')[0];
+  return INDUSTRY_PATHS.includes(slug) ? slug : '';
 }

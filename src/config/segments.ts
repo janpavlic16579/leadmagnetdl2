@@ -85,6 +85,99 @@ export const SEGMENTS: Record<SegmentId, SegmentConfig> = {
     triage: { recommendedCount: 3 },
     highLossThresholdEUR: 15000,
   },
+  zivilstvo: {
+    id: 'zivilstvo',
+    // Brez servisHz: živilo nima garancijskega servisa po predaji, reklamacije
+    // kupcev in odpoklic pa meri panožni modul sledljivost_zivilstvo — horizontala
+    // bi iste ure in dobropise štela dvakrat. Ostale štiri horizontale ostanejo:
+    // poročila za trgovce (analitikaHz), knjiženje (financeHz), evidence ur
+    // (kadriHz) in potrjevanje dokumentov (dokumentiHz) živilski moduli ne merijo.
+    moduleIds: [
+      'donos_zivilstvo',
+      'roki_zivilstvo',
+      'sledljivost_zivilstvo',
+      'kakovost_zivilstvo',
+      'narocila_zivilstvo',
+      'analitikaHz',
+      'financeHz',
+      'kadriHz',
+      'dokumentiHz',
+      'diagnostika_zivilstvo',
+      'E',
+    ],
+    // Privzeta tri = prva tri po vrstnem redu: odstopanje donosa, odpisi zaradi
+    // roka in sledljivost ob odpoklicu so tri najvišje ocenjene bolečine v
+    // katalogu raziskave (B02, B03, B01), zato defaultIds ni potreben.
+    triage: { recommendedCount: 3 },
+    // Enak prag kot proizvodnja: materialni vzvod (kalo in odpisi) je pri isti
+    // velikosti podjetja primerljiv z izmetom, mediana prihodkov v ciljnem
+    // segmentu pa celo višja. KALIBRACIJA: začetna ocena, preveriti po prvih
+    // ~50 vnosih.
+    highLossThresholdEUR: 15000,
+  },
+  plastika: {
+    id: 'plastika',
+    // Brez servisHz: predelovalec plastike garancijskega servisa po predaji
+    // nima, reklamacije kupcev pa meri panožni modul granulat_plastika —
+    // horizontala bi iste dobropise štela dvakrat. Ostale štiri horizontale
+    // ostanejo: poročil (analitikaHz), knjiženja (financeHz), evidenc ur
+    // (kadriHz) in potrjevanja dokumentov (dokumentiHz) plastičarski moduli ne
+    // merijo; prepis odpoklicev je proti dokumentiHz razmejen v besedilu help.
+    moduleIds: [
+      'stroji_plastika',
+      'granulat_plastika',
+      'planiranje_plastika',
+      'orodja_plastika',
+      'zaloge_plastika',
+      'analitikaHz',
+      'financeHz',
+      'kadriHz',
+      'dokumentiHz',
+      'diagnostika_plastika',
+      'E',
+    ],
+    // Privzeta tri = prva tri po vrstnem redu: izkoriščenost strojev in menjave,
+    // granulat in izmet ter planiranje in odpoklici so najvišje ocenjene bolečine
+    // v katalogu raziskave (B01/B02, B03/B04, B23/B10), zato defaultIds ni potreben.
+    triage: { recommendedCount: 3 },
+    // Višji prag kot proizvodnja: podjetja na seznamu panoge so večja (mediana 77
+    // zaposlenih in 9,7 mio EUR prihodkov), materialni vzvod pa je letna vrednost
+    // granulata v milijonih. KALIBRACIJA: začetna ocena, preveriti po prvih ~50
+    // vnosih.
+    highLossThresholdEUR: 20000,
+  },
+  kovinarstvo: {
+    id: 'kovinarstvo',
+    // Brez servisHz: podizvajalec v kovinarstvu garancijskega servisa in RMA
+    // praviloma nima; reklamacije kupcev (ure 8D, iskanje šarže, dobropisi) meri
+    // panožni modul sledljivost_kovinarstvo — horizontala bi iste ure in evre
+    // štela dvakrat. Vrzel: strojegradnja z garancijskimi popravili po predaji
+    // ostane neizmerjena (navodila/kovinarstvo/). Ostale štiri horizontale ostanejo:
+    // poročila (analitikaHz), knjiženje (financeHz), evidence ur za plače (kadriHz)
+    // in potrjevanje dokumentov (dokumentiHz) kovinarski moduli ne merijo.
+    moduleIds: [
+      'nalog_kovinarstvo',
+      'material_kovinarstvo',
+      'zaloge_kovinarstvo',
+      'sledljivost_kovinarstvo',
+      'kooperacija_kovinarstvo',
+      'plan_kovinarstvo',
+      'analitikaHz',
+      'financeHz',
+      'kadriHz',
+      'dokumentiHz',
+      'diagnostika_kovinarstvo',
+      'E',
+    ],
+    // Privzeta tri = prva tri po vrstnem redu: strošek naloga (B01), odstopanje
+    // porabe (B03) in zaloge (B09) ima vsak kovinar; kooperacija in certifikati sta
+    // bolečini ožjega kroga — zato defaultIds ni potreben.
+    triage: { recommendedCount: 3 },
+    // Enak prag kot proizvodnja: materialni vzvod (odstopanje od normativa) je pri
+    // isti velikosti podjetja primerljiv z izmetom, mediana prihodkov v ciljnem
+    // segmentu je 6,3 mio EUR. KALIBRACIJA: začetna ocena, preveriti po prvih ~50 vnosih.
+    highLossThresholdEUR: 15000,
+  },
   logistika: {
     id: 'logistika',
     // Brez dokumentiHz: prevozna dokumentacija (modul 'dokumentacija') meri iste
@@ -204,6 +297,76 @@ export const SEGMENTS: Record<SegmentId, SegmentConfig> = {
     // ocena, preveriti po prvih ~50 vnosih.
     highLossThresholdEUR: 15000,
   },
+  inzeniring: {
+    id: 'inzeniring',
+    // Prva panožna dejavnost pod storitvami: inženiring in izvedba na ključ. Skozi
+    // knjige prevaljajo opremo in podizvajalce, zato bolečina ni nezaračunana ura,
+    // ampak marža projekta, faza brez računa in oprema, ki ni vezana na projekt
+    // (raziskava panoge, Datalab_raziskava_INZENIRING_model.xlsx; izpeljava v
+    // navodila/inzeniring/). Vprašalnik: config/modules/inzeniring.ts.
+    //
+    // Brez dokumentiHz: dokumentacija_inzeniring meri iskanje in sestavljanje
+    // projektnih dokumentov (načrti, meritve, CE, razpisi) — ista logika kot pri
+    // logistiki. servisHz ostane: meri garancijske ure in dele PO predaji (strošek),
+    // obracun_inzeniring pa samo neobračunane posege (prihodek) — različna koša,
+    // brez preseka. Ure, razporejene na projekt, meri marza_inzeniring; prisotnost
+    // in podlago za plačo kadriHz — razmejitev je v besedilih help.
+    moduleIds: [
+      'marza_inzeniring',
+      'aneksi_inzeniring',
+      'oprema_inzeniring',
+      'obracun_inzeniring',
+      'dokumentacija_inzeniring',
+      'analitikaHz',
+      'financeHz',
+      'kadriHz',
+      'servisHz',
+      'diagnostika_inzeniring',
+      'E',
+    ],
+    // Privzeta tri = prva tri po vrstnem redu: ure brez projekta (B01), aneksi (B02)
+    // in oprema med projekti (B03) so tri najvišje ocenjene bolečine v katalogu
+    // raziskave in hkrati teza "marža, aneksi, oprema", zato defaultIds ni potreben.
+    triage: { recommendedCount: 3 },
+    // Med storitvami (15.000) in trgovino (20.000): izguba ni samo v urah, ampak
+    // tudi v opremi in v denarju, vezanem v fazah brez računa — 7 mio EUR letnih
+    // projektov × 20 dni zamika × 8,5 % je samo po sebi ~33.000. KALIBRACIJA:
+    // začetna ocena, preveriti po prvih ~50 vnosih.
+    highLossThresholdEUR: 20000,
+  },
+  gradbenistvo: {
+    id: 'gradbenistvo',
+    // Vseh pet horizontal, kot pri storitvah — meje so v besedilih help panožnih
+    // modulov: kadriHz meri evidenco prisotnosti za plačo, gradbisce_gradbenistvo
+    // pripis ur projektu; dokumentiHz meri potrjevanje računov za material,
+    // podizvajalci_gradbenistvo situacije podizvajalcev; servisHz meri odpravo
+    // pomanjkljivosti po primopredaji, ki je noben panožni modul ne meri.
+    moduleIds: [
+      'marza_gradbenistvo',
+      'situacije_gradbenistvo',
+      'gradbisce_gradbenistvo',
+      'podizvajalci_gradbenistvo',
+      'placila_gradbenistvo',
+      'analitikaHz',
+      'financeHz',
+      'kadriHz',
+      'dokumentiHz',
+      'servisHz',
+      'diagnostika_gradbenistvo',
+      'E',
+    ],
+    // Maržo projekta, situacije in gradbišče ima VSAK izvajalec; podizvajalcev
+    // specialist (instalater, fasader) nima — sam je podizvajalec drugim. Prva tri
+    // so hkrati tri najvišje ocenjene bolečine kataloga raziskave (B01, B02, B03/B04).
+    triage: {
+      recommendedCount: 3,
+      defaultIds: ['marza_gradbenistvo', 'situacije_gradbenistvo', 'gradbisce_gradbenistvo'],
+    },
+    // Kot pri veleprodaji: material in denar na večmilijonski letni vrednosti del
+    // dajeta pri isti velikosti podjetja večje zneske kot ure storitvenega podjetja.
+    // KALIBRACIJA: začetna ocena, preveriti po prvih ~50 vnosih.
+    highLossThresholdEUR: 20000,
+  },
   racunovodstvo: {
     id: 'racunovodstvo',
     // Brez financeHz (knjiženje in obračuni SO njihov produkt — merijo ga zajemRs,
@@ -260,10 +423,15 @@ export const SEGMENTS: Record<SegmentId, SegmentConfig> = {
 
 export const SEGMENT_ORDER: SegmentId[] = [
   'proizvodnja',
+  'zivilstvo',
+  'kovinarstvo',
+  'plastika',
   'logistika',
   'trgovina',
   'maloprodaja',
   'storitve',
+  'gradbenistvo',
+  'inzeniring',
   'racunovodstvo',
   'splosno',
 ];

@@ -3,7 +3,9 @@ import {
   DRUGO_ID,
   DRUGO_SUB_INDUSTRIES,
   INDUSTRIES,
+  INDUSTRY_PATHS,
   findSubIndustry,
+  getIndustryForPath,
   getIndustryForSegment,
   getIndustryLabel,
   getSegmentForIndustry,
@@ -25,11 +27,16 @@ describe('Preslikava dejavnost -> segment', () => {
 
   it('reprezentativni primeri se preslikajo pravilno', () => {
     expect(getSegmentForIndustry('proizvodnja')).toBe('proizvodnja');
+    expect(getSegmentForIndustry('kovinarstvo')).toBe('kovinarstvo');
+    expect(getSegmentForIndustry('zivilstvo')).toBe('zivilstvo');
+    expect(getSegmentForIndustry('plastika')).toBe('plastika');
+    expect(getSegmentForIndustry('inzeniring')).toBe('inzeniring');
     expect(getSegmentForIndustry('trgovina')).toBe('trgovina');
     expect(getSegmentForIndustry('maloprodaja')).toBe('maloprodaja');
     expect(getSegmentForIndustry('logistika')).toBe('logistika');
     expect(getSegmentForIndustry('racunovodstvo')).toBe('racunovodstvo');
     expect(getSegmentForIndustry('storitve')).toBe('storitve');
+    expect(getSegmentForIndustry('gradbenistvo')).toBe('gradbenistvo');
     expect(getSegmentForIndustry('drugo')).toBe('splosno');
   });
 
@@ -136,7 +143,44 @@ describe('Dejavnost, ki jo prednastavi kampanjski ?s=', () => {
 
   it('panožni segmenti dobijo svojo dejavnost iz spustnega seznama', () => {
     expect(getIndustryForSegment('proizvodnja')).toBe('proizvodnja');
+    expect(getIndustryForSegment('zivilstvo')).toBe('zivilstvo');
+    expect(getIndustryForSegment('plastika')).toBe('plastika');
+    expect(getIndustryForSegment('inzeniring')).toBe('inzeniring');
     expect(getIndustryForSegment('storitve')).toBe('storitve');
+    expect(getIndustryForSegment('gradbenistvo')).toBe('gradbenistvo');
     expect(getIndustryForSegment('logistika')).toBe('logistika');
+  });
+});
+
+describe('Kampanjske poti (/dejavnost)', () => {
+  it('vsaka glavna dejavnost razen "Drugo" ima pot, pod-dejavnosti in "drugo" je nimajo', () => {
+    expect(INDUSTRY_PATHS).toEqual(
+      INDUSTRIES.filter((industry) => industry.id !== DRUGO_ID).map((industry) => industry.id),
+    );
+    expect(getIndustryForPath(`/${DRUGO_ID}/`, '/')).toBe('');
+    for (const sub of DRUGO_SUB_INDUSTRIES) {
+      expect(getIndustryForPath(`/${sub.id}/`, '/'), sub.id).toBe('');
+    }
+  });
+
+  it('poti so veljavna imena map v objavi: male črke brez šumnikov in poševnic', () => {
+    for (const path of INDUSTRY_PATHS) {
+      expect(path).toMatch(/^[a-z0-9_-]+$/);
+    }
+  });
+
+  it('prebere dejavnost za potjo objave, s poševnico ali brez nje', () => {
+    expect(getIndustryForPath('/leadmagnetdl2/proizvodnja/', '/leadmagnetdl2/')).toBe('proizvodnja');
+    expect(getIndustryForPath('/leadmagnetdl2/proizvodnja', '/leadmagnetdl2/')).toBe('proizvodnja');
+    expect(getIndustryForPath('/racunovodstvo/', '/')).toBe('racunovodstvo');
+    expect(getIndustryForPath('/leadmagnetdl2/zivilstvo/', '/leadmagnetdl2/')).toBe('zivilstvo');
+    expect(getIndustryForPath('/leadmagnetdl2/inzeniring/', '/leadmagnetdl2/')).toBe('inzeniring');
+  });
+
+  it('koren, neznana pot, druga velikost črk in pot zunaj objave dajo prazen niz', () => {
+    expect(getIndustryForPath('/leadmagnetdl2/', '/leadmagnetdl2/')).toBe('');
+    expect(getIndustryForPath('/leadmagnetdl2/karta/', '/leadmagnetdl2/')).toBe('');
+    expect(getIndustryForPath('/leadmagnetdl2/Proizvodnja/', '/leadmagnetdl2/')).toBe('');
+    expect(getIndustryForPath('/proizvodnja/', '/leadmagnetdl2/')).toBe('');
   });
 });

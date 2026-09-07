@@ -10,7 +10,12 @@ import type { SalesReport } from './salesReport';
 import type { LeadConsents, LeadContact } from '../types';
 import type { DownloadFile } from './download';
 import type { GeneratePdfParams } from './pdf';
-import type { LeadAttachment } from './submitLead';
+import type {
+  CustomerReportOutcome,
+  CustomerReportReason,
+  LeadAttachment,
+  LeadAttachmentAudience,
+} from './submitLead';
 
 /**
  * Dostava po oddaji obrazca: sestavi prodajno pripravo, jo spravi tja, kamor
@@ -53,6 +58,23 @@ import type { LeadAttachment } from './submitLead';
  * stranka mu jo posreduje. Ko naslov nastavite, se gumb umakne sam, brez posega
  * v kodo. Cena te začasnosti: dokument je napisan O stranki (ocena ustreznosti,
  * priporočilo licenc, pričakovani ugovori) in ne ZANJO.
+ *
+ * KAM GRE STRANKINO POROČILO — isto pravilo, obrnjeno k stranki. Obrazec obljublja
+ * PDF na vpisani e-naslov; pošlje ga sprejemnik (Koda.gs, `posljiPorociloStranki`)
+ * iz priloge z oznako 'customer' in v odgovoru pove, ali je odšel:
+ *
+ * | Webhook | Dostava | Sprejemnik pravi      | Rezultati                            |
+ * |---------|---------|-----------------------|--------------------------------------|
+ * | ne      | —       | —                     | gumb za prenos (kot doslej)          |
+ * | da      | ne      | —                     | gumb za prenos                       |
+ * | da      | da      | poslano               | obvestilo z naslovom, gumba ni       |
+ * | da      | da      | ni poslano + razlog   | gumb + vrstica "nismo mogli poslati" |
+ * | da      | da      | nič (star sprejemnik) | gumb, brez vrstice                   |
+ *
+ * Prenos je torej REZERVA in ne enakovredna pot: stranka poročilo dobi tja, kamor
+ * ga je naročila, gumb pa se pokaže šele, ko te poti ni. V internem načinu ob
+ * obvestilu ostane tudi gumb — za pregled dokumenta. Odloči se tu in pride skupaj
+ * z `onSubmitted`, iz istega razloga kot priprava: rezultati se izrišejo enkrat.
  *
  * PRIPRAVA JE POMOŽNA, ZAPIS NI. Kadar `buildSalesReport` vrže izjemo, gre
  * oddaja na webhook vseeno: izvozni zapis, vrstica za preglednico in strankin
@@ -114,9 +136,25 @@ export interface DeliverLeadHooks {
   /**
    * Oddaja je opravljena — od tu naprej se obiskovalcu smejo pokazati rezultati.
    * Pokliče se ŠELE, ko je o pripravi odločeno: gumb, ki bi se pod obiskovalcem
-   * pojavil osem sekund po rezultatih, je zaslon, ki se premika.
+   * pojavil deset sekund po rezultatih, je zaslon, ki se premika. Iz istega
+   * razloga nosi tudi odločitev o strankinem poročilu (tabela v glavi).
    */
-  onSubmitted: () => void;
+  onSubmitted: (outcome: SubmitOutcome) => void;
+}
+
+/** Kam je šlo strankino poročilo — kar rezultati potrebujejo, da se izrišejo enkrat. */
+export interface CustomerReportDelivery {
+  /** Naslov, na katerega je sprejemnik poslal poročilo; null = ni bilo poslano (ali naslov ni znan). */
+  emailedTo: string | null;
+  /** Gumb za prenos na rezultatih: vedno, kadar pošte ni bilo; v internem načinu tudi ob pošti. */
+  downloadOffered: boolean;
+  reason: 'emailed' | 'no_webhook' | 'no_record' | 'delivery_failed' | 'not_sent' | 'unknown';
+  /** Razlog sprejemnika pri 'not_sent' — za sled, ne za besedilo stranki. */
+  detail?: CustomerReportReason;
+}
+
+export interface SubmitOutcome {
+  customerReport: CustomerReportDelivery;
 }
 
 /** Moduli, ki jih dostava potrebuje. Ločeni zato, da jih test poda brez omrežja. */
@@ -188,14 +226,17 @@ async function buildAttachments(
     return [];
   }
 
-  const generators: [string, () => Promise<DownloadFile>][] = [
-    ['poročilo za stranko', () => buildResults(input.customerPdf)],
-    ...(report ? [['priprava na pogovor', () => buildSales(report)] as [string, () => Promise<DownloadFile>]] : []),
+  // Oznaka občinstva potuje s prilogo: sprejemnik po njej izbere, kaj gre stranki
+  // po e-pošti — priprava ('sales') nikoli, tudi če bi bila napačno poimenovana.
+  type Generator = [string, LeadAttachmentAudience, () => Promise<DownloadFile>];
+  const generators: Generator[] = [
+    ['poročilo za stranko', 'customer', () => buildResults(input.customerPdf)],
+    ...(report ? [['priprava na pogovor', 'sales', () => buildSales(report)] as Generator] : []),
   ];
   const attachments: LeadAttachment[] = [];
-  for (const [label, build] of generators) {
+  for (const [label, audience, build] of generators) {
     try {
-      attachments.push(await modules.attachmentFromFile(await build()));
+      attachments.push(await modules.attachmentFromFile(await build(), audience));
     } catch (error) {
       console.warn(`Priloga "${label}" ni nastala:`, error);
     }
@@ -235,6 +276,11 @@ export async function deliverLead(
    * internem načinu poleg strežnika, ob neuspeli dostavi kot rezerva.
    */
   let forCustomer = !webhookUrl || input.internalMode;
+  /**
+   * Kam gre strankino poročilo (druga tabela v glavi). Začne kot prenos brez
+   * webhooka; e-pošta postane šele, ko jo sprejemnik potrdi.
+   */
+  let customerReport: CustomerReportDelivery = { emailedTo: null, downloadOffered: true, reason: 'no_webhook' };
   /**
    * En sam časovni žig za pripravo IN zapis. Zapis ga je doslej bral iz priprave
    * (`report.meta.generatedAtISO`) in je bil zato od nje odvisen — prav ta vez je
@@ -304,14 +350,14 @@ export async function deliverLead(
       // Prilogi šele, ko je zapis tu: brez privolitve oddaje ni in PDF-ja bi
       // nastala zaman. Brez webhooka se ta veja sploh ne izvede.
       const attachments = record ? await buildAttachments(input, report, modules) : [];
-      const delivered = record
+      const result = record
         ? await modules.submitLead(
             { record, salesReportHtml: salesReportHtmlOf(report, modules), attachments },
             webhookUrl,
           )
-        : false;
+        : null;
 
-      if (delivered) {
+      if (result?.delivered) {
         // Število prilog in prisotnost priprave sta lastnosti dogodka in ne nov
         // dogodek: od zunaj se vidi, ali obvestila prihajajo s PDF-jema in s
         // pripravo ali brez njih.
@@ -320,10 +366,17 @@ export async function deliverLead(
           attachments: attachments.length,
           salesReport: report ? 'da' : 'ne',
         });
+        customerReport = customerReportOf(result.customerReport, input);
       } else {
         track('lm10_delivery_failed', { reason: record ? 'rejected' : 'no_record' });
-        // Rezerva: brez uspele dostave svetovalec do priprave nima nobene poti.
+        // Rezerva: brez uspele dostave svetovalec do priprave nima nobene poti —
+        // in stranka do poročila ne, razen s prenosom.
         forCustomer = true;
+        customerReport = {
+          emailedTo: null,
+          downloadOffered: true,
+          reason: record ? 'delivery_failed' : 'no_record',
+        };
       }
     } catch {
       // Izjema JE neuspela dostava — pravilo iz glave velja enako kot za zavrnitev.
@@ -331,13 +384,35 @@ export async function deliverLead(
       // tako ali tako odpadel; gumb na rezultatih te omejitve nima.
       track('lm10_delivery_failed', { reason: 'error' });
       forCustomer = true;
+      customerReport = { emailedTo: null, downloadOffered: true, reason: 'delivery_failed' };
     }
   }
 
   // Najprej priprava, ŠELE NATO oddaja: rezultati se izrišejo z gumbom ali brez
-  // njega, ne pa z gumbom, ki se pojavi naknadno.
+  // njega, ne pa z gumbom, ki se pojavi naknadno. Odločitev o strankinem
+  // poročilu potuje z oddajo iz istega razloga.
   if (report && forCustomer) hooks.onSalesReport(report);
-  hooks.onSubmitted();
+  hooks.onSubmitted({ customerReport });
+}
+
+/**
+ * Izid sprejemnika → kaj rezultati pokažejo (druga tabela v glavi).
+ *
+ * 'unknown' (star sprejemnik, neberljivo telo) ne sproži dogodka: med
+ * razmestitvijo skripte in aplikacije bi štel vsako oddajo in o pošti ne pove
+ * nič. Neposlano z razlogom pa je napaka, ki jo je vredno videti od zunaj.
+ */
+function customerReportOf(outcome: CustomerReportOutcome, input: DeliverLeadInput): CustomerReportDelivery {
+  if (outcome.sent) {
+    track('lm10_report_emailed', { segment: input.segment.id });
+    // Interni način: gumb ostane za pregled dokumenta, obvestilo pove, da je odšel.
+    return { emailedTo: input.contact.email, downloadOffered: input.internalMode, reason: 'emailed' };
+  }
+  if (outcome.reason === 'unknown') {
+    return { emailedTo: null, downloadOffered: true, reason: 'unknown' };
+  }
+  track('lm10_report_email_failed', { reason: outcome.reason });
+  return { emailedTo: null, downloadOffered: true, reason: 'not_sent', detail: outcome.reason };
 }
 
 /**

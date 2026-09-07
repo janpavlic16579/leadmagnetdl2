@@ -7,6 +7,7 @@ import {
 } from './plausibility';
 import { UNKNOWN_ANSWER, type ModuleDefinition } from '../config/modules/moduleTypes';
 import { ALL_MODULES } from '../config/modules';
+import { MACHINE_HOURS_UNIT } from '../config/modules/plastika';
 
 /** Minimalen modul z urnimi polji — compute ni predmet teh testov. */
 const MODULE: ModuleDefinition = {
@@ -73,11 +74,15 @@ describe('assessHoursPlausibility', () => {
 describe('pokritost urnih enot v registru', () => {
   it('vsaka urna enota registra je h/mesec, h/leto ali izrecno izvzeta', () => {
     // h/stranko (donosnostRs) je razmerje na stranko, ne skupna izguba — v ovojnico
-    // ne sodi. Nova urna enota mora bodisi v plausibility.ts bodisi na ta seznam.
-    const exempt = new Set(['h/stranko']);
+    // ne sodi. Strojne ure predelave plastike ('strojnih h/mesec') niso ure ljudi:
+    // ovojnica je iz zaposlenih, zato ostanejo zunaj vsote namenoma, ne po pomoti.
+    // Nova urna enota mora bodisi v plausibility.ts bodisi na ta seznam.
+    const exempt = new Set(['h/stranko', MACHINE_HOURS_UNIT]);
     for (const definition of ALL_MODULES) {
       for (const field of definition.fields) {
-        if (!field.unit || !field.unit.startsWith('h/')) continue;
+        // includes in ne startsWith: enota, ki bi "h/" skrila za predpono, bi
+        // sicer ušla tako ovojnici kot temu testu.
+        if (!field.unit || !field.unit.includes('h/')) continue;
         if (exempt.has(field.unit)) continue;
         expect(['h/mesec', 'h/leto'], `${definition.id}.${field.key}`).toContain(field.unit);
       }

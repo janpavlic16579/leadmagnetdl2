@@ -272,11 +272,16 @@ describe('Umestitev v segmente', () => {
     expect(SEGMENTS.racunovodstvo.moduleIds).not.toContain('financeHz');
     expect(SEGMENTS.racunovodstvo.moduleIds).not.toContain('dokumentiHz');
     expect(SEGMENTS.logistika.moduleIds).not.toContain('dokumentiHz');
+    // dokumentacija_inzeniring meri iskanje in sestavljanje projektnih dokumentov.
+    expect(SEGMENTS.inzeniring.moduleIds).not.toContain('dokumentiHz');
     expect(SEGMENTS.splosno.moduleIds).not.toContain('analitikaHz');
     // servisHz meri servis PO predaji; kjer reklamacijske ure in stroške že meri
     // panožni modul (napake, popravkiRs, napakeSp), bi šlo za dvojno štetje.
     expect(SEGMENTS.logistika.moduleIds).not.toContain('servisHz');
     expect(SEGMENTS.racunovodstvo.moduleIds).not.toContain('servisHz');
     expect(SEGMENTS.splosno.moduleIds).not.toContain('servisHz');
+    expect(SEGMENTS.zivilstvo.moduleIds).not.toContain('servisHz');
+    expect(SEGMENTS.kovinarstvo.moduleIds).not.toContain('servisHz');
+    expect(SEGMENTS.plastika.moduleIds).not.toContain('servisHz');
   });
 });

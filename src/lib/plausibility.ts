@@ -43,6 +43,11 @@ export interface HoursPlausibility {
  * Šteje se VNESENA vrednost, ne razrešena: polja contextOnly ne vstopajo v
  * formulo, "Ne vem" pa ni ura. Enoti h/mesec in h/leto pokrivata vsa urna polja
  * registra (glej test, ki to preverja).
+ *
+ * Strojne ure predelave plastike (enota MACHINE_HOURS_UNIT v modules/plastika.ts)
+ * so izvzete NAMENOMA: ovojnica je iz zaposlenih, stroj pa ni človek — 30 strojev
+ * v treh izmenah pošteno vnese več strojnih ur, kot jih ima cela ekipa. Izjemo
+ * varuje isti test, da ne ostane tiha.
  */
 export function assessHoursPlausibility(
   modules: ModuleDefinition[],

@@ -26,7 +26,7 @@ deploy ob potisku na `main`: napaka tipov se je pokazala šele ob objavi. Razli�
 
 | Spremenljivka | Kaj naredi, če manjka |
 |---|---|
-| `VITE_LEAD_WEBHOOK_URL` | prodajna priprava se ne sestavi in lead nima poti do Datalaba (glej **Kaj se zgodi ob oddaji**) |
+| `VITE_LEAD_WEBHOOK_URL` | lead nima poti do Datalaba, strankino poročilo ne gre po e-pošti (stranka ga prenese z gumbom) in prodajna priprava se ponudi stranki (glej **Kaj se zgodi ob oddaji**) |
 | `VITE_PUBLIC_URL` | `canonical`, `og:url` in `og:image` se ne izpišejo — napačen kanonični naslov je slabši od nobenega |
 
 Obe se v objavi bereta iz repozitorijskih spremenljivk (`vars`) v `.github/workflows/deploy.yml`.
@@ -45,8 +45,10 @@ tudi tistih v kodi ali v CSS `url()`.
 
 Segment ima **en sam vir: dejavnost, izbrano v prvem koraku.** Kampanjski `?s=` segmenta ne določi
 mimo vprašalnika, ampak v Koraku 1 **prednastavi ustrezno dejavnost** — obiskovalec vidi, kaj je
-povezava predpostavila, in jo sme popraviti. Podprt je tudi `?utm_source=` — vir se zapiše v izvozni
-zapis.
+povezava predpostavila, in jo sme popraviti. Povezava s **potjo** (`<objava>/proizvodnja/`) gre korak
+dlje: dejavnost izbere in uvodni zaslon **preskoči** — obiskovalec pristane na koraku z zaposlenimi
+("Korak 1 od N"), uvodni zaslon pa ostane dosegljiv z "Nazaj", če je povezava predpostavila napačno.
+Podprt je tudi `?utm_source=` — vir se zapiše v izvozni zapis.
 
 Prej je obstajal še ročni override (zaslon "Izberite profil izračuna" in `?s=`), ki se ni počistil
 nikoli: od prve nastavitve naprej je bil spustni seznam v Koraku 1 okrasen — obiskovalec je zamenjal
@@ -56,15 +58,29 @@ koraku z vnosi ("spremeni dejavnost") vrne na Korak 1.
 Ob spremembi dejavnosti se odgovori zavržejo samo, kadar se spremeni tudi **segment** — `trgovina` in
 `drugo_blago` vodita v isti vprašalnik, zato bi brisanje pomenilo izgubo dela brez razloga.
 
-| URL | Segment | Koraki |
-|---|---|---|
-| `?s=proizvodnja` | Proizvodnja | 8 |
-| `?s=logistika` | Logistika in transport | 8 |
-| `?s=trgovina` | Veleprodaja in distribucija | 8 |
-| `?s=maloprodaja` | Maloprodaja | 8 |
-| `?s=storitve` | Storitve in projekti | 8 |
-| `?s=racunovodstvo` | Računovodski servis | 8 |
-| `?s=splosno` | Direktor / CFO | 8 |
+| Prednastavi (`?s=`) | Preskoči uvodni zaslon (pot) | Segment | Koraki |
+|---|---|---|---|
+| `?s=proizvodnja` | `/proizvodnja/` | Proizvodnja | 8 |
+| `?s=zivilstvo` | `/zivilstvo/` | Živilstvo | 8 |
+| `?s=kovinarstvo` | `/kovinarstvo/` | Kovinarstvo | 8 |
+| `?s=plastika` | `/plastika/` | Predelava plastike | 8 |
+| `?s=logistika` | `/logistika/` | Logistika in transport | 8 |
+| `?s=trgovina` | `/trgovina/` | Veleprodaja in distribucija | 8 |
+| `?s=maloprodaja` | `/maloprodaja/` | Maloprodaja | 8 |
+| `?s=storitve` | `/storitve/` | Storitve in projekti | 8 |
+| `?s=inzeniring` | `/inzeniring/` | Inženiring | 8 |
+| `?s=gradbenistvo` | `/gradbenistvo/` | Gradbeništvo | 8 |
+| `?s=racunovodstvo` | `/racunovodstvo/` | Računovodski servis | 8 |
+| `?s=splosno` | — | Direktor / CFO | 8 |
+
+Poti so id-ji glavnih dejavnosti brez "Drugo" (`INDUSTRY_PATHS` v `src/config/industries.ts`): "Drugo"
+ni popoln odgovor, pod-dejavnosti pa nosijo oznako "Drugo — …", ki o obiskovalcu s povezave ne velja.
+Pot stoji ZA potjo objave in PRED `?`: `<objava>/storitve/?utm_source=linkedin`. Ob gradnji za vsako pot
+nastane `dist/<pot>/index.html` (vtičnik `industryEntryPages` v `vite.config.ts`), zato naslov postreže
+GitHub Pages in vsak statični strežnik brez pravila za SPA — z odgovorom 200, ne prek `404.html`, ki bi
+ga oglaševalske platforme ob preverjanju cilja povezave zavrnile. Obisk prek poti se lijaku sporoči z
+`lm10_industry_selected` (`source: link`) pred prvim prikazom koraka; sprejemnik ga po tem šteje kot nov
+obisk in ne kot nadaljevanje (glej **Merjenje lijaka**).
 
 Imena so čista imena panog. Velikostni razred (`1–9` / `10–49` / `50–249` / `250+`) se oznaki pripne
 ob izrisu iz vnesenega števila zaposlenih — `segmentLabelWithSize` v `config/copy/index.ts` nad
@@ -78,7 +94,7 @@ dejavnost → zaposleni → [kontekst] → [triaža] → [stroškovni predpostav
 
 ```mermaid
 flowchart TD
-    A["Dejavnost in velikost<br/>sedem panog ali drugo"] --> B["Segment<br/>eden od sedmih"]
+    A["Dejavnost in velikost<br/>devet panog ali drugo"] --> B["Segment<br/>eden od devetih"]
     B --> N
 
     subgraph N["Nabor področij"]
@@ -159,6 +175,126 @@ veljajo prva področja po `moduleIds`.
 Področje, ki ga obiskovalec izbere in pusti prazno, prispeva 0 EUR, zato ne šteje ne v oceno
 zanesljivosti ne med izmerjena — pokaže se po imenu v razdelku "Česa nismo izmerili". Brez tega bi
 ista številka dobila slabšo oznako samo zato, ker je obiskovalec obkljukal več področij.
+
+### Živilstvo — pet izključujočih se stroškovnih področij
+
+Prva **panožna** dejavnost pod splošno proizvodnjo (`src/config/modules/zivilstvo.ts`), zgrajena po raziskavi
+panoge (`Datalab_raziskava_ZIVILSKA_INDUSTRIJA_model.xlsx`, SKD C10 in C11; izpeljava v
+[`navodila/zivilstvo/`](navodila/zivilstvo/vprasalnik-zivilstvo-izpeljava-iz-raziskave.md)). Mesar, mlekar in
+pek so proizvajalci, a njihova bolečina ni izmet in delovni nalog, ampak donos šarže, rok uporabnosti in
+sledljivost ob odpoklicu — trije pojmi, ki jih splošni proizvodni vprašalnik ne vpraša. Nabor sledi katalogu
+25 bolečin iz raziskave: prvih pet po prednosti so odstopanje donosa, odpisi zaradi roka, sledljivost ob
+odpoklicu, HACCP na papirju in naročila trgovcev.
+
+| Modul | Meri |
+|---|---|
+| `donos_zivilstvo` | Donos, kalo in recepture (odstopanje od recepture, beleženje šarž, ponovna predelava) |
+| `roki_zivilstvo` | Roki uporabnosti, zaloge in odpisi (potekli roki, inventurne razlike, vezan kapital) |
+| `sledljivost_zivilstvo` | Sledljivost šarž, reklamacije in odpoklic (sestavljanje sledljivosti, dobropisi, odpoklici) |
+| `kakovost_zivilstvo` | HACCP evidence, deklaracije in presoje (ročne evidence, priprava na presoje, napačne etikete) |
+| `narocila_zivilstvo` | Naročila kupcev, planiranje in nujne dobave (vnos naročil, planiranje, ekspresne nabave, penali trgovcev) |
+| `diagnostika_zivilstvo` | Štiri vprašanja o podatkih in odpornosti procesa — brez evrov, vedno vidna |
+| `E` | Kot pri proizvodnji — samo obstoječim uporabnikom PANTHEON |
+
+Meje med področji so v besedilih `help`: kalo **med** proizvodnjo je `donos_zivilstvo`, potekel rok
+`roki_zivilstvo`; reklamacija zaradi **kakovosti** je `sledljivost_zivilstvo`, odbitek zaradi **nedobave**
+`narocila_zivilstvo`; HACCP zapis je `kakovost_zivilstvo`, zapis porabe šarže `donos_zivilstvo`.
+
+Tri postavke imajo **mejo naslovljivosti** (`addressableCap`), ker imajo dno, ki ga podatki ne premaknejo: kalo je
+biološko (surovina niha po sezoni; raziskava računa z realizacijo 40–80 % izboljšave, meja 0,6), odpoklic
+sledljivost **omeji** na eno šaržo, ne prepreči (raziskava: znižanje tveganja 10–45 %, meja 0,5), HACCP zapis pa
+ostane obvezen tudi elektronsko — odpade prepis, iskanje in arhiviranje (meja 0,5). Elektronske HACCP evidence in
+temperaturni zapisi so praviloma **zunanji sistem**, zato jih alineje „PANTHEON naslavlja" in prodajna priprava
+(`content/sales/licences.ts`) ne obljubljajo.
+
+Kontekst vpraša po **skupini izdelkov** (meso, mleko, pekarstvo, pijače, predelava) in ne po načinu proizvodnje
+ter ponudi vlogo *vodja kakovosti ali tehnolog* — raziskava domneva, da je boljši prvi stik kot direktor. Marže ta
+dejavnost ne vpraša: noben njen modul je ne uporablja, izguba se meri kot delež porabljenih surovin, ne prometa.
+
+### Kovinarstvo — šest izključujočih se stroškovnih področij
+
+Druga **panožna** dejavnost pod splošno proizvodnjo (`src/config/modules/kovinarstvo.ts`), zgrajena po raziskavi
+panoge (`Datalab_raziskava_KOVINSKA_INDUSTRIJA_model.xlsx`, SKD C25 in C28; izpeljava v
+[`navodila/kovinarstvo/`](navodila/kovinarstvo/vprasalnik-kovinarstvo-izpeljava-iz-raziskave.md)). Kovinar je
+podizvajalec izvozne verige brez cenovne moči — če cene ne more dvigniti, mu ostane samo notranja učinkovitost, zato
+je prodajni argument **dejanski strošek delovnega naloga**, ne prihranek administracije. Splošni proizvodni vprašalnik
+ne vpraša po odstopanju porabe od normativa, kooperaciji, certifikatih 3.1, šaržah in nalogih, prodanih pod lastno
+ceno. Nabor sledi katalogu 25 bolečin iz raziskave: prvih šest po prednosti so strošek naloga, odstopanje
+normativ–poraba, zaloga v sistemu ni dejanska, ročna sledljivost šarže, material v kooperaciji in planiranje v Excelu.
+
+| Modul | Meri |
+|---|---|
+| `nalog_kovinarstvo` | Delovni nalog in dejanski strošek (ročno evidentiranje proizvodnje, prodaja pod lastno ceno, nastavitveni časi) |
+| `material_kovinarstvo` | Poraba materiala, izmet in ponovna izdelava (odstopanje od normativa, ponovna izdelava in sortiranje, ostružki) |
+| `zaloge_kovinarstvo` | Zaloge materiala in zastoji (inventurne razlike, zastoji zaradi materiala, nujne nabave, vezan kapital) |
+| `sledljivost_kovinarstvo` | Sledljivost šarž, certifikati in reklamacije (certifikati 3.1, obravnava reklamacij, čas do šarže) |
+| `kooperacija_kovinarstvo` | Kooperacija in zunanje operacije (administracija oddaj, čakanje na vračilo, izgube pri kooperantih) |
+| `plan_kovinarstvo` | Plan, kapacitete in roki (čakanje na plan ali risbo, nadure, penali zaradi zamud) |
+| `diagnostika_kovinarstvo` | Štiri vprašanja o podatkih in odpornosti procesa — brez evrov, vedno vidna |
+| `E` | Kot pri proizvodnji — samo obstoječim uporabnikom PANTHEON |
+
+Šest področij in ne pet: kooperacija in sledljivost sta v tej panogi ločeni bolečini z ločenimi urami in evri,
+ki ju ni mogoče stisniti v zaloge ali kakovost, ne da bi se ista postavka štela dvakrat. Meje so v besedilih
+`help`: presežna poraba **na nalogu** je `material_kovinarstvo`, manko **ob inventuri** `zaloge_kovinarstvo`,
+razlika **ob vračilu iz kooperacije** `kooperacija_kovinarstvo`; sortiranje in ponovna izdelava sta
+`material_kovinarstvo`, iskanje šarže in 8D `sledljivost_kovinarstvo`; čakanje na material je `zaloge_kovinarstvo`,
+na kooperanta `kooperacija_kovinarstvo`, na plan ali risbo `plan_kovinarstvo`.
+
+Dve posebnosti: **prodaja pod lastno ceno** gre v koš `lostMargin` (prodaja po napačni ceni stoji na predpostavki,
+da bi kupec pravo ceno plačal — ni odtekel denar, ki bi ga bilo mogoče pokazati na kontu), **presežna poraba
+materiala** pa ima mejo naslovljivosti 0,5 (raziskava računa z znižanjem odstopanja 0,5–3 % vrednosti materiala ob
+realizaciji 40–80 %; izplen razreza ostane, prihodek od ostružkov ni odštet). Kontekst marže ne vpraša — noben modul
+je ne uporablja — in vloga »Tehnolog ali vodja tehnologije« je lastna vloga (persona raziskave). `servisHz` je
+izpuščen, ker reklamacije kupcev meri panožni modul; garancijski servis po predaji v strojegradnji ostane neizmerjen.
+
+### Predelava plastike — pet izključujočih se stroškovnih področij
+
+Druga **panožna** dejavnost pod splošno proizvodnjo (`src/config/modules/plastika.ts`), zgrajena po raziskavi
+panoge (`Datalab_raziskava_PLASTIKA_model.xlsx`, SKD C22.2; izpeljava v
+[`navodila/plastika/`](navodila/plastika/vprasalnik-plastika-izpeljava-iz-raziskave.md)). Predelovalec plastike
+je proizvajalec, a njegova enota ni delovni nalog, ampak **serija na stroju**: tišči ga izkoriščenost strojev,
+menjava orodja, poraba granulata proti normi in od 12. 8. 2026 uredba PPWR o sestavi embalaže — štirje pojmi,
+ki jih splošni proizvodni vprašalnik ne vpraša. Osrednja teza raziskave: odgovor »izkoriščenosti ne merimo« je
+sam po sebi prodajni argument.
+
+| Modul | Meri |
+|---|---|
+| `stroji_plastika` | Izkoriščenost strojev, menjave orodij in javljanje (menjave kot strojne ure, ročno javljanje kosov in izmeta) |
+| `granulat_plastika` | Poraba granulata, izmet in reklamacije (izmet in odpadna plastika, reklamacije zaradi kakovosti) |
+| `planiranje_plastika` | Planiranje strojev in odpoklici kupcev (ure planiranja, prepis odpoklicov, ekspresni prevozi in penali) |
+| `orodja_plastika` | Orodja, vzdrževanje in zastoji strojev (nenačrtovani zastoji kot strojne ure, nenačrtovana popravila) |
+| `zaloge_plastika` | Zaloga granulata in gotovih izdelkov (odpisi, čakanje strojev na material, vezan kapital) |
+| `diagnostika_plastika` | Šest vprašanj v treh parih (podatki, sledljivost in sestava po PPWR, odpornost) in kljukica o trgu EU — brez evrov, vedno vidna |
+| `E` | Kot pri proizvodnji — samo obstoječim uporabnikom PANTHEON |
+
+**Strojna ura.** Operativna ura je v tem segmentu **polni strošek strojne ure z operaterjem** (stroj, operater,
+energija, amortizacija; `contexts/plastika.ts`), ker so menjave, zastoji in čakanje na material čas, ko stroj ne
+izdeluje — ura operaterja sama bi ta strošek podcenila za polovico. Človek-ure (ročno javljanje, planiranje,
+odpoklici) gredo po administrativni uri. Polja s strojnimi urami nosijo enoto `strojnih h/mesec`, ki jo
+`src/lib/plausibility.ts` **namenoma ne sešteva** proti kapaciteti zaposlenih (30 strojev v treh izmenah pošteno
+vnese več ur, kot jih ima ekipa); izjema je izrecna v `plausibility.test.ts`. Ker motor strojne in delovne ure
+sešteje v eno vsoto kapacitete, nosijo strojne postavke enoto v oznaki (»Menjave orodij (strojne ure)«), opomba
+kartice kapacitete pa pove, da so to strojne in delovne ure skupaj.
+
+Meje med področji so v besedilih `help`: načrtovana menjava je `stroji_plastika`, okvara sredi serije
+`orodja_plastika`, čakanje na granulat `zaloge_plastika`; izmet iz proizvodnje je `granulat_plastika`, odpis
+zaloge `zaloge_plastika`; reklamacija zaradi **kakovosti** je `granulat_plastika`, doplačilo zaradi **roka**
+`planiranje_plastika`; prepis proizvodnih podatkov je `stroji_plastika`, prepis odpoklicev `planiranje_plastika`,
+evidenca za plačo pa `kadriHz`.
+
+Tri postavke imajo **mejo naslovljivosti** (`addressableCap`): menjava orodja ima fizično dno — sistem naslovi
+*število* menjav prek zaporedja nalogov in pripravo nanje, krajšanje same menjave je SMED (meja 0,3, oznaka
+KALIBRACIJA — raziskava čas menjave šele meri, vrzel G11); izmet ima tehnološko dno (zagon serije, dolivki,
+vzorčenje; raziskava računa z realizacijo 40–80 %, meja 0,5); nenačrtovani zastoji in popravila ostanejo tudi ob
+načrtovanem vzdrževanju (CMMS −10…−20 %, `docs/naslovljivost-raziskava-2026-08.md`, meja 0,2). Zajem ciklov
+neposredno s krmilnikov strojev in energija po stroju **nista del standardne licence**, zato energija ostane
+kontekstno vprašanje brez zneska, alineje »PANTHEON naslavlja« in prodajna priprava (`content/sales/licences.ts`)
+pa govorijo o terminalih MT in podatkih okoli stroja.
+
+Kontekst vpraša po **vrsti izdelkov** (tehnični deli, embalaža za trg EU, lastni izdelki, orodjarna s predelavo)
+in ne po načinu proizvodnje ter ponudi vlogi *tehnolog ali vodja vzdrževanja* in *vodja kakovosti ali skladnosti*
+(lastnika podatkov o ciklih, porabi in sledljivosti). Marže ta dejavnost ne vpraša: noben njen modul je ne
+uporablja, izguba se meri kot delež porabljenega granulata in kot strojne ure, ne kot delež prometa.
 
 ### Logistika in transport — šest izključujočih se stroškovnih področij
 
@@ -266,6 +402,84 @@ Nikoli oboje. Pravilo je zapisano v besedilih `help`, varuje pa ga test v
 celotni dejavnosti. Zato tudi nezaračunane ure namenoma nimajo `hoursPerMonth` — koš `directLoss` meri
 denar, ne sproščene kapacitete.
 
+### Inženiring — pet izključujočih se stroškovnih področij
+
+Prva **panožna** dejavnost pod storitvami (`src/config/modules/inzeniring.ts`), zgrajena po raziskavi panoge
+(`Datalab_raziskava_INZENIRING_model.xlsx`, inženiring in izvedba na ključ; izpeljava v
+[`navodila/inzeniring/`](navodila/inzeniring/vprasalnik-inzeniring-izpeljava-iz-raziskave.md)). Izvajalec na
+ključ je projektno podjetje, a njegova bolečina ni nezaračunana ura: skozi knjige prevalja opremo in
+podizvajalce (279.000 EUR prihodkov na zaposlenega), zato ga tišči marža projekta, faza brez računa in oprema,
+ki ni vezana na projekt — trije pojmi, ki jih storitveni vprašalnik ne vpraša. Nabor sledi katalogu 25 bolečin
+iz raziskave: prvih pet po prednosti so ure brez projekta, aneksi pred izvedbo, oprema med projekti, faza brez
+računa in dobavni roki opreme.
+
+| Modul | Meri |
+|---|---|
+| `marza_inzeniring` | Marža projekta in evidenca ur (razporejanje ur na projekte, delo nad lastno kalkulacijo, sestavljanje stanja marže) |
+| `aneksi_inzeniring` | Spremembe obsega in aneksi (nezaračunana dodatna dela, dokazovanje sprememb, iskanje kalkulacij in cen opreme) |
+| `oprema_inzeniring` | Oprema, nabava in podizvajalci (oprema brez projekta, ekspresne dobave in kazni, čakanje na terenu, usklajevanje podizvajalcev) |
+| `obracun_inzeniring` | Obračun po fazah, zadržki in vzdrževalne pogodbe (denar v fazah brez računa, zapadli zadržki, neobračunan servis, ročne situacije) |
+| `dokumentacija_inzeniring` | Projektna dokumentacija, razpisi in prevzem (iskanje dokumentov, reference, dokazila ob predaji, teren brez podatkov) |
+| `diagnostika_inzeniring` | Štiri vprašanja o podatkih in odpornosti procesa — brez evrov, vedno vidna |
+| `E` | Kot pri proizvodnji — samo obstoječim uporabnikom PANTHEON |
+
+Edina projektna dejavnost **brez zaračunane urne postavke**. Raziskava je izrecna: sporočilo ne sme govoriti o
+urah projektantov, ampak o marži projekta, fazah in opremi. Nezaračunano delo se zato vpraša v evrih — dodatna
+dela brez aneksa in neobračunani servisni posegi gredo v koš `directLoss` po ponudbeni vrednosti — vse interne
+ure pa v koš `capacity` po strošku inženirske (inženir, tehnik, monter) ali administrativne ure (vodja projekta
+pri obračunu, nabava). Test v `src/config/modules/inzeniring.test.ts` drži, da sprememba zaračunane postavke ne
+premakne nobenega izida.
+
+Meje med področji so v besedilih `help`: preseganje **lastne** kalkulacije je `marza_inzeniring` (ure), dodatno
+delo **naročnika** je `aneksi_inzeniring` (evri); čakanje na **opremo** je `oprema_inzeniring`, čakanje na
+**podatke** `dokumentacija_inzeniring`; servis, ki bi ga smeli zaračunati, je `obracun_inzeniring`, garancijski
+servis na lasten strošek pa horizontala `servisHz`.
+
+Denar, vezan v zaključenih fazah brez računa, se izpelje iz **letne vrednosti projektov** po istem vzorcu kot
+prepozno izdani računi v logistiki (`prihodek / 365 × dni × strošek financiranja`), ne iz vprašanega stanja
+nedokončanega dela: osnova je celotna vrednost projektov, ker podjetje do situacije predfinancira tudi opremo in
+podizvajalce. Zato kontekst vpraša letno vrednost projektov in strošek financiranja, ne pa marže — noben modul je
+ne bere. Zapadli zadržki in oprema brez projekta sta enkraten kapital in se z letnimi zneski ne seštevata.
+
+### Gradbeništvo — pet izključujočih se stroškovnih področij
+
+Prva **panožna** dejavnost pod projektnimi podjetji (`src/config/modules/gradbenistvo.ts`), zgrajena po
+raziskavi panoge (`Datalab_raziskava_GRADBENISTVO_model.xlsx`, SKD F41–F43). Osrednja teza raziskave:
+odločilno vprašanje direktorja ni, koliko ur prihranimo, ampak **kdaj izve, da projekt izgublja maržo** —
+zato je prvo področje marža projekta in ne nezaračunano delo, s katerim bi gradbinca nagovoril storitveni
+vprašalnik. Sedem vprašanj z lista `Kalkulator` raziskave je razporejenih po področjih in po skupni
+finančni osnovi (npr. »kdaj po koncu meseca veste, koliko je zaslužil posamezen projekt« je prvo vprašanje
+področja Marža, »kje vodite pogodbe, situacije in ure« je vprašanje o sedanjem sistemu).
+
+| Modul | Meri |
+|---|---|
+| `marza_gradbenistvo` | Marža projekta in kontrola stroškov (ročna primerjava plana in realizacije, marža, izgubljena zaradi prepozne informacije) |
+| `situacije_gradbenistvo` | Situacije, obračun in dodatna dela (priprava in popravki situacij, neobračunana dodatna dela) |
+| `gradbisce_gradbenistvo` | Ure, material in mehanizacija na gradbišču (čakanje ekipe, pripis ur projektu, material brez vgradnje in vračila, podatki s terena) |
+| `podizvajalci_gradbenistvo` | Podizvajalci, pogodbe in zadržki (preverjanje situacij, preplačila) |
+| `placila_gradbenistvo` | Plačila, zadržana sredstva in terjatve (prekoračitev roka, odpisi, opominjanje, sprostljivi zadržki) |
+| `diagnostika_gradbenistvo` | Štiri vprašanja o podatkih in odpornosti procesa — brez evrov, vedno vidna |
+| `E` | Kot pri proizvodnji — samo obstoječim uporabnikom PANTHEON |
+
+Troje je vredno vedeti pred urejanjem:
+
+- **Edini koš `lostMargin` v segmentu je marža, izgubljena zaradi prepozne informacije** — in izrecno
+  izključuje evre, ki jih vpišejo Situacije (neobračunana dodatna dela), Gradbišče (izginuli material) in
+  Podizvajalci (preplačila). Vsi trije so isti odstop od kalkulacije, gledan z druge strani; brez meje v
+  besedilu `help` bi bil štet dvakrat. Test tega ne more ujeti — meja živi v besedilu.
+- **Kar PANTHEON ne skrajša, ne vstopa v evre.** Dnevi do potrditve situacije pri nadzoru (`approvalDays`)
+  in penali zaradi zamud podizvajalcev (`subcontractorPenaltyEUR`) sta `contextOnly` — vprašana za prodajno
+  pripravo, brez obljube prihranka (isti vzorec kot stojnine v logistiki). V evre gre samo prekoračitev
+  plačilnega roka **nad** dogovorjenim, po vzorcu `terjatve_trgovina`.
+- **Delavčeva ura vstopa v natanko eno postavko** — čakanje ekipe na gradbišču. Vse ročno delo s podatki
+  (situacije, pripis ur, preverjanje podizvajalcev, opominjanje) opravljajo vodje gradbišč in pisarna, zato
+  gre po administrativni uri; test v `src/config/modules/gradbenistvo.test.ts` drži, da dvig delavčeve
+  postavke premakne samo čakanje. Skupna finančna osnova ima štiri številke: uro delavca, uro vodje
+  gradbišča oziroma pisarne, letno vrednost izvedenih del in strošek financiranja — brez zaračunane
+  postavke (gradbinec ne prodaja ur) in brez marže (ne bere je noben modul). Vseh pet horizontal je
+  vključenih; meje z `kadriHz` (evidenca za plačo proti pripisu ur projektu) in `dokumentiHz` (računi za
+  material proti situacijam podizvajalcev) so v besedilih `help` panožnih modulov.
+
 ### Računovodski servis — pet izključujočih se stroškovnih področij
 
 Edina dejavnost, ki **nima koša `oneTimeCapital`**: servis ne drži zaloge in si zato ne more sprostiti
@@ -347,9 +561,14 @@ akcijskega načrta.
 | Segment | `analitikaHz` | `financeHz` | `kadriHz` | `dokumentiHz` | `servisHz` | Triažnih vprašanj |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
 | Proizvodnja | ✓ | ✓ | ✓ | ✓ | ✓ | 10 |
+| Živilstvo | ✓ | ✓ | ✓ | ✓ | — | 9 |
+| Kovinarstvo | ✓ | ✓ | ✓ | ✓ | — | 10 |
+| Predelava plastike | ✓ | ✓ | ✓ | ✓ | — | 9 |
 | Veleprodaja in distribucija | ✓ | ✓ | ✓ | ✓ | ✓ | 10 |
 | Maloprodaja | ✓ | ✓ | ✓ | ✓ | ✓ | 10 |
 | Storitve in projekti | ✓ | ✓ | ✓ | ✓ | ✓ | 10 |
+| Inženiring | ✓ | ✓ | ✓ | — | ✓ | 9 |
+| Gradbeništvo | ✓ | ✓ | ✓ | ✓ | ✓ | 10 |
 | Logistika in transport | ✓ | ✓ | — | — | — | 8 |
 | Računovodski servis | ✓ | — | ✓ | — | — | 7 |
 | Splošno | — | ✓ | ✓ | ✓ | — | 8 |
@@ -358,16 +577,18 @@ Izključitve niso okus, ampak **zaščita pred dvojnim štetjem ur**: računovod
 `financeHz`, ker so knjiženje in obračuni njegov produkt (merijo jih `zajemRs`, `obracuniRs`,
 `popravkiRs`), in nima `dokumentiHz`, ker zajem listin meri `zajemRs`; logistika nima `dokumentiHz`,
 ker isto merijo prevozne listine v `dokumentacija`, in nima `kadriHz`, ker potne naloge — pri prevozniku
-največji del kadrovske administracije — meri panožni modul `vozniki`; splošni segment nima `analitikaHz`, ker ure
+največji del kadrovske administracije — meri panožni modul `vozniki`; inženiring nima `dokumentiHz`, ker projektne načrte, meritve in dobavnice meri `dokumentacija_inzeniring`; splošni segment nima `analitikaHz`, ker ure
 poročanja že šteje `podatkiSp`. Kjer se področji le dotikata, razmejitev opravi napotek pod
 vprašanjem („Ure, ki ste jih že vpisali v drugem področju, tu ne ponavljajte.").
 
 `servisHz` je poseben primer iste logike. Stroške reklamacij v evrih (dobropisi, vračila, poškodovano
-blago) in ure njihovega reševanja **že merijo panožni moduli v šestih od sedmih segmentov**, zato
+blago) in ure njihovega reševanja **že merijo panožni moduli v sedmih od desetih segmentov**, zato
 modul meri izrecno le tisto, česar ne meri nihče: servis in garancije **po predaji**, vodenje
 reklamacijskega postopka ter nadomestne dele in zunanji servis. Zato ga ni v logistiki (`napake` že
 meri reklamacijske ure in stroške napačnih dostav), v računovodskem servisu (lastne napake meri
-`popravkiRs`) niti v splošnem segmentu (`napakeSp` že meri ponovno delo in reklamacije). Je tudi
+`popravkiRs`) v splošnem segmentu (`napakeSp` že meri ponovno delo in reklamacije) niti v živilstvu
+(`sledljivost_zivilstvo` meri reklamacije, dobropise in odpoklic; živilo garancijskega servisa nima) niti v predelavi
+plastike (`granulat_plastika` meri reklamacije kupcev; predelovalec servisa po predaji nima). Je tudi
 edina horizontala z **dvema urnima postavkama**: servisni poseg opravi izvajalec, zato gre po
 neposredni uri, vodenje postopka pa je pisarniško delo po administrativni.
 
@@ -383,7 +604,7 @@ bolečino. Umestitev varuje test v `src/config/modules/horizontal.test.ts`.
 ### Kategorija „drugo"
 
 „Drugo" v spustnem seznamu ni odgovor, ampak vrata do podvprašanja o **poslovnem modelu**
-(`DRUGO_SUB_INDUSTRIES` v `src/config/industries.ts`). Razlog: gradbinec in agencija sta storitveno-
+(`DRUGO_SUB_INDUSTRIES` v `src/config/industries.ts`). Razlog: agencija in IT-hiša sta storitveno-
 projektni podjetji, a v seznamu ne najdeta svoje *panoge* in zato izbereta „Drugo" — s tem pa izgubita
 panožno prilagojen vprašalnik, ki bi jima ustrezal. Seznama panog ni mogoče dopolniti do popolnosti,
 poslovnih modelov pa je malo. Štiri izbire preusmerijo v obstoječ segment, peta („nič od tega") pelje v
@@ -484,6 +705,29 @@ kontrolnikov, slovenska dvojina), je v `SHARED_COPY`; kar dejavnost lahko prepi�
 razreši proti `NEUTRAL_COPY`. `src/config/copy/copy.test.ts` med drugim pade, če je isto besedilo
 napisano sedemkrat — tak niz sodi med skupna in ne v sedem datotek.
 
+### Dodajanje nove dejavnosti
+
+Vzorec, po katerem sta bili dodani živilstvo in predelava plastike; naslednje niše (gradbeništvo, inženiring,
+kovinska industrija) sledijo istemu. Id brez šumnikov (`[a-z0-9_-]`), ker je hkrati pot v objavi.
+
+1. `src/config/segmentTypes.ts` — nov `SegmentId`.
+2. `src/config/modules/<id>.ts` — pet stroškovnih področij + lastna diagnostika (id-ji unikatni čez register,
+   `mainCauseField` zadnji, vsako polje s `help` ima `explainer`, `EUR/leto` polja `allowUnknown`, `percent`
+   privzetek 0, `contextOnly` izbire s privzetkom `UNANSWERED_CHOICE`); uvoz v `modules/index.ts`.
+3. `src/config/segments.ts` — vnos v `SEGMENTS` (panožni moduli → horizontale → diagnostika → `E`, razlog za vsako
+   izpuščeno horizontalo v komentarju) in v `SEGMENT_ORDER`.
+4. `src/config/contexts/<id>.ts` + `contexts/index.ts` — tri kontekstna vprašanja (vloga z `freeText`), urni
+   postavki s pasovi (povprečje v natanko enem pasu), prihodek in marža samo, če ju kak modul uporablja.
+5. `src/config/copy/<id>.ts` + `copy/index.ts` — nagovor (omejitve dolžin v `copy.test.ts`; naslov obrazca
+   imenuje rezultat in poročilo).
+6. `src/config/pantheonLogos.ts` (oba zapisa), `content/sales/licences.ts`, `content/sales/pantheonFit.ts`
+   (ključ `<id>:<sistem>` za vsako možnost sedanjega sistema).
+7. `content/methodology.ts` in `content/actions/actions.ts` — vnos za vsak modul s triažo.
+8. `src/config/industries.ts` — vrstica v `INDUSTRIES` (pot `/<id>/` in `dist/<id>/index.html` nastaneta sama).
+9. Testi: `modules/<id>.test.ts` po vzorcu obstoječih; dopolnitev `industries.test.ts` in `horizontal.test.ts`.
+10. Ta README (tabela segmentov, razdelek o modulih, matrika horizontal) in `navodila/<id>/` z izpeljavo iz
+    raziskave.
+
 ## Zaupanjska zasnova
 
 Ves izračun teče v brskalniku. Nič poslovnih podatkov ne zapusti naprave, dokler uporabnik sam ne odda
@@ -519,6 +763,8 @@ Aplikacija ne naloži nobene zunanje skripte in ne postavi nobenega piškotka. *
 pomnilniku strani** — ne v piškotku in ne v `sessionStorage`, ker bi identifikator za merjenje v brskalniku
 po ZEKom-2 terjal privolitev. Cena: osvežitev sredi vprašalnika je videti kot dva obiska. Sprejemnik drugega
 prepozna po tem, da se ne začne na uvodnem koraku, in ga šteje posebej kot „nadaljevanje", ne kot nov obisk.
+Izjema je obisk prek poti `/dejavnost/`, ki uvodni zaslon preskoči: aplikacija pred prvim prikazom koraka
+pošlje `lm10_industry_selected` s `source: link` in sprejemnik ga šteje kot nov obisk.
 
 Pošiljanje je „izstreli in pozabi": `navigator.sendBeacon` s telesom kot nizom (tip `text/plain`, brez
 predhodne zahteve CORS — glej `submitLead.ts`; zahteva preživi zaprtje zavihka, prav tam, kjer se odpadanje
@@ -527,14 +773,17 @@ Odgovora aplikacija ne bere: merjenje sme izgubiti dogodek, vprašalnik ne sme i
 
 Dogodki: `lm10_step_view`, `lm10_industry_selected`, `lm10_triage_done`, `lm10_cost_basis_done`,
 `lm10_email_gate_view`, `lm10_form_blocked`, `lm10_lead_submitted`, `lm10_delivery_ok`,
-`lm10_delivery_failed`, `lm10_results_view`, `lm10_report_download`.
+`lm10_delivery_failed`, `lm10_report_emailed`, `lm10_report_email_failed`, `lm10_results_view`,
+`lm10_report_download`.
 
 `lm10_step_view` nosi `stepIndex` in `stepsTotal` (isto štetje kot „Korak N od M" na zaslonu) ter pri vnosih
 `moduleId` — sproži se za **vsako stran vnosov**, ker je korak z vnosi ena stran na področje in brez id-ja
 ni videti, katero področje ljudi ustavi. `lm10_email_gate_view` šteje samo prihod na obrazec naprej iz
-vnosov (imenovalec deleža oddaj); `lm10_results_view` se sproži po oddaji; `lm10_report_download` ob vsakem
-prenosu poročila, ker je vsak ročen. Dogodek se je prej imenoval `lm10_report_redownload` — sprožilce v GTM
-je treba preimenovati.
+vnosov (imenovalec deleža oddaj); `lm10_results_view` se sproži po oddaji. `lm10_report_emailed` pove, da je
+sprejemnik strankino poročilo poslal na e-naslov iz obrazca, `lm10_report_email_failed` (z `reason`), da ga
+ni; `lm10_report_download` se sproži ob vsakem prenosu poročila z rezultatov — gumb je rezerva, zato nosi
+`reason`, zakaj je bil sploh na voljo. Dogodek se je prej imenoval `lm10_report_redownload` — sprožilce v
+GTM je treba preimenovati.
 
 `lm10_lead_submitted` nosi tudi lastnost `consulting` (`da`/`ne`) — ali je obiskovalec obkljukal poziv
 za svetovanje na zadnjem koraku. Brez nje o učinku tega poziva ni znano nič.
@@ -547,7 +796,8 @@ Kar potrebuje prodaja, potuje po webhooku s privolitvijo; analitika meri lijak i
 ## Obrazec pred rezultati
 
 `src/components/Results/EmailGate.tsx` zbere kontakt in privolitve. Stoji **med vnosi in rezultati**
-kot oštevilčen korak: kontakt odklene izračun na zaslonu in PDF poročilo. Gumb »Pokaži rezultate«
+kot oštevilčen korak: kontakt odklene izračun na zaslonu, PDF poročilo pa gre na vpisani e-naslov
+(pod poljem to pove namig). Gumb »Pokaži rezultate«
 ničesar ne prenese — poročilo prenese gumb na rezultatih. Oddan obrazec se ne prikaže drugič: kdor se
 z rezultatov vrne v vnose in popravi številke, pride naravnost na rezultate. Obvezni so **ime,
 priimek, ime podjetja, e-naslov** in **prva privolitev**; telefon in davčna sta neobvezna in označena
@@ -585,10 +835,17 @@ teče na podpoti `/leadmagnetdl/`.
 
 ## Kaj se zgodi ob oddaji obrazca
 
-**Ob oddaji se ne prenese nič.** Obiskovalec številk še ni videl; po oddaji pristane na rezultatih,
-poročilo pa prenese s klikom na »Prenesi PDF poročilo« v pasu na dnu. PDF se zgradi ob kliku iz
-trenutnega stanja, zato ustreza zaslonu tudi po popravku vnosov. Vsak klik je sveža gesta, zato
-vprašanje, koliko prenosov brskalnik dovoli iz ene, odpade.
+**Ob oddaji se ne prenese nič.** Obiskovalec številk še ni videl; po oddaji pristane na rezultatih.
+**Strankino poročilo gre na e-naslov iz obrazca:** oba PDF-ja nastaneta ob oddaji v pomnilniku in
+odideta na webhook, sprejemnik (`tools/google-sheet/Koda.gs`, `posljiPorociloStranki`) pa strankin
+PDF pošlje na vpisani naslov — s samo to prilogo, s pošiljateljem »Datalab« in odgovorom na
+`prodaja@datalab.si`. V odgovoru pove, ali je poročilo odšlo (`customerReport`); rezultati tedaj v
+pasu na dnu namesto gumba pokažejo »Poročilo smo poslali na …«. Gumb »Prenesi PDF poročilo« je
+**rezerva**: pokaže se, kadar pošte ni bilo (brez webhooka, neuspela dostava, sprejemnik javi
+razlog ali odgovora o pošti sploh ne pozna) in v internem načinu. PDF se ob kliku zgradi iz
+trenutnega stanja, zato ustreza zaslonu tudi po popravku vnosov; poslani PDF je posnetek ob oddaji,
+enako kot vrstica v preglednici in obvestilo prodaji. Tabela s pravilom je v glavi
+`src/lib/deliverLead.ts`, varuje jo `src/lib/deliverLead.test.ts`.
 
 **Ob delujočem webhooku stranka prodajne priprave ne vidi.** Priprava je interni dokument — napisan
 je O stranki (ocena ustreznosti, priporočilo licenc, pričakovani ugovori z odgovori) in ne ZANJO —
@@ -602,39 +859,46 @@ Dostava je odvisna od build spremenljivke **`VITE_LEAD_WEBHOOK_URL`** (`.env`):
   vrstico za preglednico (`sheet`: ista glava in vrstica kot pri izvozu CSV — sprejemniku tako ni
   treba poznati nobenega polja izračuna) in **obema PDF-jema kot base64 prilogama** (`attachments`:
   poročilo za stranko in priprava na pogovor, zgrajena v brskalniku tik pred oddajo —
-  `buildAttachments` v `src/lib/deliverLead.ts`). Sprejemnik ju pripne k e-obvestilu prodaji. Če
+  `buildAttachments` v `src/lib/deliverLead.ts`; vsaka nosi oznako `audience`). Sprejemnik ju pripne
+  k e-obvestilu prodaji, strankino pa pošlje še stranki in v odgovoru `{ ok: true, customerReport }`
+  pove, ali je odšlo — aplikacija telo odgovora bere (`src/lib/submitLead.ts`; Googlova stran z
+  napako s statusom 200 šteje kot neuspela dostava). Če
   PDF ne nastane ali se kos jsPDF ne naloži, gre oddaja naprej brez priloge — lead je vreden več.
   Isto velja za prodajno pripravo samo: če njena sestava vrže izjemo, odideta zapis in strankin
   PDF brez nje (`salesReportHtml` je tedaj prazen niz, sprejemnik ga preskoči, stolpec s pripravo
   ostane prazen). Dostava ni pogojena s pripravo — dokler je bila, je napaka v prodajnem delu
   lead tiho pokopala.
   S tem se prvič lahko zaprejo kalibracijske zanke ("preveriti po ~50 vnosih"). Rok zahteve raste
-  s telesom (`requestTimeoutMs`: osem sekund osnove plus čas prenosa po počasni mobilni povezavi —
-  samo HTML ≈ 8 s, s prilogama ≈ 12 s): viseč strežnik ne sme zadrževati rezultatov v nedogled,
-  prekoračitev pa šteje kot neuspela dostava in pripravo pošlje stranki, zato je lažen padec dražji
-  od daljšega čakanja. Rezultati se pokažejo, ko je POST končan — šele takrat je znano, ali stranka
-  gumb za pripravo potrebuje. Tip vsebine je `text/plain` in ne `application/json`: slednji sproži
+  s telesom (`requestTimeoutMs`: deset sekund osnove plus čas prenosa po počasni mobilni povezavi —
+  samo HTML ≈ 10 s, s prilogama ≈ 13,5 s; sprejemnik pred odgovorom pošlje dve sporočili): viseč
+  strežnik ne sme zadrževati rezultatov v nedogled, prekoračitev pa šteje kot neuspela dostava,
+  pripravo pošlje stranki in ji ponudi prenos poročila, ki je po e-pošti morda že na poti, zato je
+  lažen padec dražji od daljšega čakanja. Rezultati se pokažejo, ko je POST končan — šele takrat je
+  znano, ali stranka gumb za pripravo potrebuje in ali je poročilo odšlo po e-pošti. Tip vsebine je
+  `text/plain` in ne `application/json`: slednji sproži
   predhodno zahtevo CORS (`OPTIONS`), na katero Apps Script ne odgovori. `keepalive` (zahteva
   preživi zaprt zavihek) velja le do 60 KB telesa — brskalnik večjega ne skrajša, ampak celo
   zahtevo zavrne — zato s prilogama vedno odpade; sprejeto, ker obiskovalec med oddajo čaka na
   rezultate ob zasedenem gumbu.
-- **Webhook ni nastavljen (privzeto) ali dostava ne uspe:** rezultati ponudijo gumb »Priprava v
+- **Webhook ni nastavljen (privzeto) ali dostava ne uspe:** strankino poročilo ne gre po e-pošti in
+  rezultati ponudijo gumb »Prenesi PDF poročilo«; zraven ponudijo še gumb »Priprava v
   PDF«, besedilo nad njim pa stranko prosi, naj pripravo posreduje pred sestankom. To je **začasno
   stanje**: dokler naslova ni, je posredovanje po stranki edina pot, po kateri svetovalec pripravo
   sploh dobi. Cena je, da ima stranka na disku dokument, napisan o njej. Ko naslov nastavite, gumb
   ugasne sam — preklop je uspeh dostave in ne dodatna zastavica.
-- **Interni način `?debug=1`:** gumb se ponudi tudi ob delujočem webhooku. Namenjen razvoju in
-  pregledu vsebine; besedilo nad njim je označeno z „[interno]".
+- **Interni način `?debug=1`:** gumb za pripravo se ponudi tudi ob delujočem webhooku, gumb za
+  prenos poročila pa ostane tudi ob poslani pošti. Namenjen razvoju in pregledu vsebine; besedilo
+  je označeno z „[interno]".
 
 | Datoteka | Za koga | Kaj vsebuje |
 |---|---|---|
-| `datalab-analiza-skritih-stroskov-<podjetje>-<datum>.pdf` | stranka (gumb na rezultatih) in prodaja (priloga e-obvestila) | `src/lib/pdf.ts` — hero zneski, graf, razčlenitev, tveganja, 3 ukrepi |
+| `datalab-analiza-skritih-stroskov-<podjetje>-<datum>.pdf` | stranka (po e-pošti; gumb na rezultatih kot rezerva) in prodaja (priloga e-obvestila) | `src/lib/pdf.ts` — hero zneski, graf, razčlenitev, tveganja, 3 ukrepi |
 | `datalab-priprava-na-pogovor-<podjetje>-<datum>.pdf` | svetovalec (priloga e-obvestila; brez webhooka gumb pri stranki) | `src/lib/pdfSales.ts` |
 
 HTML različico prodajne priprave nosi **samo webhook payload** (`buildSalesReportHtml`); na zaslonu je
 ni. Sprejemnik jo shrani na Drive in povezavo vpiše v vrstico; PDF v prilogi nosi isto vsebino.
 
-Tri pravila, ki jih ni dovoljeno razveljaviti:
+Štiri pravila, ki jih ni dovoljeno razveljaviti:
 
 - **Ob oddaji se na napravo ne prenese nič.** Gumb obrazca obljublja rezultate in jih pokaže; prenos
   je vedno klik na rezultatih. Samodejni prenos ob oddaji je nekoč pomenil dva prenosa in webhook iz
@@ -649,6 +913,14 @@ Tri pravila, ki jih ni dovoljeno razveljaviti:
   v vrsto. Zdaj vodi do prenosa ena sama pot (`src/lib/download.ts`), ki tudi `URL.revokeObjectURL`
   pokliče **zakasnjeno**: takojšen preklic je vir podatkov odstranil, preden ga je brskalnik prebral,
   in prenos je odpovedal.
+- **Strankino poročilo gre na e-naslov iz obrazca; prenos je rezerva.** Stranka dokument dobi tja,
+  kamor ga je naročila; gumb se pokaže šele, ko te poti ni (brez webhooka, neuspela dostava,
+  sprejemnik pošte ni potrdil) — in nikoli ob pošti, ki je odšla, razen v internem načinu. Priprava
+  na pogovor stranki po e-pošti ne gre nikoli: sprejemnik pošlje samo prilogo z oznako
+  `audience: 'customer'`. Razmestitev v tem vrstnem redu: najprej nova različica skripte, nato
+  aplikacija — obe vmesni stanji delujeta, a nova aplikacija že na obrazcu obljublja poročilo po
+  e-pošti in s staro skripto obljube ne drži. Varujeta `src/lib/deliverLead.test.ts` in
+  `tools/google-sheet/preizkus.mjs`.
 
 Gumb »Priprava v PDF« in **kartica s kontaktom Datalab prodaje** (telefon kot `tel:`, e-naslov kot
 `mailto:`, konstanta `SALES_CONTACT` v `src/config/salesContact.ts`) živita v

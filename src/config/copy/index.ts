@@ -1,12 +1,17 @@
 import type { SegmentId } from '../segmentTypes';
 import { getSizeClass } from '../sizeClasses';
+import { INZENIRING_COPY } from './inzeniring';
+import { KOVINARSTVO_COPY } from './kovinarstvo';
 import { LOGISTIKA_COPY } from './logistika';
 import { MALOPRODAJA_COPY } from './maloprodaja';
+import { PLASTIKA_COPY } from './plastika';
 import { PROIZVODNJA_COPY } from './proizvodnja';
 import { RACUNOVODSTVO_COPY } from './racunovodstvo';
 import { SPLOSNO_COPY } from './splosno';
 import { STORITVE_COPY } from './storitve';
+import { GRADBENISTVO_COPY } from './gradbenistvo';
 import { TRGOVINA_COPY } from './trgovina';
+import { ZIVILSTVO_COPY } from './zivilstvo';
 import { NEUTRAL_COPY, type ResolvedSegmentCopy, type SegmentCopy } from './copyTypes';
 
 /**
@@ -22,10 +27,15 @@ import { NEUTRAL_COPY, type ResolvedSegmentCopy, type SegmentCopy } from './copy
  */
 export const SEGMENT_COPY: Record<SegmentId, SegmentCopy> = {
   proizvodnja: PROIZVODNJA_COPY,
+  zivilstvo: ZIVILSTVO_COPY,
+  kovinarstvo: KOVINARSTVO_COPY,
+  plastika: PLASTIKA_COPY,
   logistika: LOGISTIKA_COPY,
   trgovina: TRGOVINA_COPY,
   maloprodaja: MALOPRODAJA_COPY,
   storitve: STORITVE_COPY,
+  gradbenistvo: GRADBENISTVO_COPY,
+  inzeniring: INZENIRING_COPY,
   racunovodstvo: RACUNOVODSTVO_COPY,
   splosno: SPLOSNO_COPY,
 };

@@ -96,6 +96,59 @@ znova. `preizkusPoste` na to opozori z jasno napako namesto tihega neuspeha.
 Vgrajena obvestila preglednice (*Orodja → Nastavitve obvestil*) tu **ne
 delujejo** — sprožijo se ob človeškem urejanju, ne ob vpisu iz skripte.
 
+## Poročilo stranki po e-pošti
+
+Ob vsaki oddaji skripta pošlje **stranki** — na e-naslov iz obrazca — sporočilo
+s pripetim poročilom za stranko (`posljiPorociloStranki`). To je obljuba
+obrazca (»PDF poročilo prejmete na vpisani e-naslov«); aplikacija na
+rezultatih tedaj pokaže obvestilo namesto gumba za prenos. Pripeta je **samo
+priloga z oznako `audience: 'customer'`**; priprava na pogovor (`'sales'`)
+stranki ne gre nikoli, tudi če bi bila datoteka napačno poimenovana. Starejši
+build aplikacije oznake ne pošilja — tedaj odloči predpona imena datoteke
+(`datalab-analiza-skritih-stroskov`).
+
+Nastavitve na vrhu `Koda.gs` (preživijo lepljenje, ker so v repozitoriju):
+`POSLJI_POROCILO_STRANKI` (privzeto `true`; `false` = stranka poročilo prenese
+sama), `IME_POSILJATELJA` (»Datalab«) in `ODGOVORI_NA` (`prodaja@datalab.si`,
+isti kot v `src/config/salesContact.ts`). Besedilo sporočila je v
+`sestaviSporociloStranki`: pozdrav z imenom, en odstavek o poročilu, potrditev
+prošnje za posvet (če je bila obkljukana), kontakt prodaje in noga, ki pove,
+zakaj je sporočilo prišlo. **Brez trženja** — brez ponudb, cen in vabil na
+vsebine: to je transakcijsko sporočilo na podlagi obvezne privolitve v
+obdelavo; privolitvi v ponudbe in vsebine sta ločeni in ju spoštuje
+ActiveCampaign, ne ta pošta.
+
+**Pošiljatelj je račun, ki je skripto razmestil.** `MailApp` zna nastaviti
+prikazano ime in naslov za odgovor, ne pa naslova pošiljatelja — zato skripta
+sodi na Datalabov Workspace račun, ne na zasebnega. Tja pride tudi **odbita
+pošta** (napačno vpisan naslov, ki je videti veljaven); na `ODGOVORI_NA` gredo
+le strankini odgovori. Kvota MailApp zdaj šteje **dva prejemnika na lead**
+(stranka in prodaja): 1500 na dan pri Workspacu.
+
+**Izid je viden na treh mestih.** V odgovoru aplikaciji (`customerReport:
+{ sent, reason }` — razlogi `disabled`, `no_address`, `invalid_address`,
+`no_attachment`, `send_failed`), v stolpcu `porociloStranki` vrstice (»poslano
+2026-09-07 10:12« ali »ni poslano: …«) in v obvestilu prodaji (vrstica
+»Poročilo stranki: poslano na …« ali »NI poslano (razlog)« — tedaj ga zna
+svetovalec posredovati iz priloge). Na naslovu `/exec` (`doGet`) so še vrstice
+»Poročilo stranki po e-pošti«, »Zadnje poročilo stranki« in »Zadnja napaka
+poročila stranki« (naslovi zakriti). Pošta stranki gre **za** vrstico in v
+svojem `try/catch`: padla pošta ne vrže napake, vrstica in obvestilo prodaji
+ostaneta, aplikacija pa ob `sent: false` ponudi prenos.
+
+**Preizkus iz urejevalnika:** funkcija **`preizkusPorocilaStranki`** pošlje
+vzorčno sporočilo z vzorčnim PDF-jem na prvi naslov iz `E_NASLOV_ZA_OBVESTILA`
+— pokaže, kako sporočilo izgleda v pravem nabiralniku, in izsili dovoljenje za
+pošto, če ga še ni (glej `preizkusPoste`).
+
+**Vrstni red razmestitve:** najprej **nova različica skripte**, šele nato
+objava aplikacije. Obe vmesni stanji delujeta — nova skripta s staro aplikacijo
+poročilo pošlje (po predponi imena) in aplikacija še kaže gumb; stara skripta z
+novo aplikacijo v odgovoru nima `customerReport` in aplikacija ponudi gumb kot
+doslej — a nova aplikacija že na obrazcu obljublja poročilo po e-pošti, česar
+stara skripta ne drži. V obratnem vrstnem redu obljube ni: stara aplikacija
+pošte ne omenja, stranka pa jo dobi kot dodatek.
+
 ## Vrstni red stolpcev na listu
 
 Zaporedje določa `VRSTNI_RED` v `Koda.gs` in sledi klicateljevi zanki — **kdaj,
@@ -270,8 +323,12 @@ glavo po `VRSTNI_RED`; da paket z `events` in `visit` konča na `Dogodki`; da
 strani vnosov, nadaljevanje po osvežitvi, interni obisk, blokada obrazca)
 sestavi `Lijak` s pravimi števili — obiskov po korakih, „končalo tu", mediana
 časa, blokade po polju, nadaljevanja posebej; in da paket brez id-ja obiska
-vrže napako. Ponarejena preglednica ob `setValues` preveri obliko obsega in
-`getLastRow` računa iz vsebine, ne iz oblik. Česar ne pokrije: Drive, pošta,
+vrže napako; in da poročilo stranki po e-pošti gre na naslov iz oddaje s samo
+njenim PDF-jem (nikoli s pripravo), ob manjkajočem naslovu, prilogi ali padli
+pošti pa odgovor pove razlog, vrstica in obvestilo prodaji pa ostaneta.
+Ponarejena preglednica ob `setValues` preveri obliko obsega in `getLastRow`
+računa iz vsebine, ne iz oblik; `MailApp` je ponarejen in sporočila zbira, da
+test vidi naslovnika, prilogi in besedilo. Česar ne pokrije: Drive,
 ActiveCampaign in to, kako prava preglednica razlaga zapisane nize (uvodni
 opuščaj, pretvorba `"true"`) — ponaredek hrani natanko to, kar skripta zapiše.
 
@@ -317,7 +374,7 @@ Aplikacije ni treba spreminjati: dogodki gredo na `VITE_LEAD_WEBHOOK_URL`, ki je
 | `PO SEGMENTIH`, `PO VIRU OBISKA`, `PO ZASLONU` | Začetih, do obrazca, oddaj, delež oddaj po skupinah |
 | `OBRAZEC — KATERO POLJE USTAVI ODDAJO` | Blokade validacije po polju: kolikokrat in koliko obiskov |
 | `DOSTAVA LEADA` | Uspele in padle dostave po razlogu (`no_webhook`, `rejected`, `error`) |
-| `NADALJEVANJA IN IZPUŠČENI OBISKI` | Obiski po osvežitvi, oddaje med njimi, interni obiski (`?debug=1`) |
+| `NADALJEVANJA IN IZPUŠČENI OBISKI` | Obiski po osvežitvi, oddaje med njimi, obiski prek poti `/dejavnost/`, interni obiski (`?debug=1`) |
 | `PO DNEVIH` | Zadnjih 30 dni: začetih in oddaj — vir za graf trenda |
 
 **Kako brati.** *Obisk* je ena naložena stran, ne obiskovalec: id obiska živi samo
@@ -327,7 +384,10 @@ naredi nov obisk, ki se začne sredi toka; take obiske („nadaljevanja": prvi
 prikazani korak ni uvodni) lijak **ne** šteje, pove pa, koliko jih je in koliko
 jih je oddalo. Pravi delež dokončanih je med številko brez nadaljevanj in
 številko z njimi. Gib „Nazaj" na telefonu strani ne osveži (zgodovina je v
-aplikaciji), zato je nadaljevanj malo.
+aplikaciji), zato je nadaljevanj malo. Obisk prek kampanjske poti
+(`<objava>/proizvodnja/`) se prav tako ne začne na uvodnem koraku, a ni
+nadaljevanje: aplikacija pred prvim prikazom pošlje `lm10_industry_selected`
+z `source: link` in lijak ga šteje kot začetega.
 
 *Končalo tu* pomeni, da obisk ni prišel **dlje** od tega koraka — vrnitev nazaj
 ni odnehanje, šteje najdlje doseženi korak. Pri rezultatih pomeni dokončan
@@ -456,7 +516,7 @@ Da stolpec pristane na svojem mestu med že zapisanimi vrsticami, enkrat poženi
 ### Zakaj se pošilja dvakrat
 
 Ob oddaji gre kontakt v AC takoj, a le, če je do tedaj poteklo manj kot 4,5
-sekunde. Aplikacija namreč čaka odgovor osem sekund in ob prekoračitvi razume
+sekunde. Aplikacija namreč čaka odgovor deset sekund in ob prekoračitvi razume
 dostavo kot neuspelo ter prodajno pripravo prenese stranki. Počasen CRM tega ne
 sme povzročiti, zato ob zamudi klic odpade in vrstico čez nekaj minut pobere ura.
 Iz istega razloga napaka v AC nikoli ne pade ven: pristane v stolpcu in gre v
@@ -477,6 +537,16 @@ Drive, se vrstica vseeno zapiše (lead je dragocenejši), v stolpcu
 Klic v ActiveCampaign je za zapisom vrstice in v svojem `try/catch`: padel CRM
 ne sme pomeniti, da aplikacija dostavo razume kot neuspelo. Napaka pristane v
 stolpcu `activeCampaign` in gre v ponovni poskus.
+
+Enako pošta stranki: padla pošta (kvota, izpad) ne vrže napake — vrstica je
+zapisana, obvestilo prodaji odide, v odgovoru je `customerReport: { sent: false,
+reason: 'send_failed' }` in aplikacija stranki ponudi prenos. Napaka je v
+stolpcu `porociloStranki` in na `/exec`. Ponovnega pošiljanja ni: stranka ima
+gumb, svetovalec pa PDF v prilogi obvestila.
+
+Aplikacija bere **telo** odgovora, ne le statusa: Apps Script napako skripte
+(žeton, prazno telo, nezapisana vrstica) vrne kot HTML s statusom 200, kar je
+prej štelo kot uspešna dostava. Zdaj je uspeh samo JSON z `ok: true`.
 
 Dnevnik zagonov je v urejevalniku pod *Izvedbe* (*Executions*) — tam je vidna
 vsaka zahteva in razlog vsake napake.

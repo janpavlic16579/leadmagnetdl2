@@ -278,7 +278,7 @@ export function resolveActiveModules(
  *
  * Moduli brez triaže (diagnostika, E) si delijo zadnjo stran — nista stroškovni
  * področji, ampak kratki dodatek, in vsak na svoji strani bi obiskovalcu obljubil
- * dva koraka dela tam, kjer sta skupaj pet vprašanj.
+ * dva koraka dela tam, kjer je skupaj le nekaj vprašanj.
  *
  * Vrstni red se ohrani sam: seznam prihaja urejen po registru, kjer sta diagnostika
  * in E že na koncu.

@@ -33,7 +33,7 @@ import { assessHoursPlausibility, hoursPlausibilityWarning } from '../../lib/pla
 import { selectFollowUpSequence } from '../../lib/followUp';
 import { triageScoreLabel } from '../../lib/answerLabels';
 import { track } from '../../lib/analytics';
-import { deliverLead, loadDeliveryModules } from '../../lib/deliverLead';
+import { deliverLead, loadDeliveryModules, type CustomerReportDelivery } from '../../lib/deliverLead';
 import { readProgress, saveProgress } from '../../lib/progressStorage';
 import type { ModuleDefinition } from '../../config/modules/moduleTypes';
 import type { SalesReport } from '../../lib/salesReport';
@@ -56,8 +56,15 @@ import { ResultsView } from '../Results/ResultsView';
 import { EmailGate } from '../Results/EmailGate';
 
 interface CalculatorFlowProps {
-  /** Dejavnost, ki jo prednastavi kampanjski ?s= — obiskovalec jo v Koraku 1 vidi in sme popraviti. */
+  /** Dejavnost, ki jo prednastavi kampanjski ?s= — obiskovalec jo na uvodnem zaslonu vidi in sme popraviti. */
   initialIndustry: string;
+  /**
+   * Dejavnost je izbrala povezava s potjo (`/proizvodnja/`, App.tsx): tok se
+   * začne na prvem oštevilčenem koraku (zaposleni), uvodni zaslon z izbiro pa
+   * ostane dosegljiv z "Nazaj" — kar je povezava predpostavila, sme obiskovalec
+   * še vedno popraviti. Brez popolne initialIndustry nima učinka.
+   */
+  skipIndustryStep?: boolean;
   utmSource: string | null;
   /**
    * Interni način (?debug=1): prodajna priprava se na rezultatih ponudi tudi ob
@@ -71,6 +78,7 @@ interface CalculatorFlowProps {
 
 export function CalculatorFlow({
   initialIndustry,
+  skipIndustryStep = false,
   utmSource,
   internalMode = false,
   onActiveSegmentChange,
@@ -96,8 +104,17 @@ export function CalculatorFlow({
    */
   const useRestoredIndustry = Boolean(restored?.basicInfo.industry);
   const startingIndustry = useRestoredIndustry ? restored!.basicInfo.industry : initialIndustry;
+  /**
+   * Povezava s potjo preskoči uvodni zaslon — a po istem pravilu kot zgoraj le,
+   * dokler obiskovalec dejavnosti ni izbral sam: obnovljena seja se nadaljuje
+   * tam, kjer je obstala, tudi če je bila odprta prek povezave.
+   */
+  const startedByLink =
+    skipIndustryStep && !useRestoredIndustry && isCompleteIndustryChoice(startingIndustry);
 
-  const [step, setStep] = useState<FlowStep>(restored?.step ?? 'industry');
+  const [step, setStep] = useState<FlowStep>(
+    startedByLink ? 'employeeCount' : (restored?.step ?? 'industry'),
+  );
   const [basicInfo, setBasicInfo] = useState<BasicInfo>(() => ({
     ...(restored?.basicInfo ?? { employeeCount: 0 }),
     industry: startingIndustry,
@@ -140,6 +157,15 @@ export function CalculatorFlow({
    * lib/deliverLead.ts); rezultati jo tedaj ponudijo kot gumb.
    */
   const [salesReport, setSalesReport] = useState<SalesReport | null>(null);
+  /**
+   * Kam je šlo strankino poročilo (druga tabela v lib/deliverLead.ts): po
+   * e-pošti — rezultati pokažejo obvestilo — ali s prenosom kot rezervo. Po
+   * osvežitvi ostane samo zastavica iz shrambe (naslov je kontakt in tja ne
+   * sodi): obvestilo tedaj pove "na vaš e-naslov", brez naslova.
+   */
+  const [customerReport, setCustomerReport] = useState<CustomerReportDelivery | null>(() =>
+    restored?.reportSent ? { emailedTo: null, downloadOffered: internalMode, reason: 'emailed' } : null,
+  );
 
   /**
    * Segment ima en sam vir: izbrano dejavnost. Prej je obstajal še ročni override
@@ -198,7 +224,7 @@ export function CalculatorFlow({
   /**
    * Napredek preživi osvežitev strani.
    *
-   * Shranjuje se tudi po oddaji — z zastavico `submitted` in brez kontakta. Prej
+   * Shranjuje se tudi po oddaji — z zastavicama `submitted` in `reportSent`, brez kontakta. Prej
    * se je zapis ob oddaji pobrisal, ker je bil tok končan; zdaj oddaji sledijo
    * rezultati in osvežitev na njih ne sme vrniti vprašalnika. Zapis umre s sejo
    * zavihka (sessionStorage), zato naslednji obiskovalec istega računalnika ne
@@ -214,8 +240,9 @@ export function CalculatorFlow({
       triageSelection,
       inputsModuleId,
       submitted,
+      reportSent: customerReport?.reason === 'emailed',
     });
-  }, [step, basicInfo, profile, moduleInputs, triageScores, triageSelection, inputsModuleId, submitted]);
+  }, [step, basicInfo, profile, moduleInputs, triageScores, triageSelection, inputsModuleId, submitted, customerReport]);
 
   /**
    * Gumb "Nazaj" v brskalniku (in gib "swipe back" na telefonu) pelje korak
@@ -393,6 +420,24 @@ export function CalculatorFlow({
 
   const stepLabel = (current: FlowStep, pageIndex = 0) =>
     `Korak ${stepNumber(current, pageIndex)} od ${totalSteps}`;
+
+  /**
+   * Dejavnost s povezave gre v lijak enako kot ročna potrditev na uvodnem
+   * zaslonu — PRED prvim prikazom koraka (učinek stoji pred trackStepView, učinki
+   * tečejo po vrsti) in z izvorom 'link'. Sprejemnik (Koda.gs, opisiObisk) po tem
+   * dogodku loči obisk, ki se je zaradi povezave začel na koraku zaposlenih, od
+   * nadaljevanja po osvežitvi, ki se prav tako ne začne na uvodnem zaslonu.
+   * Enkrat na obisk: obe odvisnosti sta stalnici prvega izrisa, vrnitev na uvodni
+   * zaslon in ročna potrditev pa sprožita svoj dogodek.
+   */
+  useEffect(() => {
+    if (!startedByLink) return;
+    track('lm10_industry_selected', {
+      industry: startingIndustry,
+      segment: getSegmentForIndustry(startingIndustry),
+      source: 'link',
+    });
+  }, [startedByLink, startingIndustry]);
 
   /**
    * Lijak (lib/analytics.ts). Korak, segment in razredi, nič osebnega — brez
@@ -721,8 +766,9 @@ export function CalculatorFlow({
       modules,
       {
         onSalesReport: setSalesReport,
-        onSubmitted: () => {
+        onSubmitted: ({ customerReport: delivery }) => {
           setLead(submission);
+          setCustomerReport(delivery);
           setSubmitted(true);
           // Rezultati NADOMESTIJO vnos obrazca v zgodovini: brskalnikov "Nazaj"
           // (in gib "swipe back") z rezultatov pelje v vnose, ne na oddan obrazec.
@@ -734,9 +780,10 @@ export function CalculatorFlow({
   }
 
   /**
-   * Strankin PDF ob kliku na rezultatih — iz TRENUTNEGA stanja in ne iz datoteke,
-   * poslane ob oddaji: po "Nazaj na vnos" mora poročilo ustrezati zaslonu.
-   * Po osvežitvi ime podjetja ni znano (glej lead).
+   * Strankin PDF ob kliku na rezultatih — REZERVA, kadar poročilo ni šlo po
+   * e-pošti (ali v internem načinu, za pregled). Iz TRENUTNEGA stanja in ne iz
+   * datoteke, poslane ob oddaji: po "Nazaj na vnos" mora poročilo ustrezati
+   * zaslonu. Po osvežitvi ime podjetja ni znano (glej lead).
    */
   async function downloadCustomerPdf() {
     const [{ buildResultsPdfFile }, { downloadFile }] = await Promise.all([
@@ -744,8 +791,12 @@ export function CalculatorFlow({
       import('../../lib/download'),
     ]);
     downloadFile(await buildResultsPdfFile(customerPdfParams(lead?.contact.companyName ?? '')));
-    // Koliko obiskovalcev poročilo sploh vzame — vsak prenos je ročen.
-    track('lm10_report_download', { segment: segment.id });
+    // Gumb je rezerva: dogodek pove, zakaj je bil sploh na voljo (lib/analytics.ts).
+    track('lm10_report_download', {
+      segment: segment.id,
+      reason:
+        customerReport === null ? 'unknown' : customerReport.reason === 'emailed' ? 'internal' : customerReport.reason,
+    });
   }
 
   if (step === 'industry') {
@@ -944,6 +995,7 @@ export function CalculatorFlow({
           openInputsAt(id);
         }}
         onDownloadPdf={downloadCustomerPdf}
+        customerReport={customerReport}
         consultingRequested={lead?.consents.consentConsulting ?? false}
         internalMode={internalMode}
         followUpSequenceDebug={followUpSequence}

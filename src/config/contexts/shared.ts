@@ -25,6 +25,27 @@ export const ADMIN_HOUR_BANDS: CostBand[] = [
   { id: 'nad31', label: 'Več kot 31 EUR', midpointEUR: 36, minEUR: 31, maxEUR: 41 },
 ];
 
+/**
+ * Neposredna proizvodna ura v predelovalnih dejavnostih — skupna splošni
+ * proizvodnji in kovinarstvu; vsaka dejavnost izbere svojo rezervo (fallbackEUR)
+ * znotraj istih pasov. Doslej so pasovi stali v kontekstu proizvodnje kot
+ * neizvožena konstanta; druga dejavnost, ki jih potrebuje, jih po pravilu iz glave
+ * te datoteke ne sme uvažati od sosede.
+ *
+ * Sidro 2026 (SURS, zasebni sektor, oktober 2025, prevrednoteno): sestavljavec 18,5
+ * EUR/h, varilec 20,7, operater na stroju 20,9, orodjar 21,8, strugar 23,1,
+ * elektromehanik 25,2; panožno povprečje predelovalnih dejavnosti 23,9 (C25 kovinski
+ * izdelki 22,2, po tabeli za junij 2026 23,6). Zgornja pasova pokrijeta izmenske in
+ * nevarnostne dodatke ter specializirane profile (CNC, varilec z atestom).
+ * Izpeljava in viri: docs/urne-postavke.md.
+ */
+export const MANUFACTURING_HOUR_BANDS: CostBand[] = [
+  { id: 'do17', label: 'Do 17 EUR', midpointEUR: 16, minEUR: 15, maxEUR: 17 },
+  { id: '17do20', label: '17–20 EUR', midpointEUR: 18, minEUR: 17, maxEUR: 20 },
+  { id: '20do25', label: '20–25 EUR', midpointEUR: 22, minEUR: 20, maxEUR: 25 },
+  { id: 'nad25', label: 'Več kot 25 EUR', midpointEUR: 29, minEUR: 25, maxEUR: 33 },
+];
+
 /*
  * Pojasnila za gumb "?" pri pojmih, ki so čez dejavnosti ENAKI.
  *

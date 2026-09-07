@@ -6,7 +6,7 @@
  * ta datoteka nima učinka — v repozitoriju je zato, da koda skripte ni samo v
  * brskalniku enega računa.
  *
- * TREH REČI SE NE SPLAČA SPREMINJATI, ne da bi prej prebrali, zakaj so take:
+ * ŠTIRIH REČI SE NE SPLAČA SPREMINJATI, ne da bi prej prebrali, zakaj so take:
  *
  * 1. STOLPCEV SKRIPTA NE POZNA. Glava in vrstica prideta v telesu zahteve
  *    (`sheet.columns`, `sheet.row`), sestavi ju `src/lib/exportRecord.ts`, kjer
@@ -16,9 +16,14 @@
  * 2. VRSTICA SE PIŠE PO IMENIH STOLPCEV in ne po zaporedju. Nov stolpec se zato
  *    pripne na konec glave, obstoječe vrstice pa ostanejo poravnane.
  * 3. NAPAKA SE VRŽE NAPREJ. Apps Script pri `ContentService` vedno odgovori 200,
- *    zato aplikacija tiho napako razume kot uspešno dostavo — in prodajne
- *    priprave tedaj NE prenese stranki. Vsaka pot, ki ne konča z zapisano
- *    vrstico, mora zato pustiti napako ven (glej `doPost`).
+ *    zato aplikacija bere TELO odgovora: `{ ok: true }` je uspeh, vse drugo —
+ *    tudi Googlova stran z napako — je neuspela dostava, po kateri prodajno
+ *    pripravo prenese stranki. Vsaka pot, ki ne konča z zapisano vrstico, mora
+ *    zato pustiti napako ven (glej `doPost`).
+ * 4. PRIPRAVA NIKOLI STRANKI. Strankino poročilo gre po e-pošti tudi STRANKI —
+ *    na naslov iz obrazca, s samo njenim PDF-jem (`posljiPorociloStranki`).
+ *    Odloča oznaka `audience` na prilogi: 'customer' gre stranki, 'sales' je
+ *    priprava na pogovor in ne gre nikoli, tudi z napačnim imenom datoteke.
  *
  * Telo lahko nosi še `attachments[]` — PDF-ja v base64 za prilogi obvestila
  * (glej `pripraviPriloge`). Skripta mora delati tudi brez njih: starejši build
@@ -26,6 +31,15 @@
  * spremembi te datoteke je treba razmestiti NOVO RAZLIČICO (Deploy → Manage
  * deployments → New version) in znova vpisati E_NASLOV_ZA_OBVESTILA, ker ga
  * datoteka v repozitoriju nima.
+ *
+ * Odgovor `doPost` pove aplikaciji, ali je poročilo odšlo stranki
+ * (`customerReport`, glej `odgovorOddaje`): na rezultatih tedaj pokaže
+ * obvestilo namesto gumba za prenos, sicer gumb. Razmestitev: NAJPREJ nova
+ * različica te skripte, ŠELE NATO objava aplikacije — vsaka kombinacija stare
+ * in nove deluje (stara aplikacija brez oznake: poročilo se prepozna po imenu
+ * datoteke; stara skripta brez odgovora: aplikacija ponudi gumb), a le v tem
+ * vrstnem redu ves čas drži obljuba, ki jo nova aplikacija da že na obrazcu:
+ * "PDF poročilo prejmete na vpisani e-naslov".
  *
  * Telo lahko namesto `record` nosi `events` in `visit` — dogodke lijaka, ki jih
  * pošilja src/lib/funnel.ts. Ti gredo na list Dogodki, iz njega pa
@@ -87,6 +101,25 @@ var NASTAVITVE = {
   E_NASLOV_ZA_OBVESTILA: '',
 
   /**
+   * Strankino poročilo (PDF) gre na e-naslov iz obrazca — s tega računa.
+   * Pripeta je SAMO priloga z oznako `audience: 'customer'`; priprava na
+   * pogovor stranki ne gre nikoli (načelo 4 v glavi). false = stranka poročilo
+   * prenese sama: aplikacija ob takem odgovoru na rezultatih ponudi gumb.
+   */
+  POSLJI_POROCILO_STRANKI: true,
+
+  /**
+   * Prikazano ime pošiljatelja. NASLOV pošiljatelja je račun, ki je skripto
+   * razmestil — MailApp drugega ne zna — zato skripta sodi na Datalabov
+   * Workspace račun, ne na zasebnega. Tja pride tudi odbita pošta (napačno
+   * vpisan naslov), ne na ODGOVORI_NA.
+   */
+  IME_POSILJATELJA: 'Datalab',
+
+  /** Kam gre strankin odgovor na poročilo. Prazno = na račun skripte. */
+  ODGOVORI_NA: 'prodaja@datalab.si',
+
+  /**
    * ActiveCampaign. Naslov računa, ključ API in id seznama NISO tu, ampak v
    * lastnostih skripte (Nastavitve projekta → Lastnosti skripte): ta datoteka je
    * v repozitoriju in ključ bi bil s tem v gitu. Stranski dobiček je, da
@@ -121,6 +154,20 @@ var NASTAVITVE = {
 /** Stolpca, ki ju doda skripta; pred stolpci iz aplikacije, ker se bereta prva. */
 var PREJETO = 'prejeto';
 var PRIPRAVA = 'prodajnaPriprava';
+
+/**
+ * Izid pošte stranki: "poslano <čas>" ali "ni poslano: <razlog>". Zapiše se
+ * ŠELE za vrstico (kot `activeCampaign`), zato mora ime obstajati že ob zapisu
+ * — glej `dopolniIzpeljano`. Klicatelj tako vidi, ali ima stranka poročilo,
+ * ne da bi brskal po pošti.
+ */
+var POROCILO_STRANKI = 'porociloStranki';
+
+/**
+ * Kontakt prodaje v sporočilu stranki — isti kot v aplikaciji
+ * (`src/config/salesContact.ts`); spremembo je treba narediti na obeh mestih.
+ */
+var KONTAKT_PRODAJE = { ime: 'Datalab prodaja', telefon: '01 252 89 50', email: 'prodaja@datalab.si' };
 
 /**
  * Stolpec z id-jem kontakta v ActiveCampaignu ali z napako zadnjega poskusa.
@@ -219,6 +266,8 @@ var VRSTNI_RED = [
   'confidence',
   'selectedModules',
   PRIPRAVA,
+  // Ob pripravi: oba stolpca povesta, ali ima druga stran svoj dokument.
+  POROCILO_STRANKI,
   AC_STOLPEC,
   'role',
   'roleOther',
@@ -288,6 +337,12 @@ function doGet() {
     'Obvestila: ' + (NASTAVITVE.E_NASLOV_ZA_OBVESTILA ? 'nastavljena' : 'IZKLOPLJENA (prazen E_NASLOV_ZA_OBVESTILA)'),
     'Zadnja poslana pošta: ' + (lastnosti.getProperty('ZADNJA_POSTA') || 'še nobena'),
     'Zadnja napaka pošte: ' + (lastnosti.getProperty('ZADNJA_NAPAKA_POSTE') || 'brez'),
+    // Poročilo stranki ima svoje vrstice: pošta prodaji in pošta stranki lahko
+    // odpovesta vsaka zase (prazen naslov prodaje, neveljaven naslov stranke).
+    'Poročilo stranki po e-pošti: ' +
+      (NASTAVITVE.POSLJI_POROCILO_STRANKI ? 'vklopljeno' : 'IZKLOPLJENO (POSLJI_POROCILO_STRANKI)'),
+    'Zadnje poročilo stranki: ' + (lastnosti.getProperty('ZADNJA_POSTA_STRANKI') || 'še nobeno'),
+    'Zadnja napaka poročila stranki: ' + (lastnosti.getProperty('ZADNJA_NAPAKA_POSTE_STRANKI') || 'brez'),
     'Zadnje urejanje stolpcev: ' + (lastnosti.getProperty('ZADNJE_UREJANJE') || 'še nobeno'),
     'ActiveCampaign: ' + acStanje(),
     'Zadnji v AC: ' + (lastnosti.getProperty('AC_ZADNJI') || 'še nobeden'),
@@ -317,8 +372,9 @@ function doPost(e) {
     throw new Error('Zahteva je brez telesa.');
   }
 
-  // Merjeno od začetka obdelave: aplikacija čaka odgovor osem sekund in vse, kar
-  // sledi (Drive, vrstica, AC, pošta), se dogaja znotraj njih.
+  // Merjeno od začetka obdelave: aplikacija čaka odgovor deset sekund (plus čas
+  // prenosa telesa) in vse, kar sledi (Drive, vrstica, AC, pošta stranki in
+  // prodaji), se dogaja znotraj njih.
   var zacetek = Date.now();
 
   var oddaja = JSON.parse(e.postData.contents);
@@ -329,7 +385,7 @@ function doPost(e) {
   if (!oddaja.record) throw new Error('V telesu ni zapisa (record).');
 
   // Dve hkratni oddaji bi brez ključavnice lahko pisali v isto vrstico. Trideset
-  // sekund je pod osemsekundnim rokom na strani aplikacije le navidez: rok velja
+  // sekund je pod desetsekundnim rokom na strani aplikacije le navidez: rok velja
   // za odgovor, ključavnica pa se sprosti tudi, ko odjemalca ni več.
   var kljucavnica = LockService.getScriptLock();
   kljucavnica.waitLock(30000);
@@ -358,6 +414,12 @@ function doPost(e) {
       acVrstico(zapisana, vrednosti, zacetek);
     }
 
+    // Poročilo stranki — ZA vrstico in PRED obvestilom prodaji, ki izid ponovi.
+    // Nikoli ne vrže; izid gre v vrstico in v odgovor aplikaciji (spodaj), ki
+    // ob neposlanem poročilu stranki ponudi prenos.
+    var porociloStranki = posljiPorociloStranki(oddaja, vrednosti);
+    zapisiIzidPorocila(zapisana, porociloStranki);
+
     // ŠELE ZA vrstico in v svojem try/catch. Obvestilo je priročnost, vrstica je
     // zapis: padla pošta (kvota, napačen naslov) ne sme pomeniti, da aplikacija
     // dostavo razume kot neuspelo in prodajno pripravo prenese stranki.
@@ -366,7 +428,7 @@ function doPost(e) {
       // Dekodiranje prilog šele tu, znotraj try/catch pošte: vrstica je zapisana
       // in je pokvarjena priloga ne sme prizadeti.
       var priloge = pripraviPriloge(oddaja);
-      posljiObvestilo(vrednosti, priloge);
+      posljiObvestilo(vrednosti, priloge, porociloStranki);
       // S številom prilog, da doGet od zunaj pove, ali razmeščena različica
       // prilogi sploh pripenja.
       lastnosti.setProperty(
@@ -387,11 +449,28 @@ function doPost(e) {
     kljucavnica.releaseLock();
   }
 
+  // Vrže se ŠELE tu, ko je vrstica zapisana in pošta odposlana: aplikacija
+  // pripravo tedaj prenese stranki, poročilo pa je stranka morda že dobila —
+  // podvajanje brez škode.
   if (napakaPriprave) throw napakaPriprave;
 
-  return ContentService.createTextOutput(JSON.stringify({ ok: true })).setMimeType(
+  return ContentService.createTextOutput(JSON.stringify(odgovorOddaje(porociloStranki))).setMimeType(
     ContentService.MimeType.JSON,
   );
+}
+
+/**
+ * Odgovor aplikaciji: `{ ok: true }` kot doslej, z izidom pošte stranki. Ključi
+ * so angleški kot ostala žica (`record`, `attachments`); bere jih
+ * `parseCustomerReport` v src/lib/submitLead.ts. Stara aplikacija polje prezre.
+ */
+function odgovorOddaje(porociloStranki) {
+  return {
+    ok: true,
+    customerReport: porociloStranki.poslano
+      ? { sent: true }
+      : { sent: false, reason: porociloStranki.razlog },
+  };
 }
 
 /**
@@ -446,6 +525,8 @@ function dopolniIzpeljano(vrednosti) {
   // za imena, ki so v vrednostih, izid klica v AC pa se zapiše ŠELE za vrstico —
   // brez tega stolpca ne bi bilo kam zapisati in ura ne bi imela česa brati.
   if (vrednosti[AC_STOLPEC] === undefined) vrednosti[AC_STOLPEC] = '';
+  // Iz istega razloga: izid pošte stranki se zapiše šele za vrstico.
+  if (vrednosti[POROCILO_STRANKI] === undefined) vrednosti[POROCILO_STRANKI] = '';
 
   // Klicateljevih stolpcev ne sme zapisati NIHČE razen klicatelja. Danes jih v
   // oddaji ni in prazna vrednost bi nastala sama; to je varovalo za jutri, ko bi
@@ -1743,6 +1824,42 @@ function preizkusPoste() {
 }
 
 /**
+ * Vzorčno poročilo stranki — poženite ga v urejevalniku; gre na prvi naslov iz
+ * E_NASLOV_ZA_OBVESTILA.
+ *
+ * Dvoje pokaže naenkrat: kako sporočilo izgleda v pravem nabiralniku (ime
+ * pošiljatelja, odgovor na, besedilo, priloga) in ali ima skripta dovoljenje
+ * za pošto (glej `preizkusPoste`). Priloga je vzorčen PDF z eno prazno stranjo,
+ * ne pravo poročilo.
+ */
+function preizkusPorocilaStranki() {
+  var naslov = String(NASTAVITVE.E_NASLOV_ZA_OBVESTILA || '').split(',')[0].trim();
+  if (!naslov) throw new Error('E_NASLOV_ZA_OBVESTILA je prazen — vpišite naslov in shranite.');
+  var vzorec =
+    '%PDF-1.1\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n' +
+    '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n' +
+    '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 150]>>endobj\n' +
+    'trailer<</Root 1 0 R>>\n%%EOF\n';
+  var izid = posljiPorociloStranki(
+    {
+      attachments: [
+        {
+          filename: PREDPONA_POROCILA_STRANKE + '-vzorec.pdf',
+          contentType: 'application/pdf',
+          base64: Utilities.base64Encode(vzorec),
+          audience: 'customer',
+        },
+      ],
+    },
+    { email: naslov, firstName: 'Ana', companyName: 'Vzorčno podjetje d.o.o.', consentConsulting: 'true' },
+  );
+  if (!izid.poslano) {
+    throw new Error('Vzorec ni odšel: ' + (RAZLOGI_POROCILA_STRANKI[izid.razlog] || izid.razlog));
+  }
+  console.log('Vzorčno poročilo poslano na ' + naslov + '. Preostala dnevna kvota: ' + MailApp.getRemainingDailyQuota());
+}
+
+/**
  * Obvestilo o novem leadu.
  *
  * Vsebina je izbrana tako, da se je mogoče odločiti brez odpiranja preglednice:
@@ -1750,13 +1867,15 @@ function preizkusPoste() {
  * Zadnje je edino polje, ki pove namero in ne le dovoljenja, zato stoji v zadevi.
  * Pripeta sta oba PDF-ja (`priloge`, glej `pripraviPriloge`): poročilo za
  * stranko in priprava na pogovor — isti datoteki, kot ju aplikacija zgradi za
- * stranko oziroma svetovalca.
+ * stranko oziroma svetovalca. Vrstica "Poročilo stranki" pove, ali je stranka
+ * svoj PDF dobila po e-pošti (`porociloStranki`, glej `posljiPorociloStranki`)
+ * — kadar ga ni, ji ga zna svetovalec posredovati iz te priloge.
  *
  * Dnevna kvota MailApp je 100 prejemnikov pri navadnem Google računu in 1500 pri
  * Workspacu — za lead magnet daleč dovolj, a ob množičnem testiranju jo je mogoče
  * izčrpati; tedaj obvestila utihnejo, vrstice pa se pišejo naprej.
  */
-function posljiObvestilo(vrednosti, priloge) {
+function posljiObvestilo(vrednosti, priloge, porociloStranki) {
   var prejemniki = String(NASTAVITVE.E_NASLOV_ZA_OBVESTILA || '').trim();
   if (!prejemniki) return;
   priloge = priloge || [];
@@ -1794,6 +1913,7 @@ function posljiObvestilo(vrednosti, priloge) {
             })
             .join(', ')
         : 'brez — aplikacija jih ni poslala'),
+    'Poročilo stranki: ' + opisIzidaPorocila(porociloStranki),
     'Prodajna priprava: ' + v('prodajnaPriprava'),
     'Preglednica: ' + pridobiList().getParent().getUrl(),
   ].filter(function (vrstica) {
@@ -1821,20 +1941,237 @@ function pripraviPriloge(oddaja) {
   var vnosi = oddaja && Array.isArray(oddaja.attachments) ? oddaja.attachments : [];
   var priloge = [];
   for (var i = 0; i < vnosi.length; i++) {
-    var vnos = vnosi[i] || {};
-    try {
-      priloge.push(
-        Utilities.newBlob(
-          Utilities.base64Decode(String(vnos.base64 || '')),
-          String(vnos.contentType || 'application/pdf'),
-          String(vnos.filename || 'priloga-' + (i + 1) + '.pdf'),
-        ),
-      );
-    } catch (err) {
-      console.warn('Priloga ' + (i + 1) + ' ni bila dekodirana: ' + err);
-    }
+    var priloga = dekodirajPrilogo(vnosi[i], i);
+    if (priloga) priloge.push(priloga);
   }
   return priloge;
+}
+
+/** En vnos iz `attachments` kot Blob — ali null z opozorilom, kadar je pokvarjen. */
+function dekodirajPrilogo(vnos, indeks) {
+  vnos = vnos || {};
+  try {
+    return Utilities.newBlob(
+      Utilities.base64Decode(String(vnos.base64 || '')),
+      String(vnos.contentType || 'application/pdf'),
+      String(vnos.filename || 'priloga-' + (indeks + 1) + '.pdf'),
+    );
+  } catch (err) {
+    console.warn('Priloga ' + (indeks + 1) + ' ni bila dekodirana: ' + err);
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Poročilo stranki po e-pošti
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Predpona imena strankinega poročila (`src/lib/pdf.ts`) — rezerva za starejši
+ * build aplikacije, ki prilog še ne označuje z `audience`.
+ */
+var PREDPONA_POROCILA_STRANKE = 'datalab-analiza-skritih-stroskov';
+
+/**
+ * Razlogi, zakaj poročilo stranki ni odšlo. Ključ potuje v odgovor aplikaciji
+ * (`customerReport.reason`, glej `parseCustomerReport` v src/lib/submitLead.ts),
+ * besedilo v obvestilo prodaji in v stolpec vrstice.
+ */
+var RAZLOGI_POROCILA_STRANKI = {
+  disabled: 'pošiljanje je izklopljeno (POSLJI_POROCILO_STRANKI)',
+  no_address: 'v oddaji ni e-naslova',
+  invalid_address: 'e-naslov ni videti veljaven',
+  no_attachment: 'aplikacija ni poslala strankinega PDF-ja',
+  send_failed: 'pošiljanje je vrglo napako',
+};
+
+/**
+ * Ali je vnos med prilogami strankino poročilo.
+ *
+ * Odloča oznaka `audience` iz aplikacije: 'customer' je poročilo za stranko,
+ * 'sales' priprava na pogovor — ta stranki ne gre NIKOLI, tudi če bi bila
+ * datoteka poimenovana kot poročilo. Brez oznake (starejši build) odloči
+ * predpona imena datoteke.
+ */
+function jePrilogaZaStranko(vnos) {
+  if (!vnos || vnos.audience === 'sales') return false;
+  if (vnos.audience === 'customer') return true;
+  return String(vnos.filename || '').indexOf(PREDPONA_POROCILA_STRANKE) === 0;
+}
+
+/** Strankino poročilo iz telesa zahteve kot Blob — ali null, če ga ni ali je pokvarjeno. */
+function prilogaZaStranko(oddaja) {
+  var vnosi = oddaja && Array.isArray(oddaja.attachments) ? oddaja.attachments : [];
+  for (var i = 0; i < vnosi.length; i++) {
+    if (jePrilogaZaStranko(vnosi[i])) return dekodirajPrilogo(vnosi[i], i);
+  }
+  return null;
+}
+
+/**
+ * Poročilo za stranko na e-naslov iz obrazca — z eno samo prilogo.
+ *
+ * To je obljuba obrazca ("PDF poročilo prejmete na vpisani e-naslov"). Aplikacija
+ * iz izida izve, ali jo je skripta izpolnila; kadar je ni, stranki na rezultatih
+ * ponudi prenos. Zato izid ne sme biti nikoli izgubljen: funkcija nikoli ne vrže
+ * in vsak izhod vrne { poslano, razlog, naslov } ter ga zapiše v lastnosti
+ * skripte, da je viden v doGet.
+ *
+ * Vrstni red preverb: nastavitev → naslov → priloga → pošiljanje. Neveljaven
+ * naslov se ujame PRED klicem MailApp: njegova izjema ("Invalid email") bi
+ * sicer pristala kot splošna napaka pošiljanja in zakrila pravi vzrok.
+ *
+ * Priloga je natanko ena — tista z oznako 'customer' (`prilogaZaStranko`).
+ * Seznam iz `pripraviPriloge` (oba PDF-ja) sem ne pride nikoli; to je edino
+ * mesto v skripti, ki stranki karkoli pošlje.
+ */
+function posljiPorociloStranki(oddaja, vrednosti) {
+  var lastnosti = PropertiesService.getScriptProperties();
+  var neposlano = function (razlog) {
+    lastnosti.setProperty(
+      'ZADNJA_POSTA_STRANKI',
+      new Date().toISOString() + ' — ni poslano (' + razlog + ')',
+    );
+    return { poslano: false, razlog: razlog, naslov: '' };
+  };
+
+  if (!NASTAVITVE.POSLJI_POROCILO_STRANKI) return neposlano('disabled');
+
+  var naslov = String(
+    (vrednosti && vrednosti.email) || (oddaja && oddaja.record && oddaja.record.email) || '',
+  ).trim();
+  if (!naslov) return neposlano('no_address');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(naslov)) return neposlano('invalid_address');
+
+  var priloga = prilogaZaStranko(oddaja);
+  if (!priloga) {
+    // Navaden izid in ne opozorilo: starejši build ali PDF, ki v brskalniku ni
+    // nastal. Aplikacija ob tem odgovoru ponudi prenos.
+    console.log('Poročilo stranki ni poslano: v oddaji ni strankinega PDF-ja.');
+    return neposlano('no_attachment');
+  }
+
+  try {
+    var sporocilo = sestaviSporociloStranki(vrednosti);
+    var posiljka = {
+      to: naslov,
+      subject: sporocilo.subject,
+      body: sporocilo.body,
+      htmlBody: sporocilo.htmlBody,
+      attachments: [priloga],
+      name: NASTAVITVE.IME_POSILJATELJA || 'Datalab',
+    };
+    if (NASTAVITVE.ODGOVORI_NA) posiljka.replyTo = NASTAVITVE.ODGOVORI_NA;
+    MailApp.sendEmail(posiljka);
+    lastnosti.setProperty('ZADNJA_POSTA_STRANKI', new Date().toISOString() + ' → ' + zakrijNaslove(naslov));
+    lastnosti.deleteProperty('ZADNJA_NAPAKA_POSTE_STRANKI');
+    return { poslano: true, razlog: '', naslov: naslov };
+  } catch (err) {
+    // Kvota, izpad — vrstica je zapisana, obvestilo prodaji gre naprej. Zapisano
+    // v lastnosti, ker je doGet edino, kar je o tem vidno od zunaj.
+    console.warn('Poročila stranki ni bilo mogoče poslati: ' + err);
+    lastnosti.setProperty(
+      'ZADNJA_NAPAKA_POSTE_STRANKI',
+      new Date().toISOString() + ' — ' + zakrijNaslove(String(err)),
+    );
+    return { poslano: false, razlog: 'send_failed', naslov: '' };
+  }
+}
+
+/**
+ * Sporočilo stranki: zadeva, golo besedilo in HTML.
+ *
+ * Transakcijsko sporočilo: prinese dokument, ki ga je oseba zahtevala z oddajo
+ * obrazca (pravna podlaga je obvezna privolitev v obdelavo), zato v njem NI
+ * ničesar, kar bi bilo trženje — ne ponudb, ne cen, ne vabil na vsebine. Ti
+ * privolitvi sta ločeni (consentOffers, consentContent) in ju spoštuje
+ * ActiveCampaign, ne to sporočilo. Vrednosti iz obrazca gredo v HTML skozi
+ * `ubezajHtml`: prišle so z javnega webhooka.
+ */
+function sestaviSporociloStranki(vrednosti) {
+  var v = function (ime) {
+    var vrednost = vrednosti ? vrednosti[ime] : undefined;
+    return vrednost === undefined || vrednost === null ? '' : String(vrednost).trim();
+  };
+  var ime = v('firstName');
+  var podjetje = v('companyName') || 'vaše podjetje';
+  var posvet = jePosvet(v('consentConsulting'));
+
+  var pozdrav = ime ? 'Pozdravljeni, ' + ime + ',' : 'Pozdravljeni,';
+  var odstavki = [
+    'v priponki je poročilo »Analiza skritih stroškov« za ' +
+      podjetje +
+      ', sestavljeno iz vaših odgovorov v Datalabovem kalkulatorju. Vsebuje letni znesek, ' +
+      'razčlenitev po področjih, formulo pod vsako postavko in tri ukrepe za ta teden.',
+  ];
+  if (posvet) {
+    odstavki.push('Označili ste, da želite pogovor s svetovalcem — zahtevek je pri naši prodajni ekipi.');
+  }
+  odstavki.push(
+    'Vprašanja o številkah: ' +
+      KONTAKT_PRODAJE.ime + ', ' + KONTAKT_PRODAJE.telefon + ', ' + KONTAKT_PRODAJE.email + '.',
+  );
+  var podpis = ['Datalab Tehnologije, d. d.', 'Hajdrihova 28c, Ljubljana'];
+  var noga =
+    'To sporočilo ste prejeli, ker ste ta e-naslov vpisali v kalkulator skritih stroškov in zahtevali ' +
+    'poročilo. Če ga niste zahtevali vi, sporočilo izbrišite.';
+
+  var odstavek = function (besedilo, slog) {
+    return '<p style="' + slog + '">' + ubezajHtml(besedilo) + '</p>';
+  };
+  var navaden = 'margin:0 0 16px';
+  var htmlBody =
+    '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#1f2937;max-width:600px">' +
+    odstavek(pozdrav, navaden) +
+    odstavki
+      .map(function (besedilo) {
+        return odstavek(besedilo, navaden);
+      })
+      .join('') +
+    '<p style="margin:24px 0 16px">' + ubezajHtml(podpis[0]) + '<br>' + ubezajHtml(podpis[1]) + '</p>' +
+    odstavek(noga, 'margin:0;font-size:12px;color:#6b7280') +
+    '</div>';
+
+  return {
+    subject: 'Analiza skritih stroškov — ' + podjetje,
+    body: [pozdrav, '', odstavki.join('\n\n'), '', podpis.join('\n'), '', noga].join('\n'),
+    htmlBody: htmlBody,
+  };
+}
+
+/** HTML ubežanje za vrednosti z javnega webhooka, ki gredo v htmlBody. */
+function ubezajHtml(besedilo) {
+  return String(besedilo)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** Ena vrstica za obvestilo prodaji: kam je poročilo šlo ali zakaj ni. */
+function opisIzidaPorocila(izid) {
+  if (!izid) return 'neznano';
+  if (izid.poslano) return 'poslano na ' + izid.naslov;
+  return (
+    'NI poslano (' +
+    (RAZLOGI_POROCILA_STRANKI[izid.razlog] || izid.razlog) +
+    ') — stranka ima na rezultatih gumb za prenos'
+  );
+}
+
+/** Izid pošte stranki v stolpec `porociloStranki` pravkar zapisane vrstice. Nikoli ne vrže. */
+function zapisiIzidPorocila(zapisana, izid) {
+  try {
+    if (!zapisana || !zapisana.glava) return;
+    var stolpec = zapisana.glava.indexOf(POROCILO_STRANKI) + 1;
+    if (!stolpec) return;
+    var besedilo = izid.poslano
+      ? 'poslano ' + Utilities.formatDate(new Date(), 'Europe/Ljubljana', 'yyyy-MM-dd HH:mm')
+      : 'ni poslano: ' + (RAZLOGI_POROCILA_STRANKI[izid.razlog] || izid.razlog);
+    zapisana.list.getRange(zapisana.vrstica, stolpec).setValue(besedilo);
+  } catch (err) {
+    console.warn('Izida pošte stranki ni bilo mogoče zapisati v vrstico: ' + err);
+  }
 }
 
 /** Odgovor doGet je javen, sporočila o napakah pa radi navedejo naslov. */
@@ -1910,7 +2247,7 @@ function pridobiMapo() {
  * 2. IZID SE ZAPIŠE V STOLPEC `activeCampaign`. Prazna celica ali "NAPAKA: …"
  *    pomeni "še ni v AC" in je edino, po čemer ura (`posljiZaostaleVAC`) ve, kaj
  *    naj ponovi. Brez tega stolpca je vsak neuspeh tih in nepovraten.
- * 3. NA VROČI POTI JE ROK. Aplikacija čaka odgovor osem sekund; če ga ne dobi,
+ * 3. NA VROČI POTI JE ROK. Aplikacija čaka odgovor deset sekund; če ga ne dobi,
  *    pade v rezervno pot in pripravo prenese stranki. Zato se AC ob oddaji
  *    pokliče le, če je do tedaj poteklo manj kot `AC_ROK_MS` — sicer ga pobere
  *    ura. Lead ne sme biti izgubljen zato, ker je bil CRM počasen.
@@ -1935,11 +2272,12 @@ var AC_LASTNOST = {
 /**
  * Koliko časa od začetka obdelave še dovolimo, da gremo v AC na vroči poti.
  *
- * Osem sekund je rok aplikacije za CELOTEN odgovor, v katerem sta že shranjena
- * priprava na Drive in zapisana vrstica. Štiri sekunde in pol pustijo klicem v
- * AC (sync + seznam + oznake) dovolj prostora, hkrati pa je meja dovolj nizka,
- * da počasen CRM ne potisne odgovora čez rok. Ob prekoračitvi se ne zgodi nič
- * slabega: celica ostane prazna in vrstico pobere ura.
+ * Deset sekund je rok aplikacije za CELOTEN odgovor, v katerem sta že shranjena
+ * priprava na Drive in zapisana vrstica, za AC pa prideta še dve sporočili
+ * (stranki in prodaji, vsako do sekunde ali dve). Štiri sekunde in pol pustijo
+ * klicem v AC (sync + seznam + oznake) dovolj prostora, hkrati pa je meja dovolj
+ * nizka, da počasen CRM ne potisne odgovora čez rok. Ob prekoračitvi se ne zgodi
+ * nič slabega: celica ostane prazna in vrstico pobere ura.
  */
 var AC_ROK_MS = 4500;
 
@@ -2559,8 +2897,15 @@ var KORAKI_LIJAKA = [
   ['results', 'Rezultati'],
 ];
 
-/** Korak, s katerim se začne vsak nov obisk; obisk z drugim prvim korakom je nadaljevanje. */
+/**
+ * Korak, s katerim se začne vsak nov obisk; obisk z drugim prvim korakom je
+ * nadaljevanje po osvežitvi — razen kadar je dejavnost pred prvim prikazom
+ * izbrala povezava s potjo (`<objava>/proizvodnja/`): tak obisk uvodni zaslon
+ * preskoči in se začne na koraku zaposlenih, aplikacija pa pred prikazom pošlje
+ * lm10_industry_selected z izvorom IZVOR_POVEZAVA (CalculatorFlow.tsx).
+ */
 var UVODNI_KORAK = 'industry';
+var IZVOR_POVEZAVA = 'link';
 
 /** Prvi stolpec podatkov za graf na listu Lijak (N); levo od njega je pogled za človeka. */
 var LIJAK_PODATKI_STOLPEC = 14;
@@ -2889,6 +3234,12 @@ function sestaviLijakList() {
           return o.oddal;
         }),
       ],
+      [
+        'Začeli s povezavo /dejavnost (uvodni zaslon preskočen, štejejo kot začeti)',
+        prestej(zacetni, function (o) {
+          return o.zacelaPovezava;
+        }),
+      ],
       ['Izpuščeni: interni način (?debug=1) ali brez prikaza koraka', izpusceni],
     ],
     [null, '#.##0'],
@@ -3007,6 +3358,18 @@ function opisiObisk(ob) {
   var prikazi = ob.dogodki.filter(function (d) {
     return d.dogodek === 'lm10_step_view' && d.korak;
   });
+  // Dejavnost je pred prvim prikazom izbrala povezava s potjo: obisk se ne
+  // začne na uvodnem zaslonu, a ni nadaljevanje. Izbira ZA prvim prikazom je
+  // ročna (vrnitev na uvodni zaslon) in tega ne pove.
+  var zacelaPovezava =
+    prikazi.length > 0 &&
+    ob.dogodki.some(function (d) {
+      return (
+        d.dogodek === 'lm10_industry_selected' &&
+        d.lastnosti.source === IZVOR_POVEZAVA &&
+        d.zaporedje < prikazi[0].zaporedje
+      );
+    });
   var o = {
     id: ob.id,
     interni: ob.interni,
@@ -3015,7 +3378,8 @@ function opisiObisk(ob) {
     segment: ob.segment || '(neznan)',
     zacetek: ob.zacetek,
     prikazov: prikazi.length,
-    nadaljevanje: prikazi.length > 0 && prikazi[0].korak !== UVODNI_KORAK,
+    zacelaPovezava: zacelaPovezava,
+    nadaljevanje: prikazi.length > 0 && prikazi[0].korak !== UVODNI_KORAK && !zacelaPovezava,
     dosegel: {},
     indeks: {},
     cas: {},

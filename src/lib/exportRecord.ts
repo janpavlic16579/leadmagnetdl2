@@ -184,6 +184,8 @@ export const CSV_COLUMNS = [
   'businessType',
   'currentSystem',
   'role',
+  // Pri predelavi plastike je operationalHourCostEUR STROJNA ura z operaterjem
+  // (contexts/plastika.ts), ne ura človeka — stolpec ostane isti, pomen pove segment.
   'operationalHourCostEUR',
   'adminHourCostEUR',
   'hourCostsEstimated',

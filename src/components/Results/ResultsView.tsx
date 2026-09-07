@@ -9,6 +9,7 @@ import { useReveal } from '../../lib/useReveal';
 import type { TriageScores } from '../../lib/moduleEngine';
 import type { ResultTotals } from '../../lib/potential';
 import type { TotalsRange } from '../../lib/range';
+import type { CustomerReportDelivery } from '../../lib/deliverLead';
 import { Breakdown } from './Breakdown';
 import { CompositionBar } from './CompositionBar';
 import { ConfidenceNote } from './ConfidenceNote';
@@ -56,11 +57,18 @@ interface ResultsViewProps {
   confidenceReason?: string | null;
   onMeasureModule: (id: string) => void;
   /**
-   * Prenos strankinega poročila. Zgradi se ob kliku iz TRENUTNEGA stanja in ne
-   * iz datoteke, shranjene ob oddaji: obiskovalec sme po oddaji nazaj v vnose
-   * in PDF mora ustrezati zaslonu, s katerega ga prenaša.
+   * Prenos strankinega poročila — REZERVA, kadar poročilo ni šlo po e-pošti.
+   * Zgradi se ob kliku iz TRENUTNEGA stanja in ne iz datoteke, shranjene ob
+   * oddaji: obiskovalec sme po oddaji nazaj v vnose in PDF mora ustrezati
+   * zaslonu, s katerega ga prenaša.
    */
   onDownloadPdf: () => Promise<void>;
+  /**
+   * Kam je šlo strankino poročilo (druga tabela v lib/deliverLead.ts). Odloča,
+   * ali noga pokaže obvestilo o poslani pošti ali gumb za prenos. null = ni
+   * znano (npr. obnovljena seja brez zastavice) — tedaj gumb, kot doslej.
+   */
+  customerReport: CustomerReportDelivery | null;
   /** Kaj sledi rezultatom (NextSteps) — vsebina nekdanjega zahvalnega zaslona. */
   consultingRequested: boolean;
   onDownloadSalesPdf?: () => void | Promise<void>;
@@ -84,6 +92,7 @@ export function ResultsView({
   confidenceReason,
   onMeasureModule,
   onDownloadPdf,
+  customerReport,
   consultingRequested,
   onDownloadSalesPdf,
   internalMode,
@@ -109,6 +118,14 @@ export function ResultsView({
       setDownloading(false);
     }
   };
+
+  /**
+   * Noga: obvestilo o poslani pošti ali gumb za prenos — nikoli gumb sam od sebe
+   * ob pošti, ki je odšla (razen v internem načinu, za pregled). Brez podatka
+   * (null) ostane gumb: rezerva je varna razlaga neznanega.
+   */
+  const reportEmailed = customerReport?.reason === 'emailed';
+  const showDownload = customerReport?.downloadOffered ?? true;
 
   const isAccounting = segment.id === 'racunovodstvo';
   const modules = getModules(segment.moduleIds);
@@ -317,6 +334,7 @@ export function ResultsView({
 
       <NextSteps
         consultingRequested={consultingRequested}
+        reportEmailed={reportEmailed}
         onDownloadSalesPdf={onDownloadSalesPdf}
         internalMode={internalMode}
         followUpSequenceDebug={followUpSequenceDebug}
@@ -333,22 +351,47 @@ export function ResultsView({
               .
             </p>
           ) : null}
+          {/*
+            Obvestilo stoji tam, kjer je bil gumb: kdor išče prenos, tu izve, kam
+            je poročilo šlo. Naslov ponovi krepko — tipkarska napaka se vidi tu,
+            ne šele čez uro v praznem nabiralniku. Po osvežitvi naslova ni.
+          */}
+          {reportEmailed ? (
+            <p role="status" className={styles.footerNote}>
+              {internalMode ? '[interno] ' : ''}Poročilo smo poslali na{' '}
+              {customerReport?.emailedTo ? (
+                <strong className={styles.footerNoteStrong}>{customerReport.emailedTo}</strong>
+              ) : (
+                'vaš e-naslov'
+              )}
+              .
+            </p>
+          ) : null}
+          {customerReport?.reason === 'not_sent' ? (
+            <p role="status" className={styles.footerNote}>
+              Poročila na e-naslov nismo mogli poslati — prenesite ga tukaj.
+            </p>
+          ) : null}
           <div className={styles.actions}>
             <button type="button" className={buttonStyles.secondaryButton} onClick={onBack}>
               Nazaj na vnos
             </button>
             {/*
-              Prenos neposredno, brez vmesnega zaslona: obrazec je za obiskovalcem.
-              Vsak klik je sveža gesta, zato prenos ne odpade kot nekoč samodejni.
+              Prenos je REZERVA (lib/deliverLead.ts): pokaže se, kadar poročilo ni
+              šlo po e-pošti, in v internem načinu. Neposredno, brez vmesnega
+              zaslona: obrazec je za obiskovalcem. Vsak klik je sveža gesta, zato
+              prenos ne odpade kot nekoč samodejni.
             */}
-            <button
-              type="button"
-              className={buttonStyles.primaryButton}
-              onClick={handleDownload}
-              disabled={downloading}
-            >
-              {downloading ? 'Pripravljam …' : SHARED_COPY.resultsPrimaryCta}
-            </button>
+            {showDownload ? (
+              <button
+                type="button"
+                className={buttonStyles.primaryButton}
+                onClick={handleDownload}
+                disabled={downloading}
+              >
+                {downloading ? 'Pripravljam …' : SHARED_COPY.resultsPrimaryCta}
+              </button>
+            ) : null}
           </div>
         </div>
       </div>

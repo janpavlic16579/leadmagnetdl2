@@ -330,7 +330,7 @@ Ker se razlikujejo poklici, ki jih vprašanje opisuje. Kjer je razlika samo v be
 poklicih, je nabor namenoma isti — logistika in veleprodaja obe merita skladiščnika in
 komisionarja, zato imata enak nabor.
 
-Trije nabori odstopajo od gole izpeljave, vsak s svojim razlogom:
+Štirje nabori odstopajo od gole izpeljave, vsak s svojim razlogom:
 
 - **Maloprodaja** ima spodnji pas nad izpeljavo iz plače prodajalca: poslovalnica dela ob
   sobotah, praznikih in v izmenah, dodatki pa to uro sistematično dvignejo.
@@ -340,6 +340,35 @@ Trije nabori odstopajo od gole izpeljave, vsak s svojim razlogom:
   poklicev — mehanik in serviser na eni strani, inženir strojništva in programer na drugi.
   Posledica je zavestna: rezultat se pri izbranem pasu pogosteje prikaže kot razpon in ne
   kot ena številka.
+- **Gradbeništvo** (september 2026) nima lastnega sidra: zidarja, tesarja in strojnika
+  (SKP 7112, 7115, 8342) tabela zgoraj še ne vsebuje, zato je nabor prevzet od proizvodne
+  operativne ure — isto dno (minimalna plača, pod katero v gradbeništvu leži spodnji
+  kvartil) in isti red velikosti, privzetek 21 EUR/h. Zgornja meja je izmerjena: Eurostat
+  `lc_lci_lev` daje za gradbeništvo (F) 25,4 EUR/h (2025), a kot povprečje cele panoge z
+  inženirji in vodstvom — za delavca je to strop, ne sredina. Vodstvena ura je 28 EUR/h,
+  ker sta vodja gradbišča in kalkulant tehnik ali inženir (tehnik 27,7, nadzornik 29,6,
+  N71.12 inženiring 29,6), ne pisarniški uradnik (20,9). Ob naslednji objavi tabele
+  `0711360S` nabor preveriti proti tem trem poklicem.
+
+- **Inženiring** (september 2026) ima lastno košarico, težjo od storitvene: brez oblikovalca
+  in programerja, z inženirjem, tehnikom, nadzornikom (vodja montaže) in serviserjem. Po isti
+  metodi kot zgoraj (pot A iz plače, pot B iz izmerjenega stroška dela, sredina obeh za
+  povprečje in za mediano) da košarica **29,4 → privzetek 30 EUR/h**. Ne 31 ali več, čeprav
+  raziskava panoge računa z 32–45 EUR/h: ta številka vključuje režijo, ki je ta kalkulator
+  namenoma ne šteje, povprečje panoge N71.12 z vodstvom vred pa je 29,6 in je zgornja meja
+  verjetnosti, ne sidro. Pasovi so isti kot pri storitvah (`do 22 · 22–28 · 28–35 · nad 35`),
+  ker se košarici prekrivata v štirih od šestih poklicev in bi drugačne meje pomenile razliko v
+  besedah, ne v poklicih.
+
+| Poklic (SKP-08) | bruto okt. 2025 | mediana 2025 | pot A | pot B | EUR/h | EUR/h iz mediane |
+|---|---|---|---|---|---|---|
+| 2141 Inženir, tehnolog v industriji | 3.244 | 3.081 | 30,6 | 35,8 | 33,2 | 31,6 |
+| 2144 Inženir strojništva | 3.504 | 3.188 | 32,8 | 38,7 | 35,7 | 32,6 |
+| 2149 Strokovnjak tehnično-tehnoloških strok | 3.119 | 2.880 | 29,5 | 34,4 | 32,0 | 29,6 |
+| 3115 Tehnik za strojništvo | 2.685 | 2.492 | 25,8 | 29,6 | 27,7 | 25,8 |
+| 3122 Nadzornik v predelovalnih dejavnostih | 2.843 | 2.624 | 27,1 | 31,4 | 29,3 | 27,1 |
+| 7233 Mehanik, serviser strojev | 2.404 | 2.256 | 23,4 | 26,5 | 25,0 | 23,5 |
+| **Košarica — sredina povprečja in mediane** | | | | | **29,4** | |
 
 **Sidro ni nujno prvi našteti poklic.** Logistika in veleprodaja nista usidrani na
 voznika, čeprav ga vprašanje našteva prvega: po plači je na dnu naštetih poklicev
@@ -385,10 +414,13 @@ Dve posledici za kalibracijo:
 | Veleprodaja, operativna ura | 20 | do 17 · 17–19 · 19–23 · nad 23 | 22 |
 | Maloprodaja, operativna ura | 19 | do 17 · 17–20 · 20–24 · nad 24 | 21 |
 | Storitve, izvedbena ura | 29 | do 22 · 22–28 · 28–35 · nad 35 | 32 |
+| Inženiring, inženirska ura | 30 | do 22 · 22–28 · 28–35 · nad 35 | — |
+| Gradbeništvo, ura delavca na gradbišču | 21 | do 17 · 17–20 · 20–25 · nad 25 | — |
 | Računovodstvo, operativna ura | 25 | do 19 · 19–24 · 24–30 · nad 30 | 26 |
 | Splošno, operativna ura | 20 | do 17 · 17–19 · 19–23 · nad 23 | 23 |
 | Administrativna ura (skupna) | 26 | do 20 · 20–25 · 25–31 · nad 31 | 27 |
 | Računovodstvo, vodstvena ura | 33 | isti nabor kot administrativna | 34 |
+| Gradbeništvo, ura vodje gradbišča oziroma pisarne | 28 | isti nabor kot administrativna | — |
 | Storitve, zaračunana postavka | 55 | do 42 · 42–60 · 60–85 · nad 85 | 55 |
 
 Iste vrednosti nosi tudi `DEFAULT_COST_CONTEXT` v `src/config/modules/moduleTypes.ts`

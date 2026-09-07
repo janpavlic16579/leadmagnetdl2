@@ -141,13 +141,17 @@ export interface SegmentCopy {
      */
     directLoss: FigureCopy & { note: string };
     lostMargin?: { title?: string; note?: string };
-    /** note se izpiše ZA predpono "X h/mesec. " — ure doda izrisovalec, ne besedilo. */
-    capacity?: { title?: string; note?: string };
+    /**
+     * note se izpiše ZA predpono "X h/mesec. " — ure doda izrisovalec, ne besedilo.
+     * shortNote je tu zato, ker so pri predelavi plastike v isti vsoti STROJNE in
+     * delovne ure — nevtralna opomba v PDF-ju ("zaposleni ostane") bi jih razglasila za plače.
+     */
+    capacity?: FigureCopy;
     oneTimeCapital?: { title?: string; note?: string };
     potential?: { title?: string; note?: string };
   };
 
-  /** Obrazec med vnosi in rezultati — odklene rezultat na zaslonu in PDF poročilo. */
+  /** Obrazec med vnosi in rezultati — odklene rezultat na zaslonu, PDF poročilo gre na vpisani e-naslov. */
   emailGate: {
     /**
      * Mora poimenovati OBOJE, kar obrazec odklene: REZULTAT in POROČILO. Naslov,
@@ -231,11 +235,12 @@ export const SHARED_COPY = {
     'Vpišite število zaposlenih — vsaj 1. Če ste samostojni podjetnik brez zaposlenih, štejte sebe.',
 
   /**
-   * Primarni gumb na rezultatih: poročilo prenese neposredno, brez vmesnega
-   * zaslona — obrazec je obiskovalec izpolnil že PRED rezultati. Vsak klik je
-   * sveža gesta, zato prenos ne odpade, kot je nekoč samodejni po oddaji.
-   * Poimenuje isti dokument, ki ga je obljubil naslov obrazca (emailGate.title)
-   * — varuje copy.test.ts.
+   * Gumb za prenos na rezultatih — REZERVA, kadar poročilo ni šlo po e-pošti
+   * (lib/deliverLead.ts); sicer na njegovem mestu stoji obvestilo o poslani
+   * pošti. Prenese neposredno, brez vmesnega zaslona — obrazec je obiskovalec
+   * izpolnil že PRED rezultati. Vsak klik je sveža gesta, zato prenos ne odpade,
+   * kot je nekoč samodejni po oddaji. Poimenuje isti dokument, ki ga je obljubil
+   * naslov obrazca (emailGate.title) — varuje copy.test.ts.
    */
   resultsPrimaryCta: 'Prenesi PDF poročilo',
 
@@ -449,7 +454,7 @@ export const NEUTRAL_COPY: ResolvedSegmentCopy = {
   emailGate: {
     title: 'Rezultat in PDF poročilo z akcijskim načrtom',
     subtitle:
-      'Po oddaji se na zaslonu odpre vaš izračun in z njim PDF poročilo za upravo — razčlenjeno po področjih, s formulo pod vsako postavko in tremi ukrepi za področje z največjim zneskom.',
+      'Po oddaji se na zaslonu odpre vaš izračun, PDF poročilo za upravo pa prejmete na vpisani e-naslov — razčlenjeno po področjih, s formulo pod vsako postavko in tremi ukrepi za področje z največjim zneskom.',
     consultingTitle: 'Želite, da vaše številke pregledamo skupaj?',
     consultingNote:
       'Brez obveznosti. Svetovalec pogleda vaš izračun in pove, katere postavke je v vašem primeru mogoče nasloviti najhitreje.',
