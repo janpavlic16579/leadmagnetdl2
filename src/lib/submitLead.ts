@@ -69,14 +69,11 @@ export interface LeadWirePayload extends LeadSubmission {
 }
 
 /**
- * Naslov webhooka iz build okolja (.env: VITE_LEAD_WEBHOOK_URL). Null pomeni
- * "ni konfigurirano" in klicatelj obdrži dosedanje vedenje.
+ * Naslov webhooka — živi v lib/webhookUrl.ts, ker ga potrebuje tudi merjenje
+ * lijaka v glavnem svežnju. Tu ostane izvožen, da klicatelji dostave (in test)
+ * ne poznajo te delitve.
  */
-export function leadWebhookUrl(env: Record<string, unknown> = import.meta.env): string | null {
-  const url = env.VITE_LEAD_WEBHOOK_URL;
-  if (typeof url !== 'string' || url.trim() === '') return null;
-  return url.trim();
-}
+export { leadWebhookUrl } from './webhookUrl';
 
 /**
  * Koliko časa čakamo webhook, preden odnehamo — osnova, h kateri se prišteje

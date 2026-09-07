@@ -12,10 +12,11 @@ zanesljivost, urni postavki z izvorom, `utm_source` in follow-up sekvenca. Skrip
 doda še `prejeto` (čas prejema) in `prodajnaPriprava` (povezava do dokumenta na
 Drive). Ob vsaki oddaji lahko pošlje tudi obvestilo na e-pošto (spodaj).
 
-**Kdo v preglednico NE pride.** Kdor vprašalnik zapusti pred obrazcem — brez
+**Kdo v list `Leadi` NE pride.** Kdor vprašalnik zapusti pred obrazcem — brez
 e-naslova in brez privolitve zapisa ni (`buildLeadExportRecord` tedaj vrne `null`).
-Za odpadanje po korakih so dogodki v `window.dataLayer` (`src/lib/analytics.ts`),
-ne ta preglednica.
+Odpadanje po korakih merijo dogodki lijaka, ki pridejo po istem webhooku na list
+`Dogodki`; povzetek je na listu `Lijak` (glej
+[Lijak — kje obiskovalci odnehajo](#lijak--kje-obiskovalci-odnehajo)).
 
 ## Namestitev (~10 minut, enkrat)
 
@@ -229,10 +230,10 @@ pove v izpisu — urejanje leadov se zaradi tega **ne** razveljavi.
 - **Kdaj je bil lead poklican.** Potrditveno polje ne hrani časa, zato „povprečen
   čas od oddaje do klica" ni izračunljiv — ne s formulo ne s skripto. Za to bi
   bila potrebna sprožilec ob urejanju in nov stolpec z datumom.
-- **Koliko obiskovalcev je odpadlo pred obrazcem.** V preglednico pridejo samo
-  oddaje s privolitvijo; lijak obiskovalec → lead merijo dogodki v
-  `src/lib/analytics.ts`, ne ta list. Kdor bi ga sestavil iz teh številk, bi meril
-  samo tiste, ki so vprašalnik prehodili do konca.
+- **Koliko obiskovalcev je odpadlo pred obrazcem.** V list `Leadi` pridejo samo
+  oddaje s privolitvijo; lijak obiskovalec → lead je na listu `Lijak` (spodaj).
+  Kdor bi ga sestavil iz številk tega lista, bi meril samo tiste, ki so
+  vprašalnik prehodili do konca.
 - **Odstotkov pri malo klicih.** „Sestanki na poklicanega" pod desetimi klici
   pokaže `n=3 — premalo za odstotek`. Namerno: pri treh klicih odstotek skače med
   0, 33, 67 in 100 in se v ponedeljek prepolovi. „Delež poklicanih" te zapore
@@ -252,6 +253,99 @@ Google poganja **razmeščeno različico**, ne tiste v urejevalniku. Po vsaki
 spremembi: *Razmesti → Upravljaj razmestitve → svinčnik → Različica: Nova
 različica → Razmesti*. Naslov ostane isti. Brez tega koraka teče stara koda in
 videti je, kot da sprememba ni imela učinka.
+
+## Lijak — kje obiskovalci odnehajo
+
+Aplikacija pošlje po istem webhooku tudi **dogodke lijaka** (`src/lib/funnel.ts`):
+prikaz vsakega koraka (in vsake strani vnosov), izbrana dejavnost, zaključena
+triaža in osnova, prihod na obrazec, blokada validacije, oddaja, izid dostave,
+prenos poročila. Telo nosi `events` in `visit` namesto `record`; `doPost` ju loči
+po obliki. `zapisiDogodke` dogodke pripne na list **`Dogodki`** (ena vrstica na
+dogodek), `sestaviLijak` pa iz njih sestavi list **`Lijak`**.
+
+Kdor vprašalnik zapusti pred obrazcem, je torej viden tu — kot obisk brez
+e-naslova, brez imena, brez vnesenih zneskov. Dogodek nosi korak, segment,
+področje vnosov, razred zaslona (`mobile`/`desktop`), `utm_source` in razrede
+(zanesljivost, število področij, polje, ki je ustavilo oddajo). Nič drugega.
+
+### Namestitev (~5 minut, enkrat)
+
+1. **Prilepite novo različico `Koda.gs`** in jo **razmestite kot novo različico**
+   (*Razmesti → Upravljaj razmestitve → svinčnik → Nova različica*). Stara
+   razmeščena različica dogodke zavrača z napako `V telesu ni zapisa (record)` —
+   aplikacija tega ne vidi (odgovora ne bere), vidi pa se v *Izvedbah* in po tem,
+   da list `Dogodki` ne nastane.
+2. **Preverite na naslovu `/exec`**: vrstica `Dogodki lijaka:` pove število
+   vrstic in čas zadnjega prejema. Dokler je 0, dogodki ne prihajajo — bodisi
+   teče stara različica, bodisi aplikacija nima nastavljenega webhooka.
+3. **Poženite `sestaviLijak`** (izberite funkcijo → *Zaženi*), ko je na listu
+   `Dogodki` nekaj obiskov. Nastane list `Lijak`.
+4. **Poženite `namestiUroZaLijak`** — povzetek se od tedaj sestavi vsak dan ob
+   šestih zjutraj. Ponovni zagon starih ur ne podvoji.
+
+Aplikacije ni treba spreminjati: dogodki gredo na `VITE_LEAD_WEBHOOK_URL`, ki je
+že nastavljen. Brez njega se ne pošlje nič.
+
+### Kaj je na listu `Lijak`
+
+| Kje | Kaj |
+|---|---|
+| vrstici 4–5 | **Kartice**: začetih obiskov, do obrazca, oddaj, delež oddaj, prenosov poročila |
+| `LIJAK — VSI SEGMENTI` | Korak za korakom: koliko obiskov ga je doseglo, delež od začetnih, koliko jih **tu končalo** (ni šlo dlje), odpad v odstotkih, **mediana časa** na koraku; pod vnosi še vsaka stran (področje) posebej. Desno graf. |
+| `LIJAK — <SEGMENT>` | Isti lijak za vsak segment posebej — edini točen, ker koraki kontekst, triaža in osnova obstajajo le v segmentih s konfiguracijo |
+| `PO SEGMENTIH`, `PO VIRU OBISKA`, `PO ZASLONU` | Začetih, do obrazca, oddaj, delež oddaj po skupinah |
+| `OBRAZEC — KATERO POLJE USTAVI ODDAJO` | Blokade validacije po polju: kolikokrat in koliko obiskov |
+| `DOSTAVA LEADA` | Uspele in padle dostave po razlogu (`no_webhook`, `rejected`, `error`) |
+| `NADALJEVANJA IN IZPUŠČENI OBISKI` | Obiski po osvežitvi, oddaje med njimi, interni obiski (`?debug=1`) |
+| `PO DNEVIH` | Zadnjih 30 dni: začetih in oddaj — vir za graf trenda |
+
+**Kako brati.** *Obisk* je ena naložena stran, ne obiskovalec: id obiska živi samo
+v pomnilniku strani (brez piškotka, brez `sessionStorage` — identifikator v
+brskalniku bi po ZEKom-2 terjal privolitev). Osvežitev sredi vprašalnika zato
+naredi nov obisk, ki se začne sredi toka; take obiske („nadaljevanja": prvi
+prikazani korak ni uvodni) lijak **ne** šteje, pove pa, koliko jih je in koliko
+jih je oddalo. Pravi delež dokončanih je med številko brez nadaljevanj in
+številko z njimi. Gib „Nazaj" na telefonu strani ne osveži (zgodovina je v
+aplikaciji), zato je nadaljevanj malo.
+
+*Končalo tu* pomeni, da obisk ni prišel **dlje** od tega koraka — vrnitev nazaj
+ni odnehanje, šteje najdlje doseženi korak. Pri rezultatih pomeni dokončan
+vprašalnik. *Mediana časa* šteje samo obiske, ki so s koraka šli naprej (zadnji
+korak obiska časa nima: ni znano, kdaj je obiskovalec odšel), in izpusti čase
+nad 30 minutami (pozabljen zavihek). Mediana in ne povprečje, ker en pozabljen
+zavihek povprečje pokvari bolj kot sto pravih obiskov.
+
+**List je posnetek**, ne žive formule kot `Analitika`: povzetek potrebuje
+obiske (dogodke, zbrane po id-ju in urejene po zaporedju), česar formule ne
+zmorejo berljivo. Kdaj je nastal, piše v vrstici 2; izid zadnjega zagona je na
+naslovu `/exec` (`Lijak:`). V list ne pišite ročno — ob naslednjem zagonu se
+sestavi na novo (list ob urejanju opozori).
+
+### Nastavitve
+
+| Nastavitev | Privzeto | Kaj naredi |
+|---|---|---|
+| `LIJAK_OBDOBJE_DNI` | `0` (vsi dogodki) | Koliko dni nazaj šteje povzetek. Pri majhnem prometu pustite 0 — pri dvajsetih obiskih na teden je tedenski odstotek šum. Ožje obdobje ima smisel, ko se vprašalnik spremeni in primerjate prej in potem. |
+| `DOGODKI_HRANI_DNI` | `0` (nikoli) | Po koliko dneh dnevna ura pobriše surove dogodke. Obisk pusti okoli deset vrstic; pri sto obiskih na dan je to milijon celic na leto (meja preglednice je deset milijonov). |
+
+### Kar je vredno vedeti
+
+- **Napaka tu ne gre v rezervno pot.** Aplikacija odgovora na dogodke ne bere
+  (pošilja jih s `sendBeacon`, da preživijo zaprtje zavihka), zato izjema v
+  `zapisiDogodke` ne škodi nikomur razen dnevniku *Izvedb* — in tam je prav, da
+  se vidi.
+- **Dogodki ne čakajo na oddajo.** Pripenjanje ima kratko ključavnico (5 s);
+  če je zasedena (oddaja leada z Drive in pošto), gre vrstica za vrstico prek
+  `appendRow`, ki je varen tudi brez nje.
+- **Kvota.** Obisk pošlje okrog deset paketov. Brezplačni račun zmore ~20.000
+  klicev na dan — okoli 2.000 obiskov na dan, preden bi bilo treba pakete
+  redčiti.
+- **Stolpci lista `Dogodki` so določeni v skripti** (`DOGODKI_GLAVA`), drugače
+  kot pri `Leadi`: povzetek jih mora poznati tako ali tako. Kar aplikacija pošlje
+  poleg znanih lastnosti, pristane kot JSON v stolpcu `lastnosti`. Ne
+  preimenujte jih in ne pišite vanj ročno.
+- **Interni obiski** (`?debug=1`) se zapišejo z `interni = TRUE` in jih povzetek
+  izpusti — razvojni kliki ne pokvarijo odstotkov.
 
 ## ActiveCampaign
 

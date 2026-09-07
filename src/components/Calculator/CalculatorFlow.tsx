@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { SEGMENTS, type SegmentId } from '../../config/segments';
 import { getModules } from '../../config/modules';
 import {
@@ -323,15 +323,6 @@ export function CalculatorFlow({
   }, [hasAnswers, submitted]);
 
   /**
-   * Lijak (lib/analytics.ts). Korak in segment, nič osebnega — brez tega o
-   * odpadanju skozi deset korakov ni znano nič, s tem pa je vsaka razprava o
-   * krajšanju vprašalnika razprava o mnenjih.
-   */
-  useEffect(() => {
-    track('lm10_step_view', { step, segment: activeSegmentId });
-  }, [step, activeSegmentId]);
-
-  /**
    * Zaporedje korakov je izpeljano iz konfiguracije segmenta, ne iz verige ternarjev.
    * Dodajanje koraka pomeni en vnos tu — številčenje in navigacija se prilagodita sama.
    */
@@ -402,6 +393,35 @@ export function CalculatorFlow({
 
   const stepLabel = (current: FlowStep, pageIndex = 0) =>
     `Korak ${stepNumber(current, pageIndex)} od ${totalSteps}`;
+
+  /**
+   * Lijak (lib/analytics.ts). Korak, segment in razredi, nič osebnega — brez
+   * tega o odpadanju skozi deset korakov ni znano nič, s tem pa je vsaka
+   * razprava o krajšanju vprašalnika razprava o mnenjih.
+   *
+   * Stoji ZA stepNumber in ne pri ostalih učinkih zgoraj, ker nosi isto
+   * številko koraka, kot jo vidi obiskovalec ("Korak N od M"): zaporedje je
+   * odvisno od segmenta in brez številke lijakov različnih segmentov ni mogoče
+   * poravnati. Pri vnosih se sproži za VSAKO stran (inputsPageIndex med
+   * odvisnostmi) in nosi id področja — korak z vnosi je ena stran na področje
+   * in brez id-ja ni videti, katero področje ljudi ustavi.
+   */
+  const trackStepView = useEffectEvent(() => {
+    const pageModules = step === 'inputs' ? (inputPages[inputsPageIndex] ?? []) : [];
+    track('lm10_step_view', {
+      step,
+      segment: activeSegmentId,
+      stepIndex: stepNumber(step, inputsPageIndex),
+      stepsTotal: totalSteps,
+      ...(step === 'inputs' ? { moduleId: pageModules[0]?.id ?? '' } : {}),
+    });
+  });
+  // Samo trije sprožilci; vrednosti, ki jih dogodek nosi, bere useEffectEvent iz
+  // trenutnega izrisa. Če bi bil `totalSteps` med odvisnostmi, bi vsaka kljukica
+  // v triaži (spremeni število strani vnosov) štela kot nov prikaz koraka.
+  useEffect(() => {
+    trackStepView();
+  }, [step, activeSegmentId, inputsPageIndex]);
 
   /**
    * Vizualna vrstica napredka nad korakom. Besedilni števec je bil doslej edini

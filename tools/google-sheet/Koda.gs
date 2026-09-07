@@ -26,6 +26,11 @@
  * spremembi te datoteke je treba razmestiti NOVO RAZLIČICO (Deploy → Manage
  * deployments → New version) in znova vpisati E_NASLOV_ZA_OBVESTILA, ker ga
  * datoteka v repozitoriju nima.
+ *
+ * Telo lahko namesto `record` nosi `events` in `visit` — dogodke lijaka, ki jih
+ * pošilja src/lib/funnel.ts. Ti gredo na list Dogodki, iz njega pa
+ * `sestaviLijak` naredi list Lijak: kje obiskovalci odnehajo. Glej razdelek
+ * LIJAK na dnu datoteke.
  */
 
 var NASTAVITVE = {
@@ -34,6 +39,28 @@ var NASTAVITVE = {
 
   /** List s pregledom številk. Nastane in se sestavi ob `urediStolpce`. */
   IME_LISTA_ANALITIKA: 'Analitika',
+
+  /** List s surovimi dogodki lijaka — ena vrstica na dogodek (glej razdelek LIJAK). */
+  IME_LISTA_DOGODKI: 'Dogodki',
+
+  /** List s povzetkom lijaka. Sestavi ga `sestaviLijak` (ročno ali dnevna ura). */
+  IME_LISTA_LIJAK: 'Lijak',
+
+  /**
+   * Koliko dni nazaj šteje povzetek lijaka. 0 = vsi dogodki. Pri majhnem
+   * prometu pustite 0: pri dvajsetih obiskih na teden je odstotek za zadnjih
+   * sedem dni šum. Ožje obdobje ima smisel, ko se vprašalnik spremeni in je
+   * treba primerjati prej in potem.
+   */
+  LIJAK_OBDOBJE_DNI: 0,
+
+  /**
+   * Po koliko dneh dnevna ura pobriše surove dogodke. 0 = nikoli. Obisk pusti
+   * okoli deset vrstic; pri sto obiskih na dan je to milijon celic na leto
+   * (meja preglednice je deset milijonov), zato je brisanje vprašanje šele
+   * drugega leta.
+   */
+  DOGODKI_HRANI_DNI: 0,
 
   /**
    * Neobvezen žeton (`?zeton=...` v naslovu webhooka). Prazno = izklopljeno.
@@ -247,6 +274,9 @@ var SKRIJ = [
 function doGet() {
   var list = pridobiList();
   var lastnosti = PropertiesService.getScriptProperties();
+  // Brez ustvarjanja lista: doGet je javen in ne sme puščati sledi.
+  var dogodki = poisciList(NASTAVITVE.IME_LISTA_DOGODKI);
+  var stDogodkov = dogodki ? Math.max(0, dogodki.getLastRow() - 1) : 0;
 
   // Stanje obvestil je tu zato, ker se je enkrat že zgodilo: vrstice so se
   // pisale, pošte pa ni bilo, in vzroka ni bilo mogoče videti od zunaj — napaka
@@ -263,6 +293,18 @@ function doGet() {
     'Zadnji v AC: ' + (lastnosti.getProperty('AC_ZADNJI') || 'še nobeden'),
     'Zadnja napaka AC: ' + (lastnosti.getProperty('AC_ZADNJA_NAPAKA') || 'brez'),
     'Vrstic v listu (getMaxRows): ' + list.getMaxRows() + ', stolpcev: ' + list.getMaxColumns(),
+    // Pravi leadi proti vsem vrsticam. Razlika je edini znak za okvaro, ki je
+    // od zunaj videti kot "leadi se ne vpisujejo": prazne vrstice s sledjo
+    // potrditvenega polja odrinejo vsako novo oddajo na dno lista, kjer je ne
+    // vidi nihče. Dokler sta številki blizu, je list zdrav.
+    'Od tega pravih leadov: ' + prestejLeade(list),
+    // Lijak: ali dogodki sploh prihajajo (razmeščena stara različica jih zavrača
+    // z napako, ki je aplikacija ne vidi) in kdaj je bil povzetek nazadnje sestavljen.
+    'Dogodki lijaka: ' +
+      stDogodkov +
+      ' vrstic' +
+      (stDogodkov ? ', zadnji prejet: ' + zadnjiPrejemDogodka(dogodki) : ''),
+    'Lijak: ' + (lastnosti.getProperty('LIJAK_ZADNJI') || 'še ni sestavljen — poženite sestaviLijak'),
   ];
   return ContentService.createTextOutput(vrstice.join('\n'));
 }
@@ -280,6 +322,10 @@ function doPost(e) {
   var zacetek = Date.now();
 
   var oddaja = JSON.parse(e.postData.contents);
+  // Dogodki lijaka gredo po isti poti kot oddaje in se ločijo po obliki telesa
+  // (razdelek LIJAK na dnu). Pred ključavnico spodaj: pripenjanje dogodkov ima
+  // svojo, kratko, in ne sme čakati na Drive in pošto oddaje.
+  if (oddaja.events) return zapisiDogodke(oddaja);
   if (!oddaja.record) throw new Error('V telesu ni zapisa (record).');
 
   // Dve hkratni oddaji bi brez ključavnice lahko pisali v isto vrstico. Trideset
@@ -645,6 +691,13 @@ function preurediList() {
   // enako mnogo kot prej, zato prepis pokrije prav vse celice.
   list.getRange(1, 1, nove.length, novaGlava.length).setValues(nove);
 
+  // Zapis na disk PRED vsem, kar sledi. Apps Script pisanje kopiči in ga izvede
+  // ob prvem branju; pri stotisoč celicah je ta trenutek predaleč — `urediVidez`
+  // in `urediAnalitiko` spodaj list BEREta znova in smeta videti samo končno
+  // stanje. En klic, ki stane nič, in odpade cel razred napak "list je videti,
+  // kot da prepisa ni bilo".
+  SpreadsheetApp.flush();
+
   urediVidez(list, novaGlava);
 
   // Analitika ŠELE ZDAJ: njene formule kažejo na črke stolpcev, zato jih je
@@ -684,6 +737,161 @@ function preurediList() {
  * vsakem leadu izpolnjen; getLastRow bi bil tu neuporaben, saj je prav on tisti,
  * ki laže.
  */
+/**
+ * KONEC PREIZKUSNEGA OBDOBJA: pobriše VSE vrstice z leadi in pusti samo glavo.
+ *
+ * Namenjeno trenutku, ko je preizkušanje končano in naj list od tod naprej
+ * zbira samo prave obiskovalce. Glava, oblike stolpcev in širine ostanejo —
+ * pobriše se vsebina, ne postavitev.
+ *
+ * Zadnje nezamrznjene vrstice se ne da pobrisati (Google to zavrne), zato se
+ * pobrišejo vse do nje, njo pa izpraznimo do konca: brez vsebine, brez oblike
+ * in brez veljavnosti. Šele s tem `getLastRow` pade nazaj na 1 in naslednja
+ * oddaja pristane v vrstici 2 — kar je ves namen tega posega.
+ *
+ * NEPOVRATNO. Pred zagonom Datoteka → Ustvari kopijo; pravi „razveljavi" je
+ * Datoteka → Zgodovina različic.
+ */
+function pocistiVseLeade() {
+  var list = pridobiList();
+  var glava = preberiGlavo(list);
+  if (!glava.length) throw new Error('List "' + NASTAVITVE.IME_LISTA + '" nima glave — ni česa čistiti.');
+
+  var vrstic = Math.max(0, list.getLastRow() - 1);
+
+  // Ista ključavnica kot doPost: oddaja, ki pride sredi čiščenja, bi sicer
+  // pristala v vrstici, ki jo ta poseg takoj za tem pobriše.
+  var kljucavnica = LockService.getScriptLock();
+  kljucavnica.waitLock(30000);
+  try {
+    if (list.getMaxRows() > 2) list.deleteRows(2, list.getMaxRows() - 2);
+    var ostanek = list.getRange(2, 1, 1, list.getMaxColumns());
+    ostanek.clearContent();
+    ostanek.clearDataValidations();
+    ostanek.clearFormat();
+    SpreadsheetApp.flush();
+  } finally {
+    kljucavnica.releaseLock();
+  }
+
+  var izid =
+    'Pobrisanih vrstic: ' + vrstic + '. Ostala je samo glava — naslednji lead pristane v vrstici 2.';
+  PropertiesService.getScriptProperties().setProperty(
+    'ZADNJE_CISCENJE',
+    new Date().toISOString() + ' — ' + izid,
+  );
+  return izid;
+}
+
+/**
+ * Isto za list z dogodki lijaka: pobriše vse zbrane dogodke in pusti glavo.
+ * Povzetek `sestaviLijak` po tem šteje od nič — smiselno takrat, ko so v listu
+ * samo še razvojni kliki in naj merjenje začne s pravim prometom.
+ */
+function pocistiVseDogodke() {
+  var list = poisciList(NASTAVITVE.IME_LISTA_DOGODKI);
+  if (!list) return 'Lista "' + NASTAVITVE.IME_LISTA_DOGODKI + '" ni — nič za počistiti.';
+
+  var vrstic = Math.max(0, list.getLastRow() - 1);
+  var kljucavnica = LockService.getScriptLock();
+  kljucavnica.waitLock(30000);
+  try {
+    if (list.getMaxRows() > 2) list.deleteRows(2, list.getMaxRows() - 2);
+    var ostanek = list.getRange(2, 1, 1, list.getMaxColumns());
+    ostanek.clearContent();
+    ostanek.clearFormat();
+    SpreadsheetApp.flush();
+  } finally {
+    kljucavnica.releaseLock();
+  }
+  return 'Pobrisanih dogodkov: ' + vrstic + '. Lijak bo od zdaj štel od nič.';
+}
+
+/**
+ * ENKRATNO POPRAVILO: stolpcu s časi prejema vrne ime `prejeto`.
+ *
+ * Obstaja zato, ker se je zgodilo: ime je iz glave izpadlo (prazna celica v
+ * vrstici 1), s tem pa je stolpec ob preurejanju zdrsnil med neznane in vse, kar
+ * se nanj sklicuje — analitika, čiščenje, štetje leadov — je odpovedalo. Podatki
+ * so ostali; manjkalo je samo ime.
+ *
+ * Stolpec prepozna po vsebini in ne po legi: išče NEIMENOVAN stolpec, v katerem
+ * so same vrednosti datum. Kadar tak ni natanko eden, se ne ugiba — raje pove,
+ * kaj je našlo, in pusti odločitev človeku.
+ */
+function popraviGlavo() {
+  var list = pridobiList();
+  var glava = preberiGlavo(list);
+  if (!glava.length) throw new Error('List "' + NASTAVITVE.IME_LISTA + '" nima glave.');
+  if (glava.indexOf(PREJETO) !== -1) {
+    return 'Glava je v redu: stolpec "' + PREJETO + '" je na mestu ' + crkaStolpca(glava, PREJETO) + '. Popravilo ni potrebno.';
+  }
+
+  var vrstic = list.getLastRow() - 1;
+  if (vrstic < 1) throw new Error('List nima podatkov — stolpca s časi prejema ni mogoče prepoznati.');
+  var podatki = list.getRange(2, 1, vrstic, glava.length).getValues();
+
+  var kandidati = [];
+  for (var c = 0; c < glava.length; c++) {
+    if (String(glava[c]).trim() !== '') continue;
+    var datumov = 0;
+    var nepraznih = 0;
+    for (var r = 0; r < podatki.length; r++) {
+      var celica = podatki[r][c];
+      if (celica === '' || celica === null) continue;
+      nepraznih++;
+      // Ne `instanceof Date`: ta primerja konstruktorje in laže vsakič, ko
+      // vrednost pride iz drugega konteksta (v preizkusu iz `node:vm`, v Apps
+      // Scriptu iz druge preglednice). Oznaka vrste je ista povsod.
+      if (Object.prototype.toString.call(celica) === '[object Date]') datumov++;
+    }
+    if (nepraznih > 0 && datumov === nepraznih) kandidati.push(c);
+  }
+
+  if (kandidati.length !== 1) {
+    throw new Error(
+      'Stolpca s časi prejema ni bilo mogoče enolično prepoznati (najdenih: ' +
+        kandidati.length +
+        '). Poiščite stolpec z datumi in prazno glavo ter v vrstico 1 ročno vpišite "' +
+        PREJETO +
+        '".',
+    );
+  }
+
+  var stolpec = kandidati[0] + 1;
+  list.getRange(1, stolpec).setValue(PREJETO).setFontWeight('bold');
+  SpreadsheetApp.flush();
+  return (
+    'Stolpcu ' + crkaIzIndeksa(stolpec) + ' je vrnjeno ime "' + PREJETO + '" (' + vrstic + ' vrstic s podatki). Zdaj poženite urediStolpce.'
+  );
+}
+
+/**
+ * Ali v celici klicatelja ni NIČESAR — širše od "prazna celica".
+ *
+ * Neobkljukano potrditveno polje ni prazna celica: Google vanjo zapiše `false`,
+ * ki se glede na to, kako je vrednost nastala, bere kot logični `false` ali kot
+ * besedilo "FALSE". Prejšnje merilo (`String(celica).trim() === ''`) je oboje
+ * razumelo kot vsebino, zato je bila vsaka vrstica, ki je kdaj dobila obliko
+ * potrditvenega polja, za vedno "polna" in je čiščenje ni pobrisalo NIKOLI.
+ * Natanko to je uporabniku pustilo dva tisoč vrstic v listu, čeprav je
+ * `urediStolpce` tekel — nove oddaje so pristajale pod njimi, kjer jih ni videl
+ * nihče, in videti je bilo, kot da se leadi sploh ne vpisujejo.
+ *
+ * Ničla je tu iz istega razloga: izpeljanka `letno` je nekoč vanje zapisala 0.
+ *
+ * Merilo je namerno široko: klicatelj v `poklicano`, `sestanek` ali `opombe` ne
+ * vpiše ne "false" ne ničle, `prejeto` pa je pri vsakem leadu datum. Nasprotna
+ * napaka — pustiti prazno vrstico — je poceni, brisanje leada pa ni, zato je
+ * vse, kar ni na tem ozkem seznamu, vsebina.
+ */
+function jePraznoZaKlicatelja(celica) {
+  if (celica === '' || celica === null || celica === undefined) return true;
+  if (celica === false || celica === 0) return true;
+  var besedilo = String(celica).trim().toLowerCase();
+  return besedilo === '' || besedilo === 'false' || besedilo === '0';
+}
+
 function pociistiOdvecneVrstice(list, glava) {
   var vrstic = list.getMaxRows();
   if (vrstic < 2) return 0;
@@ -694,37 +902,58 @@ function pociistiOdvecneVrstice(list, glava) {
   // kar bi vpisal klicatelj. Prej je veljalo strožje merilo "vse celice prazne",
   // a ga je pokvarila ena sama ničla, ki jo je vanje zapisala izpeljava —
   // odvečne vrstice so ostale za vedno.
-  var kazalo = {};
-  [PREJETO].concat(DELOVNI_STOLPCI).forEach(function (ime) {
-    var i = glava ? glava.indexOf(ime) : -1;
-    if (i !== -1) kazalo[ime] = i;
-  });
-  var pomembni = Object.keys(kazalo).map(function (ime) {
-    return kazalo[ime];
+  //
+  // BREZ STOLPCA `prejeto` SE NE ČISTI. To ni previdnost, ampak popravilo
+  // napake, ki je STALA PODATKE: ko je iz glave izpadlo ime `prejeto`, je merilo
+  // spodaj presojalo samo še po klicateljevih stolpcih — in vsak lead, ki še ni
+  // bil poklican, je bil s tem "prazna vrstica". Zbrisalo jih je. Manjkajoče
+  // sidro pomeni, da lead od praznine ni ločljiv, in tedaj je edino pravilno
+  // dejanje, da se ne zbriše nič. Ime vrne `popraviGlavo`.
+  var sidro = glava ? glava.indexOf(PREJETO) : -1;
+  if (sidro === -1) {
+    throw new Error(
+      'V glavi ni stolpca "' +
+        PREJETO +
+        '", zato leada ni mogoče ločiti od prazne vrstice — čiščenje je ustavljeno in NIČ ni bilo pobrisano. ' +
+        'Poženite popraviGlavo in nato znova urediStolpce.',
+    );
+  }
+
+  var pomembni = [sidro];
+  DELOVNI_STOLPCI.forEach(function (ime) {
+    var i = glava.indexOf(ime);
+    if (i !== -1) pomembni.push(i);
   });
 
   var odvecna = podatki.map(function (vrstica) {
-    // Brez glave (star list, druga postavitev) ostane staro, strožje merilo.
-    if (!pomembni.length) {
-      return vrstica.every(function (celica) {
-        return celica === '' || celica === null;
-      });
-    }
     return pomembni.every(function (i) {
-      return String(vrstica[i] === null ? '' : vrstica[i]).trim() === '';
+      return jePraznoZaKlicatelja(vrstica[i]);
     });
   });
 
   // Od spodaj navzgor in v strnjenih blokih: brisanje od zgoraj bi premaknilo
   // vse indekse pod sabo, blok pa je en klic namesto tisoč.
+  // Ena nezamrznjena vrstica mora preživeti: Google zavrne poskus, da bi jih
+  // pobrisali vse, z "Sorry, it is not possible to delete all non-frozen rows"
+  // — in ker ta izjema prileti sredi zanke, so bili nekateri bloki takrat že
+  // pobrisani, drugi pa ne. Zato proračun in ne poskus z upanjem: če pride do
+  // dna, pusti zadnjo vrstico pri miru in poseg se konča urejeno.
+  // `|| 0`: brez njega bi manjkajoča vrednost dala NaN, `Math.min` bi vrnil NaN
+  // in čiščenje bi tiho ne pobrisalo ničesar — okvara, ki je videti kot uspeh.
+  var proracun = Math.max(0, list.getMaxRows() - (list.getFrozenRows() || 0) - 1);
+
   var pobrisanih = 0;
   var konec = null;
   for (var i = odvecna.length - 1; i >= -1; i--) {
     var jeOdvecna = i >= 0 && odvecna[i];
     if (jeOdvecna && konec === null) konec = i;
     if (!jeOdvecna && konec !== null) {
-      list.deleteRows(i + 3, konec - i);
-      pobrisanih += konec - i;
+      var koliko = Math.min(konec - i, proracun);
+      if (koliko > 0) {
+        list.deleteRows(i + 3, koliko);
+        pobrisanih += koliko;
+        proracun -= koliko;
+      }
       konec = null;
     }
   }
@@ -1280,14 +1509,14 @@ function urediVidezAnalitike(list, steviloKartic) {
  * V try/catch, ker je zaščita razkošje: v skupni rabi ali brez pravic klic
  * odpove, analitika pa je tedaj vseeno sestavljena.
  */
-function zascitiOpozorilno(list) {
+function zascitiOpozorilno(list, opis) {
   try {
     list.getProtections(SpreadsheetApp.ProtectionType.SHEET).forEach(function (prejsnja) {
       prejsnja.remove();
     });
     list
       .protect()
-      .setDescription('Analitika se sestavi samodejno — ročni vnosi se ob naslednjem zagonu izgubijo.')
+      .setDescription(opis || 'Analitika se sestavi samodejno — ročni vnosi se ob naslednjem zagonu izgubijo.')
       .setWarningOnly(true);
   } catch (err) {
     console.warn('Lista ni bilo mogoče zaščititi: ' + err);
@@ -1351,7 +1580,19 @@ function skupinskaFormula(vse, stolpec, znesek) {
 function crkaStolpca(glava, ime) {
   var i = glava.indexOf(ime);
   if (i === -1) {
-    throw new Error('Stolpca "' + ime + '" v glavi ni — analitike ni mogoče sestaviti.');
+    // Z vsebino glave: brez nje je sporočilo slepa ulica. Ime lahko manjka, ker
+    // ga je kdo preimenoval, ker je v celici presledek ali ker se bere glava
+    // napačnega lista — vsak od teh treh vzrokov terja drugačen ukrep, iz golega
+    // "stolpca ni" pa se jih ne da ločiti.
+    throw new Error(
+      'Stolpca "' +
+        ime +
+        '" v glavi ni — analitike ni mogoče sestaviti. Glava ima ' +
+        glava.length +
+        ' stolpcev: ' +
+        glava.slice(0, 8).join(', ') +
+        (glava.length > 8 ? ', …' : ''),
+    );
   }
   return crkaIzIndeksa(i + 1);
 }
@@ -1425,18 +1666,55 @@ function pridobiList() {
 }
 
 function pridobiListPoImenu(ime) {
+  var preglednica = pridobiPreglednico();
+  var list = preglednica.getSheetByName(ime);
+  if (!list) {
+    list = preglednica.insertSheet(ime);
+  }
+  return list;
+}
+
+/**
+ * Koliko vrstic je pravih leadov: tistih s časom prejema. Vse ostale so sled
+ * oblikovanja in jih pobriše `urediStolpce` (glej `jePraznoZaKlicatelja`).
+ * Nikoli ne vrže — doGet je diagnostika in ne sme pasti zaradi lastne meritve.
+ */
+function prestejLeade(list) {
+  try {
+    var glava = preberiGlavo(list);
+    var stolpec = glava.indexOf(PREJETO) + 1;
+    var vrstic = list.getLastRow() - 1;
+    if (!stolpec || vrstic < 1) return 0;
+    var vrednosti = list.getRange(2, stolpec, vrstic, 1).getValues();
+    var n = 0;
+    for (var i = 0; i < vrednosti.length; i++) {
+      if (String(vrednosti[i][0]).trim() !== '') n++;
+    }
+    return n;
+  } catch (err) {
+    return 'ni bilo mogoče prešteti (' + err + ')';
+  }
+}
+
+/** List po imenu ali null — za branje stanja, ki ne sme ustvariti ničesar (doGet). */
+function poisciList(ime) {
+  return pridobiPreglednico().getSheetByName(ime);
+}
+
+function pridobiPreglednico() {
   var preglednica = NASTAVITVE.ID_PREGLEDNICE
     ? SpreadsheetApp.openById(NASTAVITVE.ID_PREGLEDNICE)
     : SpreadsheetApp.getActive();
   if (!preglednica) {
     throw new Error('Preglednice ni: skripta ni v preglednici in ID_PREGLEDNICE ni nastavljen.');
   }
+  return preglednica;
+}
 
-  var list = preglednica.getSheetByName(ime);
-  if (!list) {
-    list = preglednica.insertSheet(ime);
-  }
-  return list;
+/** Čas prejema zadnjega dogodka (prvi stolpec zadnje vrstice) — za doGet. */
+function zadnjiPrejemDogodka(list) {
+  var zadnja = list.getRange(list.getLastRow(), 1).getValue();
+  return zadnja instanceof Date ? zadnja.toISOString() : String(zadnja);
 }
 
 /**
@@ -2194,6 +2472,863 @@ function odstraniUroZaAC() {
   var koliko = 0;
   ScriptApp.getProjectTriggers().forEach(function (sprozilec) {
     if (sprozilec.getHandlerFunction() === 'posljiZaostaleVAC') {
+      ScriptApp.deleteTrigger(sprozilec);
+      koliko++;
+    }
+  });
+  if (koliko) console.log('Odstranjenih ur: ' + koliko + '.');
+  return koliko;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LIJAK — kje obiskovalci odnehajo
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Dogodki lijaka, ki jih pošilja aplikacija (src/lib/funnel.ts), pridejo po
+ * istem webhooku kot oddaje: telo nosi `events` in `visit` namesto `record`.
+ * `zapisiDogodke` jih pripne na list Dogodki, `sestaviLijak` (ročno ali dnevna
+ * ura, glej `namestiUroZaLijak`) pa iz njih sestavi list Lijak: koliko obiskov
+ * je doseglo kateri korak, kje odnehajo, koliko časa porabijo in kaj jih
+ * ustavi na obrazcu.
+ *
+ * ZA RAZLIKO OD LEADOV SKRIPTA TU STOLPCE POZNA — načelo 1 iz glave zanje ne
+ * velja. Povzetek mora korak, segment in področje poznati tako ali tako (brez
+ * imena koraka ni lijaka), oblika dogodka pa je majhna in ustaljena. Kar
+ * aplikacija pošlje poleg znanih lastnosti, pristane kot JSON v stolpcu
+ * `lastnosti`, da se nič ne izgubi.
+ *
+ * OBISK NI OBISKOVALEC. Id obiska živi samo v pomnilniku strani — brez
+ * piškotka in brez shrambe, ker bi identifikator v brskalniku po ZEKom-2 terjal
+ * privolitev. Osvežitev sredi vprašalnika zato naredi nov obisk, ki se začne
+ * sredi toka. Povzetek take obiske ("nadaljevanja": prvi prikazani korak ni
+ * uvodni) šteje posebej in jih v lijak ne meša; pravi delež dokončanih je med
+ * številko brez nadaljevanj in številko z njimi.
+ *
+ * NAPAKA TU NE GRE V REZERVNO POT. Aplikacija odgovora na dogodke ne bere
+ * (pošilja jih s `sendBeacon`), zato izjema v `zapisiDogodke` ne škodi nikomur
+ * razen dnevniku izvedb — in tam je prav, da se vidi.
+ */
+
+/** Stolpci lista Dogodki — v tem vrstnem redu jih piše `zapisiDogodke` in bere `zberiObiske`. */
+var DOGODKI_GLAVA = [
+  'prejeto',
+  'obisk',
+  'zaporedje',
+  'cas',
+  'dogodek',
+  'korak',
+  'indeksKoraka',
+  'korakovSkupaj',
+  'podrocje',
+  'segment',
+  'naprava',
+  'vir',
+  'interni',
+  'lastnosti',
+];
+
+/** Lastnosti dogodka, ki imajo svoj stolpec; ostale gredo v `lastnosti` kot JSON. */
+var LASTNOSTI_S_STOLPCEM = ['step', 'stepIndex', 'stepsTotal', 'moduleId', 'segment'];
+
+/** Največ dogodkov iz enega paketa; aplikacija jih pošlje do 50, kar je čez, je sumljivo. */
+var NAJVEC_DOGODKOV_NA_PAKET = 50;
+/** Najdaljši niz iz javnega vhoda, ki gre v celico. */
+var NAJDALJSI_NIZ = 200;
+/**
+ * Čas na koraku nad to mejo se v mediano ne šteje: obiskovalec je zavihek pustil
+ * odprt, ne bral pol ure. Brez meje bi en pozabljen zavihek povlekel mediano
+ * navzgor bolj kot sto pravih obiskov.
+ */
+var NAJDALJSI_CAS_NA_KORAKU_MS = 30 * 60 * 1000;
+
+/**
+ * Koraki v vrstnem redu toka (src/types.ts, FlowStep). Kontekst, triaža in
+ * stroškovna osnova obstajajo le v segmentih s konfiguracijo konteksta oziroma
+ * triaže — v skupnem lijaku so zato nižji od sosedov tudi brez odpada; točen
+ * lijak je v blokih po segmentih.
+ */
+var KORAKI_LIJAKA = [
+  ['industry', 'Dejavnost (uvod)'],
+  ['employeeCount', 'Zaposleni'],
+  ['context', 'Nekaj o vas (kontekst)'],
+  ['triage', 'Triaža področij'],
+  ['costBasis', 'Stroškovna osnova'],
+  ['inputs', 'Vnosi (vse strani skupaj)'],
+  ['emailGate', 'Obrazec s kontaktom'],
+  ['results', 'Rezultati'],
+];
+
+/** Korak, s katerim se začne vsak nov obisk; obisk z drugim prvim korakom je nadaljevanje. */
+var UVODNI_KORAK = 'industry';
+
+/** Prvi stolpec podatkov za graf na listu Lijak (N); levo od njega je pogled za človeka. */
+var LIJAK_PODATKI_STOLPEC = 14;
+var LIJAK_KARTICE_VRSTICA = 4;
+
+/**
+ * Sprejme paket dogodkov (src/lib/funnel.ts, FunnelEnvelope) in ga pripne na
+ * list Dogodki: ena vrstica na dogodek, obisk v vsaki.
+ *
+ * Kratka ključavnica in ne čakanje: dva paketa v isti sekundi bi brez nje
+ * pisala v isto vrstico, čakati na oddajo leada (Drive, pošta, AC — do nekaj
+ * sekund) pa se ne splača — appendRow je varen tudi brez ključavnice, le
+ * počasnejši. Vsaka vrednost iz telesa gre skozi obrezovanje: naslov webhooka
+ * je javen in vsebina telesa je tuj vhod.
+ */
+function zapisiDogodke(paket) {
+  var obisk = paket.visit && typeof paket.visit === 'object' ? paket.visit : {};
+  var idObiska = kratekNiz(obisk.id, 64);
+  var dogodki = Array.isArray(paket.events) ? paket.events.slice(0, NAJVEC_DOGODKOV_NA_PAKET) : [];
+  if (!idObiska || !dogodki.length) {
+    throw new Error('Paket dogodkov je brez obiska ali brez dogodkov.');
+  }
+
+  var prejeto = new Date();
+  var vrstice = dogodki.map(function (dogodek) {
+    var d = dogodek && typeof dogodek === 'object' ? dogodek : {};
+    var lastnosti = d.props && typeof d.props === 'object' ? d.props : {};
+    var ostale = {};
+    for (var ime in lastnosti) {
+      if (LASTNOSTI_S_STOLPCEM.indexOf(ime) === -1) {
+        ostale[kratekNiz(ime, 40)] = kratkaVrednost(lastnosti[ime]);
+      }
+    }
+    return [
+      prejeto,
+      idObiska,
+      celoStevilo(d.seq),
+      datumIzNiza(d.t),
+      kratekNiz(d.event, NAJDALJSI_NIZ),
+      kratekNiz(lastnosti.step, NAJDALJSI_NIZ),
+      celoStevilo(lastnosti.stepIndex),
+      celoStevilo(lastnosti.stepsTotal),
+      kratekNiz(lastnosti.moduleId, NAJDALJSI_NIZ),
+      kratekNiz(lastnosti.segment, NAJDALJSI_NIZ),
+      kratekNiz(obisk.device, 20),
+      kratekNiz(obisk.utmSource, NAJDALJSI_NIZ),
+      obisk.internal === true,
+      Object.keys(ostale).length ? JSON.stringify(ostale).slice(0, 1000) : '',
+    ];
+  });
+
+  var list = pridobiListPoImenu(NASTAVITVE.IME_LISTA_DOGODKI);
+  var kljucavnica = LockService.getScriptLock();
+  var zaklenjeno = kljucavnica.tryLock(5000);
+  try {
+    zagotoviGlavoDogodkov(list);
+    if (zaklenjeno) {
+      var od = list.getLastRow() + 1;
+      list.getRange(od, 1, vrstice.length, DOGODKI_GLAVA.length).setValues(vrstice);
+      // Oblika datuma samo na pravkar zapisanih celicah, ne čez ves stolpec:
+      // oblikovanje do dna lista je enkrat že premaknilo getLastRow na dno
+      // (glej pociistiOdvecneVrstice) in tega tu ne ponavljamo.
+      list.getRange(od, 1, vrstice.length, 1).setNumberFormat('yyyy-mm-dd hh:mm:ss');
+      list.getRange(od, 4, vrstice.length, 1).setNumberFormat('yyyy-mm-dd hh:mm:ss');
+    } else {
+      vrstice.forEach(function (vrstica) {
+        list.appendRow(vrstica);
+      });
+    }
+  } finally {
+    if (zaklenjeno) kljucavnica.releaseLock();
+  }
+
+  return ContentService.createTextOutput(
+    JSON.stringify({ ok: true, events: vrstice.length }),
+  ).setMimeType(ContentService.MimeType.JSON);
+}
+
+/** Glava lista Dogodki, kadar je list še prazen. */
+function zagotoviGlavoDogodkov(list) {
+  if (list.getLastRow() > 0) return;
+  zagotoviStolpce(list, DOGODKI_GLAVA.length);
+  list.getRange(1, 1, 1, DOGODKI_GLAVA.length).setValues([DOGODKI_GLAVA]).setFontWeight('bold');
+  list.setFrozenRows(1);
+}
+
+/** Niz iz javnega vhoda: samo niz ali število, obrezan. Vse drugo je prazno. */
+function kratekNiz(vrednost, najvec) {
+  if (typeof vrednost === 'number' && isFinite(vrednost)) return String(vrednost);
+  if (typeof vrednost !== 'string') return '';
+  return vrednost.slice(0, najvec);
+}
+
+/** Vrednost lastnosti za JSON: niz ali število, obrezano; drugo odpade. */
+function kratkaVrednost(vrednost) {
+  if (typeof vrednost === 'number' && isFinite(vrednost)) return vrednost;
+  return kratekNiz(vrednost, NAJDALJSI_NIZ);
+}
+
+/** Celo število ali prazna celica — nikoli 0 namesto "ni podatka". */
+function celoStevilo(vrednost) {
+  if (vrednost === '' || vrednost === null || vrednost === undefined) return '';
+  var n = typeof vrednost === 'number' ? vrednost : Number(vrednost);
+  return isFinite(n) ? Math.round(n) : '';
+}
+
+/** Datum iz niza ISO ali prazna celica. */
+function datumIzNiza(vrednost) {
+  if (typeof vrednost !== 'string') return '';
+  var d = new Date(vrednost);
+  return isNaN(d.getTime()) ? '' : d;
+}
+
+/**
+ * Sestavi list Lijak iz lista Dogodki. Poženite ročno (izberite funkcijo →
+ * Zaženi) ali pustite dnevni uri (`namestiUroZaLijak`). Izid zadnjega zagona
+ * je viden v odgovoru doGet.
+ *
+ * List je POSNETEK in ne žive formule kot Analitika: povzetek potrebuje obiske
+ * (dogodke, zbrane po id-ju in urejene po zaporedju), česar formule ne zmorejo
+ * berljivo. Kdaj je nastal, piše v vrstici 2.
+ */
+function sestaviLijak() {
+  var lastnosti = PropertiesService.getScriptProperties();
+  try {
+    var izid = sestaviLijakList();
+    lastnosti.setProperty('LIJAK_ZADNJI', new Date().toISOString() + ' — ' + izid);
+    console.log(izid);
+    return izid;
+  } catch (err) {
+    lastnosti.setProperty('LIJAK_ZADNJI', new Date().toISOString() + ' — NAPAKA: ' + err);
+    throw err;
+  }
+}
+
+function sestaviLijakList() {
+  var dogodki = poisciList(NASTAVITVE.IME_LISTA_DOGODKI);
+  if (!dogodki || dogodki.getLastRow() < 2) {
+    throw new Error(
+      'List "' +
+        NASTAVITVE.IME_LISTA_DOGODKI +
+        '" je prazen: aplikacija še ni poslala dogodkov (webhook ni nastavljen ali je razmeščena stara različica skripte).',
+    );
+  }
+
+  var od =
+    NASTAVITVE.LIJAK_OBDOBJE_DNI > 0
+      ? new Date(Date.now() - NASTAVITVE.LIJAK_OBDOBJE_DNI * 86400000)
+      : null;
+  var vsi = zberiObiske(dogodki, od).map(opisiObisk);
+  var obiski = vsi.filter(function (o) {
+    return !o.interni && o.prikazov > 0;
+  });
+  var izpusceni = vsi.length - obiski.length;
+  var zacetni = obiski.filter(function (o) {
+    return !o.nadaljevanje;
+  });
+  var nadaljevanja = obiski.filter(function (o) {
+    return o.nadaljevanje;
+  });
+
+  var zacetih = zacetni.length;
+  var doObrazca = prestej(zacetni, function (o) {
+    return o.dosegel.emailGate;
+  });
+  var oddaj = prestej(zacetni, function (o) {
+    return o.oddal;
+  });
+  var prenosov = 0;
+  obiski.forEach(function (o) {
+    prenosov += o.prenosov;
+  });
+
+  // Vse tabele so sestavljene, PREDEN se list počisti (isti razlog kot v
+  // urediAnalitiko): napaka zgoraj pusti prejšnji povzetek nedotaknjen.
+  var kartice = [
+    ['ZAČETIH OBISKOV', zacetih, '#.##0'],
+    ['DO OBRAZCA', doObrazca, '#.##0'],
+    ['ODDAJ', oddaj, '#.##0'],
+    ['DELEŽ ODDAJ', zacetih ? oddaj / zacetih : '', '0 %'],
+    ['PRENOSOV POROČILA', prenosov, '#.##0'],
+  ];
+  var glavaLijaka = ['Korak', 'Obiskov', 'Delež začetnih', 'Končalo tu', 'Odpad', 'Mediana časa'];
+  var oblikeLijaka = [null, '#.##0', '0 %', '#.##0', '0 %', '#.##0 "s"'];
+  var skupni = vrsticeLijaka(zacetni);
+  var segmenti = skupine(zacetni, function (o) {
+    return o.segment;
+  });
+  var glavaSkupin = ['', 'Začetih', 'Do obrazca', 'Oddaj', 'Delež oddaj'];
+  var oblikeSkupin = [null, '#.##0', '#.##0', '#.##0', '0 %'];
+
+  var list = pridobiListPoImenu(NASTAVITVE.IME_LISTA_LIJAK);
+  list.clear();
+  list.getCharts().forEach(function (graf) {
+    list.removeChart(graf);
+  });
+  zagotoviStolpce(list, LIJAK_PODATKI_STOLPEC + 4);
+
+  list.getRange('A1').setValue('LM-10 — lijak vprašalnika');
+  list
+    .getRange('A2')
+    .setValue(
+      'Posnetek, sestavljen ' +
+        Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'd. M. yyyy HH:mm') +
+        '. Obdobje: ' +
+        (od ? 'zadnjih ' + NASTAVITVE.LIJAK_OBDOBJE_DNI + ' dni' : 'vsi dogodki') +
+        '. Lijak šteje obiske, ki so se začeli na uvodnem koraku; nadaljevanja po osvežitvi so spodaj posebej. ' +
+        'Za osvežitev poženite sestaviLijak ali namestite dnevno uro (namestiUroZaLijak).',
+    );
+
+  kartice.forEach(function (kartica, i) {
+    var stolpec = 1 + i * 2;
+    list.getRange(LIJAK_KARTICE_VRSTICA, stolpec).setValue(kartica[0]);
+    list
+      .getRange(LIJAK_KARTICE_VRSTICA + 1, stolpec)
+      .setValue(kartica[1])
+      .setNumberFormat(kartica[2]);
+  });
+
+  var vrstica = LIJAK_KARTICE_VRSTICA + 3;
+  var vrsticaSkupnega = vrstica;
+  vrstica = pisiTabelo(list, vrstica, 'LIJAK — VSI SEGMENTI', glavaLijaka, skupni, oblikeLijaka);
+  list
+    .getRange(vrstica - 1, 1)
+    .setValue(
+      '„Končalo tu" = obisk ni prišel dlje od tega koraka; pri rezultatih pomeni dokončan vprašalnik. ' +
+        'Kontekst, triaža in osnova obstajajo le v nekaterih segmentih — točen lijak je po segmentih spodaj. ' +
+        'Mediana časa: samo obiski, ki so šli naprej; nad 30 minutami se ne šteje.',
+    )
+    .setFontStyle('italic')
+    .setFontColor('#5f6368');
+  vrstica += 1;
+
+  // Graf ob skupnem lijaku — podatki zanj desno, kot na listu Analitika.
+  var zaGraf = KORAKI_LIJAKA.map(function (korak) {
+    return [korak[1], skupni[indeksVrsticeKoraka(skupni, korak[1])][1]];
+  });
+  list.getRange(LIJAK_KARTICE_VRSTICA, LIJAK_PODATKI_STOLPEC).setValue('PODATKI ZA GRAF — ne brišite');
+  list
+    .getRange(LIJAK_KARTICE_VRSTICA + 1, LIJAK_PODATKI_STOLPEC, zaGraf.length, 2)
+    .setValues(zaGraf);
+  list.insertChart(
+    list
+      .newChart()
+      .setChartType(Charts.ChartType.COLUMN)
+      .addRange(list.getRange(LIJAK_KARTICE_VRSTICA + 1, LIJAK_PODATKI_STOLPEC, zaGraf.length, 2))
+      .setPosition(vrsticaSkupnega, 8, 0, 0)
+      .setOption('title', 'Obiskov po korakih')
+      .setOption('width', 520)
+      .setOption('height', 300)
+      .setOption('legend', { position: 'none' })
+      .build(),
+  );
+
+  Object.keys(segmenti)
+    .sort(function (a, b) {
+      return segmenti[b].length - segmenti[a].length;
+    })
+    .forEach(function (segment) {
+      vrstica = pisiTabelo(
+        list,
+        vrstica,
+        'LIJAK — ' + segment.toUpperCase() + ' (' + segmenti[segment].length + ' obiskov)',
+        glavaLijaka,
+        vrsticeLijaka(segmenti[segment]),
+        oblikeLijaka,
+      );
+    });
+
+  vrstica = pisiTabelo(
+    list,
+    vrstica,
+    'PO SEGMENTIH',
+    glavaSkupin,
+    vrsticeSkupin(zacetni, function (o) {
+      return o.segment;
+    }),
+    oblikeSkupin,
+  );
+  vrstica = pisiTabelo(
+    list,
+    vrstica,
+    'PO VIRU OBISKA (utm_source)',
+    glavaSkupin,
+    vrsticeSkupin(zacetni, function (o) {
+      return o.vir;
+    }),
+    oblikeSkupin,
+  );
+  vrstica = pisiTabelo(
+    list,
+    vrstica,
+    'PO ZASLONU',
+    glavaSkupin,
+    vrsticeSkupin(zacetni, function (o) {
+      return o.naprava;
+    }),
+    oblikeSkupin,
+  );
+  vrstica = pisiTabelo(
+    list,
+    vrstica,
+    'OBRAZEC — KATERO POLJE USTAVI ODDAJO',
+    ['Polje', 'Blokad', 'Obiskov'],
+    vrsticeBlokad(obiski),
+    [null, '#.##0', '#.##0'],
+  );
+  vrstica = pisiTabelo(
+    list,
+    vrstica,
+    'DOSTAVA LEADA (webhook)',
+    ['Izid', 'Obiskov'],
+    vrsticeDostave(obiski),
+    [null, '#.##0'],
+  );
+  vrstica = pisiTabelo(
+    list,
+    vrstica,
+    'NADALJEVANJA IN IZPUŠČENI OBISKI',
+    ['', 'Obiskov'],
+    [
+      ['Nadaljevanja po osvežitvi (prvi korak ni uvodni)', nadaljevanja.length],
+      [
+        '   … od tega oddaj',
+        prestej(nadaljevanja, function (o) {
+          return o.oddal;
+        }),
+      ],
+      ['Izpuščeni: interni način (?debug=1) ali brez prikaza koraka', izpusceni],
+    ],
+    [null, '#.##0'],
+  );
+  vrstica = pisiTabelo(
+    list,
+    vrstica,
+    'PO DNEVIH — zadnjih 30 dni',
+    ['Dan', 'Začetih', 'Oddaj'],
+    vrsticePoDnevih(zacetni, 30),
+    ['yyyy-mm-dd', '#.##0', '#.##0'],
+  );
+
+  urediVidezLijaka(list, kartice.length);
+  zascitiOpozorilno(list, 'Lijak se sestavi samodejno (sestaviLijak) — ročni vnosi se ob naslednjem zagonu izgubijo.');
+
+  var pobrisanih = NASTAVITVE.DOGODKI_HRANI_DNI > 0 ? pocistiStareDogodke(dogodki) : 0;
+
+  return (
+    'Lijak sestavljen: ' +
+    zacetih +
+    ' začetih obiskov, ' +
+    nadaljevanja.length +
+    ' nadaljevanj, ' +
+    izpusceni +
+    ' izpuščenih, ' +
+    oddaj +
+    ' oddaj.' +
+    (pobrisanih ? ' Pobrisanih starih dogodkov: ' + pobrisanih + '.' : '')
+  );
+}
+
+/**
+ * Obiski z lista Dogodki: dogodki, zbrani po id-ju in urejeni po zaporedju iz
+ * aplikacije (ne po času — ura naprave ni zanesljiva, zaporedje je). Obisk
+ * zunaj obdobja (po času prejema prvega dogodka) odpade.
+ */
+function zberiObiske(list, od) {
+  var podatki = list.getDataRange().getValues();
+  var glava = podatki[0].map(function (celica) {
+    return String(celica);
+  });
+  var k = function (ime) {
+    var i = glava.indexOf(ime);
+    if (i === -1) throw new Error('Na listu ' + NASTAVITVE.IME_LISTA_DOGODKI + ' ni stolpca "' + ime + '".');
+    return i;
+  };
+  var K = {
+    prejeto: k('prejeto'),
+    obisk: k('obisk'),
+    zaporedje: k('zaporedje'),
+    cas: k('cas'),
+    dogodek: k('dogodek'),
+    korak: k('korak'),
+    indeks: k('indeksKoraka'),
+    podrocje: k('podrocje'),
+    segment: k('segment'),
+    naprava: k('naprava'),
+    vir: k('vir'),
+    interni: k('interni'),
+    lastnosti: k('lastnosti'),
+  };
+
+  var obiski = {};
+  for (var r = 1; r < podatki.length; r++) {
+    var v = podatki[r];
+    var id = String(v[K.obisk] || '');
+    if (!id) continue;
+    var prejeto = vDatum(v[K.prejeto]);
+    var o = obiski[id];
+    if (!o) {
+      o = obiski[id] = {
+        id: id,
+        zacetek: prejeto,
+        segment: '',
+        naprava: String(v[K.naprava] || ''),
+        vir: String(v[K.vir] || ''),
+        interni: v[K.interni] === true || String(v[K.interni]).toUpperCase() === 'TRUE',
+        dogodki: [],
+      };
+    }
+    if (prejeto && (!o.zacetek || prejeto < o.zacetek)) o.zacetek = prejeto;
+    if (v[K.segment]) o.segment = String(v[K.segment]);
+    o.dogodki.push({
+      zaporedje: Number(v[K.zaporedje]) || 0,
+      cas: vDatum(v[K.cas]),
+      dogodek: String(v[K.dogodek] || ''),
+      korak: String(v[K.korak] || ''),
+      indeks: v[K.indeks] === '' || v[K.indeks] === null ? null : Number(v[K.indeks]),
+      podrocje: String(v[K.podrocje] || ''),
+      lastnosti: razcleniLastnosti(v[K.lastnosti]),
+    });
+  }
+
+  var seznam = [];
+  for (var kljuc in obiski) {
+    var ob = obiski[kljuc];
+    if (od && ob.zacetek && ob.zacetek < od) continue;
+    ob.dogodki.sort(function (a, b) {
+      return a.zaporedje - b.zaporedje;
+    });
+    seznam.push(ob);
+  }
+  return seznam;
+}
+
+/**
+ * Kar povzetek potrebuje o enem obisku: katere korake je dosegel, kje je bil
+ * najdlje (po indeksu koraka, ne po času — vrnitev nazaj ni odnehanje), koliko
+ * časa je bil na vsakem in kaj se je zgodilo z obrazcem.
+ *
+ * Čas na koraku je vsota vseh prikazov tega koraka do naslednjega prikaza;
+ * zadnji prikaz obiska časa nima, ker ni znano, kdaj je obiskovalec odšel.
+ */
+function opisiObisk(ob) {
+  var prikazi = ob.dogodki.filter(function (d) {
+    return d.dogodek === 'lm10_step_view' && d.korak;
+  });
+  var o = {
+    id: ob.id,
+    interni: ob.interni,
+    naprava: ob.naprava || '(neznano)',
+    vir: ob.vir || '(brez)',
+    segment: ob.segment || '(neznan)',
+    zacetek: ob.zacetek,
+    prikazov: prikazi.length,
+    nadaljevanje: prikazi.length > 0 && prikazi[0].korak !== UVODNI_KORAK,
+    dosegel: {},
+    indeks: {},
+    cas: {},
+    najdlje: { indeks: -1, kljuc: '', korak: '' },
+    oddal: false,
+    dostavaOk: false,
+    dostavaPadla: '',
+    prenosov: 0,
+    blokade: [],
+  };
+
+  for (var i = 0; i < prikazi.length; i++) {
+    var d = prikazi[i];
+    var kljuc = d.korak === 'inputs' && d.podrocje ? 'inputs/' + d.podrocje : d.korak;
+    var indeks = d.indeks !== null ? d.indeks : polozajKoraka(d.korak);
+    o.dosegel[d.korak] = true;
+    o.dosegel[kljuc] = true;
+    if (o.indeks[kljuc] === undefined || indeks < o.indeks[kljuc]) o.indeks[kljuc] = indeks;
+    if (indeks > o.najdlje.indeks) o.najdlje = { indeks: indeks, kljuc: kljuc, korak: d.korak };
+
+    var naslednji = prikazi[i + 1];
+    if (naslednji && d.cas && naslednji.cas) {
+      var ms = naslednji.cas.getTime() - d.cas.getTime();
+      if (ms >= 0 && ms <= NAJDALJSI_CAS_NA_KORAKU_MS) {
+        o.cas[d.korak] = (o.cas[d.korak] || 0) + ms;
+        if (kljuc !== d.korak) o.cas[kljuc] = (o.cas[kljuc] || 0) + ms;
+      }
+    }
+  }
+
+  ob.dogodki.forEach(function (d) {
+    if (d.dogodek === 'lm10_lead_submitted') o.oddal = true;
+    else if (d.dogodek === 'lm10_delivery_ok') o.dostavaOk = true;
+    else if (d.dogodek === 'lm10_delivery_failed') o.dostavaPadla = String(d.lastnosti.reason || 'neznano');
+    else if (d.dogodek === 'lm10_report_download') o.prenosov++;
+    else if (d.dogodek === 'lm10_form_blocked') o.blokade.push(String(d.lastnosti.field || '?'));
+  });
+  return o;
+}
+
+/** Vrstice lijaka: koraki v vrstnem redu toka, pod vnosi še vsaka stran posebej. */
+function vrsticeLijaka(obiski) {
+  var zacetih = obiski.length;
+  var vrstice = [];
+  KORAKI_LIJAKA.forEach(function (korak) {
+    vrstice.push(vrsticaKoraka(obiski, korak[0], korak[0], korak[1], zacetih));
+    if (korak[0] === 'inputs') {
+      straniVnosov(obiski).forEach(function (kljuc) {
+        vrstice.push(
+          vrsticaKoraka(obiski, kljuc, 'inputs', '      · ' + kljuc.slice('inputs/'.length), zacetih),
+        );
+      });
+    }
+  });
+  return vrstice;
+}
+
+function vrsticaKoraka(obiski, kljuc, korak, oznaka, zacetih) {
+  var doseglo = 0;
+  var koncalo = 0;
+  var casi = [];
+  obiski.forEach(function (o) {
+    if (!o.dosegel[kljuc]) return;
+    doseglo++;
+    var koncalTu = kljuc === korak ? o.najdlje.korak === korak : o.najdlje.kljuc === kljuc;
+    if (koncalTu) koncalo++;
+    if (o.cas[kljuc] !== undefined) casi.push(o.cas[kljuc]);
+  });
+  return [
+    oznaka,
+    doseglo,
+    zacetih ? doseglo / zacetih : '',
+    koncalo,
+    doseglo ? koncalo / doseglo : '',
+    casi.length ? Math.round(mediana(casi) / 1000) : '',
+  ];
+}
+
+/** Strani vnosov, ki jih je kdo dosegel — v vrstnem redu, v katerem se pojavijo v toku. */
+function straniVnosov(obiski) {
+  var indeks = {};
+  obiski.forEach(function (o) {
+    for (var kljuc in o.indeks) {
+      if (kljuc.indexOf('inputs/') !== 0) continue;
+      if (indeks[kljuc] === undefined || o.indeks[kljuc] < indeks[kljuc]) indeks[kljuc] = o.indeks[kljuc];
+    }
+  });
+  return Object.keys(indeks).sort(function (a, b) {
+    return indeks[a] - indeks[b] || (a < b ? -1 : 1);
+  });
+}
+
+function indeksVrsticeKoraka(vrstice, oznaka) {
+  for (var i = 0; i < vrstice.length; i++) if (vrstice[i][0] === oznaka) return i;
+  throw new Error('V lijaku ni vrstice "' + oznaka + '".');
+}
+
+/** Položaj koraka v toku — rezerva za dogodke starejšega builda brez stepIndex. */
+function polozajKoraka(korak) {
+  for (var i = 0; i < KORAKI_LIJAKA.length; i++) if (KORAKI_LIJAKA[i][0] === korak) return i;
+  return KORAKI_LIJAKA.length;
+}
+
+function skupine(obiski, kljucObiska) {
+  var rezultat = {};
+  obiski.forEach(function (o) {
+    var kljuc = kljucObiska(o);
+    (rezultat[kljuc] = rezultat[kljuc] || []).push(o);
+  });
+  return rezultat;
+}
+
+/** Skupina → začetih, do obrazca, oddaj, delež oddaj; največje skupine najprej. */
+function vrsticeSkupin(obiski, kljucObiska) {
+  var po = skupine(obiski, kljucObiska);
+  return Object.keys(po)
+    .sort(function (a, b) {
+      return po[b].length - po[a].length || (a < b ? -1 : 1);
+    })
+    .map(function (kljuc) {
+      var seznam = po[kljuc];
+      var oddaj = prestej(seznam, function (o) {
+        return o.oddal;
+      });
+      return [
+        kljuc,
+        seznam.length,
+        prestej(seznam, function (o) {
+          return o.dosegel.emailGate;
+        }),
+        oddaj,
+        seznam.length ? oddaj / seznam.length : '',
+      ];
+    });
+}
+
+/** Polje → število blokad in število obiskov, ki jih je polje ustavilo vsaj enkrat. */
+function vrsticeBlokad(obiski) {
+  var blokad = {};
+  var obiskov = {};
+  obiski.forEach(function (o) {
+    var videno = {};
+    o.blokade.forEach(function (polje) {
+      blokad[polje] = (blokad[polje] || 0) + 1;
+      if (!videno[polje]) {
+        videno[polje] = true;
+        obiskov[polje] = (obiskov[polje] || 0) + 1;
+      }
+    });
+  });
+  return Object.keys(blokad)
+    .sort(function (a, b) {
+      return blokad[b] - blokad[a];
+    })
+    .map(function (polje) {
+      return [polje, blokad[polje], obiskov[polje]];
+    });
+}
+
+function vrsticeDostave(obiski) {
+  var izidi = {};
+  obiski.forEach(function (o) {
+    if (!o.oddal) return;
+    var izid = o.dostavaOk ? 'dostava uspela' : o.dostavaPadla ? 'padla: ' + o.dostavaPadla : 'brez izida';
+    izidi[izid] = (izidi[izid] || 0) + 1;
+  });
+  return Object.keys(izidi)
+    .sort()
+    .map(function (izid) {
+      return [izid, izidi[izid]];
+    });
+}
+
+/** Zadnjih N dni, vsak dan svoja vrstica tudi brez obiskov — za graf brez lukenj. */
+function vrsticePoDnevih(obiski, dni) {
+  var poDnevih = {};
+  obiski.forEach(function (o) {
+    if (!o.zacetek) return;
+    var dan = Utilities.formatDate(o.zacetek, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    var d = (poDnevih[dan] = poDnevih[dan] || { zacetih: 0, oddaj: 0 });
+    d.zacetih++;
+    if (o.oddal) d.oddaj++;
+  });
+  var vrstice = [];
+  var danes = new Date();
+  for (var i = dni - 1; i >= 0; i--) {
+    var datum = new Date(danes.getFullYear(), danes.getMonth(), danes.getDate() - i);
+    var oznaka = Utilities.formatDate(datum, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    var d2 = poDnevih[oznaka] || { zacetih: 0, oddaj: 0 };
+    vrstice.push([datum, d2.zacetih, d2.oddaj]);
+  }
+  return vrstice;
+}
+
+/** Zapiše naslov, glavo in vrstice tabele od stolpca A; vrne prvo prosto vrstico pod njo. */
+function pisiTabelo(list, vrstica, naslov, glava, vrstice, oblike) {
+  list.getRange(vrstica, 1, 1, glava.length).setBackground('#f1f3f4');
+  list.getRange(vrstica, 1).setValue(naslov).setFontWeight('bold');
+  list
+    .getRange(vrstica + 1, 1, 1, glava.length)
+    .setValues([glava])
+    .setFontWeight('bold')
+    .setFontColor('#5f6368');
+  if (vrstice.length) {
+    list.getRange(vrstica + 2, 1, vrstice.length, glava.length).setValues(vrstice);
+    oblike.forEach(function (oblika, i) {
+      if (oblika) list.getRange(vrstica + 2, i + 1, vrstice.length, 1).setNumberFormat(oblika);
+    });
+  } else {
+    list.getRange(vrstica + 2, 1).setValue('Ni podatkov.').setFontStyle('italic');
+  }
+  return vrstica + 2 + Math.max(vrstice.length, 1) + 1;
+}
+
+function urediVidezLijaka(list, steviloKartic) {
+  list.getRange('A1').setFontSize(16).setFontWeight('bold');
+  list.getRange('A2').setFontColor('#5f6368').setFontStyle('italic');
+  for (var i = 0; i < steviloKartic; i++) {
+    var stolpec = 1 + i * 2;
+    list
+      .getRange(LIJAK_KARTICE_VRSTICA, stolpec, 1, 2)
+      .merge()
+      .setFontSize(9)
+      .setFontColor('#5f6368')
+      .setHorizontalAlignment('center');
+    list
+      .getRange(LIJAK_KARTICE_VRSTICA + 1, stolpec, 1, 2)
+      .merge()
+      .setFontSize(24)
+      .setFontWeight('bold')
+      .setHorizontalAlignment('center');
+  }
+  list.setColumnWidth(1, 320);
+  for (var s = 2; s <= 6; s++) list.setColumnWidth(s, 110);
+  list.setColumnWidth(LIJAK_PODATKI_STOLPEC, 220);
+  list.setFrozenRows(2);
+}
+
+/**
+ * Pobriše surove dogodke, starejše od DOGODKI_HRANI_DNI. Vrstice so v vrstnem
+ * redu prejema, zato so stare na vrhu in gre dol en strnjen blok — brez
+ * prebiranja celega lista.
+ */
+function pocistiStareDogodke(list) {
+  var meja = new Date(Date.now() - NASTAVITVE.DOGODKI_HRANI_DNI * 86400000);
+  var vrstic = list.getLastRow() - 1;
+  if (vrstic < 1) return 0;
+  var prejeti = list.getRange(2, 1, vrstic, 1).getValues();
+  var koliko = 0;
+  while (koliko < vrstic && prejeti[koliko][0] instanceof Date && prejeti[koliko][0] < meja) koliko++;
+  if (!koliko) return 0;
+
+  var kljucavnica = LockService.getScriptLock();
+  kljucavnica.waitLock(30000);
+  try {
+    list.deleteRows(2, koliko);
+  } finally {
+    kljucavnica.releaseLock();
+  }
+  return koliko;
+}
+
+function prestej(seznam, pogoj) {
+  var n = 0;
+  seznam.forEach(function (element) {
+    if (pogoj(element)) n++;
+  });
+  return n;
+}
+
+function mediana(stevila) {
+  var s = stevila.slice().sort(function (a, b) {
+    return a - b;
+  });
+  var n = s.length;
+  if (!n) return 0;
+  return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
+}
+
+/** Celica z datumom (Date) ali z nizom ISO; sicer null. */
+function vDatum(vrednost) {
+  if (vrednost instanceof Date) return isNaN(vrednost.getTime()) ? null : vrednost;
+  if (typeof vrednost === 'string' && vrednost) {
+    var d = new Date(vrednost);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
+function razcleniLastnosti(vrednost) {
+  if (typeof vrednost !== 'string' || !vrednost) return {};
+  try {
+    var razclenjeno = JSON.parse(vrednost);
+    return razclenjeno && typeof razclenjeno === 'object' ? razclenjeno : {};
+  } catch (err) {
+    return {};
+  }
+}
+
+/**
+ * Dnevna ura za lijak — enkrat ročno. Ob šestih zjutraj, ko zahtev ni: povzetek
+ * bere ves list Dogodki in ob večjem prometu teče nekaj sekund.
+ */
+function namestiUroZaLijak() {
+  odstraniUroZaLijak();
+  ScriptApp.newTrigger('sestaviLijak').timeBased().everyDays(1).atHour(6).create();
+  console.log('Ura nameščena: sestaviLijak vsak dan ob 6h.');
+}
+
+function odstraniUroZaLijak() {
+  var koliko = 0;
+  ScriptApp.getProjectTriggers().forEach(function (sprozilec) {
+    if (sprozilec.getHandlerFunction() === 'sestaviLijak') {
       ScriptApp.deleteTrigger(sprozilec);
       koliko++;
     }
