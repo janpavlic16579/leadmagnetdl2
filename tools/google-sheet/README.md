@@ -254,6 +254,27 @@ spremembi: *Razmesti → Upravljaj razmestitve → svinčnik → Različica: Nov
 različica → Razmesti*. Naslov ostane isti. Brez tega koraka teče stara koda in
 videti je, kot da sprememba ni imela učinka.
 
+**Pred lepljenjem poženite preizkus.** Skripto naloži v Node s preglednico v
+pomnilniku namesto Googla in skoznjo požene obe poti webhooka ter sestavljanje
+lijaka:
+
+```bash
+node tools/google-sheet/preizkus.mjs
+```
+
+Brez odvisnosti (`node:vm`, `node:test`, `node:assert`); isti ukaz teče v CI
+(`.github/workflows/ci.yml`) ob vsakem PR. Preverja, da oddaja z `record` in
+`sheet` konča kot vrstica na `Leadi` s stolpcema `kliciTakoj` in `letno` in z
+glavo po `VRSTNI_RED`; da paket z `events` in `visit` konča na `Dogodki`; da
+`sestaviLijak` iz šestih značilnih obiskov (poln tok, odnehanje na triaži in na
+strani vnosov, nadaljevanje po osvežitvi, interni obisk, blokada obrazca)
+sestavi `Lijak` s pravimi števili — obiskov po korakih, „končalo tu", mediana
+časa, blokade po polju, nadaljevanja posebej; in da paket brez id-ja obiska
+vrže napako. Ponarejena preglednica ob `setValues` preveri obliko obsega in
+`getLastRow` računa iz vsebine, ne iz oblik. Česar ne pokrije: Drive, pošta,
+ActiveCampaign in to, kako prava preglednica razlaga zapisane nize (uvodni
+opuščaj, pretvorba `"true"`) — ponaredek hrani natanko to, kar skripta zapiše.
+
 ## Lijak — kje obiskovalci odnehajo
 
 Aplikacija pošlje po istem webhooku tudi **dogodke lijaka** (`src/lib/funnel.ts`):
