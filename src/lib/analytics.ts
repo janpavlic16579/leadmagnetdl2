@@ -1,14 +1,29 @@
+import {
+  createFunnelQueue,
+  describeVisit,
+  newVisitId,
+  sendBeaconOrFetch,
+  type FunnelQueue,
+} from './funnel';
+import { leadWebhookUrl } from './webhookUrl';
+
 /**
  * Merjenje lijaka.
  *
- * Vprašalnik ima deset korakov, o odpadanju pa doslej ni bilo znano nič: ne kje
+ * Vprašalnik ima deset korakov, o odpadanju pa dolgo ni bilo znano nič: ne kje
  * obiskovalci odnehajo, ne katera dejavnost pride do rezultata, ne kolikšen
  * delež jih odda e-naslov. Vsaka razprava o skrajšanju vprašalnika je bila zato
  * razprava o mnenjih.
  *
- * Dogodki gredo v `window.dataLayer` (Google Tag Manager). Aplikacija ne naloži
- * nobene zunanje skripte in ne postavi nobenega piškotka — če GTM na strani ni
- * nameščen, se dogodki tiho naberejo v polju in nikamor ne odidejo.
+ * Vsak dogodek gre na dve mesti:
+ *
+ * - v `window.dataLayer` (Google Tag Manager) — za primer, da bi GTM na strani
+ *   kdaj bil; aplikacija ga sama ne naloži;
+ * - na webhook (lib/funnel.ts), kadar je `VITE_LEAD_WEBHOOK_URL` nastavljen —
+ *   isti naslov kot za oddaje; sprejemnik iz dogodkov sestavi list "Lijak".
+ *
+ * Aplikacija ne naloži nobene zunanje skripte in ne postavi nobenega piškotka;
+ * id obiska živi samo v pomnilniku strani (lib/funnel.ts, odločitev 1).
  *
  * OSEBNIH PODATKOV TU NI. Ne e-naslova, ne imena podjetja, ne vnesenih zneskov;
  * samo korak, segment in razredi (oznaka zanesljivosti, število področij). Kar
@@ -20,7 +35,12 @@ interface DataLayerWindow extends Window {
 }
 
 export type AnalyticsEvent =
-  /** Prikaz koraka — osnova vsakega lijaka. */
+  /**
+   * Prikaz koraka — osnova vsakega lijaka. Nosi `stepIndex`/`stepsTotal` (isto
+   * štetje kot "Korak N od M" na zaslonu) in pri vnosih `moduleId`: korak z
+   * vnosi je ena stran na področje in brez id-ja ni videti, katero področje
+   * ljudi ustavi.
+   */
   | 'lm10_step_view'
   /** Izbrana dejavnost (in s tem segment). */
   | 'lm10_industry_selected'
@@ -50,6 +70,46 @@ export type AnalyticsEvent =
    */
   | 'lm10_delivery_failed';
 
+/**
+ * Vrsta za webhook — nastane ob prvem dogodku in živi do konca strani.
+ * `undefined` = še ni odločeno, `null` = brez webhooka ali brez brskalnika
+ * (vitest teče v node): tedaj ostane samo dataLayer.
+ */
+let queue: FunnelQueue | null | undefined;
+
+function funnelQueue(): FunnelQueue | null {
+  if (queue !== undefined) return queue;
+  queue = null;
+  try {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return null;
+    const url = leadWebhookUrl();
+    if (!url) return null;
+
+    const created = createFunnelQueue({
+      visit: describeVisit({
+        id: newVisitId(),
+        startedAt: new Date(),
+        search: window.location.search,
+        // Razred zaslona in ne naprava: dovolj za vprašanje "ali telefon odpada
+        // drugje kot namizje", brez branja user agenta.
+        narrowScreen: window.matchMedia('(max-width: 768px)').matches,
+      }),
+      send: (body) => sendBeaconOrFetch(url, body),
+    });
+    // Ob skritju zavihka (menjava aplikacije na telefonu, zaprtje) gre vse, kar
+    // čaka, takoj — odlog četrt sekunde bi sicer pojedel prav zadnji korak, na
+    // katerem je obiskovalec odnehal.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') created.flush();
+    });
+    window.addEventListener('pagehide', () => created.flush());
+    queue = created;
+  } catch {
+    queue = null;
+  }
+  return queue;
+}
+
 export function track(event: AnalyticsEvent, props: Record<string, string | number> = {}): void {
   try {
     const target = window as DataLayerWindow;
@@ -57,5 +117,10 @@ export function track(event: AnalyticsEvent, props: Record<string, string | numb
     target.dataLayer.push({ event, ...props });
   } catch {
     // Merjenje ne sme nikoli ustaviti vprašalnika.
+  }
+  try {
+    funnelQueue()?.record(event, props);
+  } catch {
+    // Isto pravilo za webhook.
   }
 }

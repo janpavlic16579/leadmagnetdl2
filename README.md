@@ -508,24 +508,41 @@ Trije mehanizmi, ki jih je lahko spregledati, ker se pokažejo šele ob napaki:
 
 ## Merjenje lijaka
 
-`src/lib/analytics.ts` potisne dogodke v `window.dataLayer` (Google Tag Manager). Aplikacija ne naloži
-nobene zunanje skripte in ne postavi nobenega piškotka — brez nameščenega GTM se dogodki naberejo v
-polju in nikamor ne odidejo.
+`src/lib/analytics.ts` potisne vsak dogodek na dve mesti: v `window.dataLayer` (Google Tag Manager, ki ga
+aplikacija sama ne naloži) in — kadar je nastavljen `VITE_LEAD_WEBHOOK_URL` — na **isti webhook kot
+oddaje** (`src/lib/funnel.ts`). Sprejemnik v [`tools/google-sheet/`](tools/google-sheet/README.md#lijak--kje-obiskovalci-odnehajo)
+dogodke pripne na list `Dogodki` in iz njih sestavi list `Lijak`: koliko obiskov je doseglo kateri korak,
+kje odnehajo, koliko časa porabijo na koraku, katero polje ustavi oddajo. Brez webhooka se dogodki naberejo
+v `dataLayer` in nikamor ne odidejo — kot doslej.
 
-Dogodki: `lm10_step_view`, `lm10_industry_selected`, `lm10_triage_done`, `lm10_email_gate_view`,
-`lm10_lead_submitted`, `lm10_results_view`, `lm10_report_download`.
+Aplikacija ne naloži nobene zunanje skripte in ne postavi nobenega piškotka. **Id obiska živi samo v
+pomnilniku strani** — ne v piškotku in ne v `sessionStorage`, ker bi identifikator za merjenje v brskalniku
+po ZEKom-2 terjal privolitev. Cena: osvežitev sredi vprašalnika je videti kot dva obiska. Sprejemnik drugega
+prepozna po tem, da se ne začne na uvodnem koraku, in ga šteje posebej kot „nadaljevanje", ne kot nov obisk.
 
-`lm10_email_gate_view` šteje samo prihod na obrazec naprej iz vnosov (imenovalec deleža oddaj);
-`lm10_results_view` se sproži po oddaji; `lm10_report_download` ob vsakem prenosu poročila, ker je
-vsak ročen. Dogodek se je prej imenoval `lm10_report_redownload` — sprožilce v GTM je treba
-preimenovati.
+Pošiljanje je „izstreli in pozabi": `navigator.sendBeacon` s telesom kot nizom (tip `text/plain`, brez
+predhodne zahteve CORS — glej `submitLead.ts`; zahteva preživi zaprtje zavihka, prav tam, kjer se odpadanje
+dogaja), dogodki istega trenutka združeni v en paket s četrtsekundnim odlogom, ob skritju zavihka takoj.
+Odgovora aplikacija ne bere: merjenje sme izgubiti dogodek, vprašalnik ne sme izgubiti sekunde.
+
+Dogodki: `lm10_step_view`, `lm10_industry_selected`, `lm10_triage_done`, `lm10_cost_basis_done`,
+`lm10_email_gate_view`, `lm10_form_blocked`, `lm10_lead_submitted`, `lm10_delivery_ok`,
+`lm10_delivery_failed`, `lm10_results_view`, `lm10_report_download`.
+
+`lm10_step_view` nosi `stepIndex` in `stepsTotal` (isto štetje kot „Korak N od M" na zaslonu) ter pri vnosih
+`moduleId` — sproži se za **vsako stran vnosov**, ker je korak z vnosi ena stran na področje in brez id-ja
+ni videti, katero področje ljudi ustavi. `lm10_email_gate_view` šteje samo prihod na obrazec naprej iz
+vnosov (imenovalec deleža oddaj); `lm10_results_view` se sproži po oddaji; `lm10_report_download` ob vsakem
+prenosu poročila, ker je vsak ročen. Dogodek se je prej imenoval `lm10_report_redownload` — sprožilce v GTM
+je treba preimenovati.
 
 `lm10_lead_submitted` nosi tudi lastnost `consulting` (`da`/`ne`) — ali je obiskovalec obkljukal poziv
 za svetovanje na zadnjem koraku. Brez nje o učinku tega poziva ni znano nič.
 
 **Osebnih podatkov in zneskov med njimi ni** — samo korak, segment in razredi (oznaka zanesljivosti,
-število izmerjenih področij, obkljukan poziv). Kar potrebuje prodaja, potuje po webhooku s privolitvijo;
-analitika meri lijak in ne strank.
+število izmerjenih področij, obkljukan poziv, razred zaslona, `utm_source`). `src/lib/funnel.ts` vrednosti
+omeji na nize in števila in nize obreže; test `funnel.test.ts` trdi, da ovojnica nosi samo obisk in dogodke.
+Kar potrebuje prodaja, potuje po webhooku s privolitvijo; analitika meri lijak in ne strank.
 
 ## Obrazec pred rezultati
 

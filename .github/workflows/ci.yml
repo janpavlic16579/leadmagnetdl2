@@ -35,6 +35,12 @@ jobs:
       - name: Testi
         run: npm test
 
+      # Skripta za Google Sheet (tools/google-sheet/Koda.gs) teče v Apps Scriptu
+      # in je vitest ne vidi: preizkus jo naloži v Node s preglednico v
+      # pomnilniku. Brez odvisnosti, pod sekundo.
+      - name: Preizkus skripte za Google Sheet
+        run: node tools/google-sheet/preizkus.mjs
+
       # Karta vprašalnika je del objavne poti (glej deploy.yml) — če se orodje pokvari,
       # naj to pove PR in ne deploy.
       - name: Zgradi karto vprašalnika
