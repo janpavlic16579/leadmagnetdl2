@@ -43,6 +43,13 @@ Odpadanje po korakih merijo dogodki lijaka, ki pridejo po istem webhooku na list
 
 ## Obvestilo na e-pošto ob vsaki oddaji
 
+> **Privzeto to obvestilo pošlje ActiveCampaign, ne skripta.** Ob nastavljenem
+> AC in `POSTA_PREK_AC: true` skripta ne pošlje ničesar — obvestilo prodaji in
+> poročilo stranki odpravita avtomatizaciji v AC, s povezavama do PDF-jev na
+> Drivu. Glej [Pošta prek ActiveCampaigna](#pošta-prek-activecampaigna).
+> Spodnje velja za način MailApp (`POSTA_PREK_AC: false` ali AC ni priklopljen)
+> in ostaja rezervna pot, ki jo je vredno poznati.
+
 V `Koda.gs` na vrhu izpolnite `E_NASLOV_ZA_OBVESTILA` (več naslovov ločite z
 vejico); prazno pomeni brez obvestil. Nato spremembo **razmestite kot novo
 različico** (spodaj) — ob tem bo Google zahteval dodatno dovoljenje za pošiljanje
@@ -100,6 +107,12 @@ delujejo** — sprožijo se ob človeškem urejanju, ne ob vpisu iz skripte.
 
 ## Poročilo stranki po e-pošti
 
+> **Privzeto to sporočilo pošlje ActiveCampaign, ne skripta**, in namesto
+> priloge nosi povezavo do PDF-ja na Drivu — glej
+> [Pošta prek ActiveCampaigna](#pošta-prek-activecampaigna). Spodnje velja za
+> način MailApp; besedilo sporočila in pravilo »priprava nikoli stranki« sta v
+> obeh načinih ista.
+
 Ob vsaki oddaji skripta pošlje **stranki** — na e-naslov iz obrazca — sporočilo
 s pripetim poročilom za stranko (`posljiPorociloStranki`). To je obljuba
 obrazca (»PDF poročilo prejmete na vpisani e-naslov«); aplikacija na
@@ -129,7 +142,8 @@ le strankini odgovori. Kvota MailApp zdaj šteje **dva prejemnika na lead**
 
 **Izid je viden na treh mestih.** V odgovoru aplikaciji (`customerReport:
 { sent, reason }` — razlogi `disabled`, `no_address`, `invalid_address`,
-`no_attachment`, `send_failed`), v stolpcu `porociloStranki` vrstice (»poslano
+`no_attachment`, `send_failed`, v načinu AC še `queued` in `unsubscribed`), v
+stolpcu `porociloStranki` vrstice (»poslano 2026-09-07 10:12«, »prek AC
 2026-09-07 10:12« ali »ni poslano: …«) in v obvestilu prodaji (vrstica
 »Poročilo stranki: poslano na …« ali »NI poslano (razlog)« — tedaj ga zna
 svetovalec posredovati iz priloge). Na naslovu `/exec` (`doGet`) so še vrstice
@@ -334,9 +348,12 @@ vrže napako; da poročilo stranki po e-pošti gre na naslov iz oddaje s samo
 njenim PDF-jem (nikoli s pripravo), ob manjkajočem naslovu, prilogi ali padli
 pošti pa odgovor pove razlog, vrstica in obvestilo prodaji pa ostaneta; da
 kontakt gre v ActiveCampaign naročen, s privolitvijo kot oznako, in da kdor se
-je sam odjavil, ostane odjavljen; in da strankin PDF pristane na Drivu v svoji
+je sam odjavil, ostane odjavljen; da strankin PDF pristane na Drivu v svoji
 mapi, deljen s povezavo, povezava pa v stolpcu `porociloPdf` in v polju v AC —
-ob odpovedi Drive pa vrstica, pošta stranki in AC tečejo naprej.
+ob odpovedi Drive pa vrstica, pošta stranki in AC tečejo naprej; in da v načinu
+`POSTA_PREK_AC` skripta ne pošlje ničesar, oba PDF-ja pristaneta na Drivu
+deljena s povezavo, kontakt na obeh seznamih, odgovor pa je `queued` — oziroma
+`no_attachment`, `unsubscribed` ali `disabled`, kadar je tako.
 Ponarejena preglednica ob `setValues` preveri obliko obsega in `getLastRow`
 računa iz vsebine, ne iz oblik; `MailApp` je ponarejen in sporočila zbira, da
 test vidi naslovnika, prilogi in besedilo; `DriveApp` (mape, datoteke, deljenje)
@@ -461,7 +478,8 @@ Dokler nastavitev ni, se ne zgodi nič — zbiralnik dela natanko kot doslej.
    |---|---|
    | `AC_NASLOV` | URL iz *Developer*, npr. `https://ime.api-us1.com` |
    | `AC_KLJUC` | Key iz *Developer* |
-   | `AC_SEZNAM` | id seznama iz 1. koraka |
+   | `AC_SEZNAM` | id seznama strank iz 1. koraka |
+   | `AC_SEZNAM_PRODAJA` | neobvezno: id drugega seznama, pregleda leadov za prodajo |
 
    Ključ **ne sodi v `Koda.gs`** — datoteka je v repozitoriju. Stranski dobiček
    lastnosti skripte je, da preživijo vsako naslednje lepljenje kode; naslova za
@@ -469,8 +487,10 @@ Dokler nastavitev ni, se ne zgodi nič — zbiralnik dela natanko kot doslej.
 4. **Prilepite novo različico `Koda.gs`** in shranite.
 5. **Poženite `pripraviAC`** (izberite funkcijo v urejevalniku → *Zaženi*).
    Google bo prvič zahteval dovoljenje za klice na zunanje naslove. Funkcija
-   preveri ključ, izpiše ime seznama in v AC ustvari manjkajoča polja po meri.
-   Varno jo je pognati večkrat.
+   preveri ključ, izpiše imena seznamov in v AC ustvari manjkajoča polja po meri.
+   Izpis loči **že obstoječa** polja od **na novo ustvarjenih** — polji `PDF_LINK`
+   in `PDF_LINK_PRODAJA` sta v AC ustvarjeni ročno in morata biti med prvimi;
+   če se pojavita med ustvarjenimi, se oznaki ne ujemata. Varno večkrat.
 6. **Poženite `posljiZaostaleVAC`** — pošlje leade, ki so se v preglednici
    nabrali pred priklopom (do 5 na zagon; poženite večkrat, dokler izpis ne
    pokaže `Poslano: 0`).
@@ -484,11 +504,24 @@ Dokler nastavitev ni, se ne zgodi nič — zbiralnik dela natanko kot doslej.
 
 ### Kaj pride v ActiveCampaign
 
-Standardna polja: e-naslov, ime, priimek, telefon. Poleg njih petnajst polj po
-meri z oznakami `%LM10_…%` (podjetje, panoga, zaposleni, prihodek, letni izračun,
-enkratni kapital, zanesljivost, področja, tveganja, posvet, povezava do prodajne
-priprave, povezava do strankinega PDF-ja, sekvenca, vir, vloga) — uporabna so v
-personalizaciji e-pošte.
+Standardna polja: e-naslov, ime, priimek, telefon. Poleg njih sedemnajst polj po
+meri, uporabnih v personalizaciji e-pošte:
+
+| Polje | Vsebina |
+|---|---|
+| `%PDF_LINK%` | povezava do strankinega poročila (PDF na Drivu) |
+| `%PDF_LINK_PRODAJA%` | povezava do priprave na pogovor |
+| `%LM10_ODDAJA%` | čas zadnje oddaje — edino polje, ki se spremeni ob VSAKI oddaji |
+| `%LM10_DAVCNA%` | davčna številka |
+| `%LM10_PODJETJE%`, `%LM10_PANOGA%`, `%LM10_ZAPOSLENI%`, `%LM10_PROMET%` | podjetje in velikost |
+| `%LM10_LETNO%`, `%LM10_KAPITAL%`, `%LM10_ZANESLJIVOST%` | izračun |
+| `%LM10_PODROCJA%`, `%LM10_TVEGANJA%`, `%LM10_POSVET%` | kaj je izbral in ali prosi za posvet |
+| `%LM10_SEKVENCA%`, `%LM10_VIR%`, `%LM10_VLOGA%` | za segmentacijo |
+
+Polji `PDF_LINK` in `PDF_LINK_PRODAJA` **ustvarite v AC ročno** (Settings →
+Fields), preden poženete `pripraviAC` — skripta ju najde po personalizacijski
+oznaki. Ostala ustvari sama. Starejši polji `LM10_POROCILO` in `LM10_PRIPRAVA`
+skripta ne polni več; v AC ostaneta prazni in ju smete izbrisati.
 
 Oznake so tisto, na kar se v AC obesi avtomatizacija:
 
@@ -506,47 +539,80 @@ Predpono `LM-10` spremenite v `NASTAVITVE.AC.OSNOVNA_OZNAKA`.
 V CRM **ne gredo** surov JSON vnosov, triažne ocene in podrobnosti izračuna. Te
 ostanejo v preglednici; CRM ni prostor zanje.
 
-### Povezava do strankinega PDF-ja
+### Pošta prek ActiveCampaigna
 
-Polje `%LM10_POROCILO%` je povezava do istega PDF-ja, ki ga je stranka dobila po
-e-pošti. Skripta ga ob oddaji shrani v mapo `LM-10 poročila strankam` na Drivu
-(`shraniPorocilo`; nastavitvi `SHRANI_POROCILO` in `IME_MAPE_POROCIL`), povezavo
-zapiše v stolpec `porociloPdf` in jo od tam pošlje v AC skupaj z ostalimi polji
-— tudi takrat, ko lead pobere ura. Svetovalec PDF odpre iz kartice kontakta;
-avtomatizacija v AC ga lahko vstavi v sporočilo (»vaše poročilo:
-%LM10_POROCILO%«).
+Privzeto (`POSTA_PREK_AC: true` in priklopljen AC) **obe sporočili pošlje
+ActiveCampaign**: poročilo stranki in obvestilo prodaji. Skripta ju ne pošlje —
+naredi tri stvari in utihne:
 
-**Datoteka je deljena s povezavo, samo za branje** (`POROCILO_DOSTOPNO_S_POVEZAVO`,
-privzeto `true`). Brez tega bi povezava vsakomur razen računu skripte odprla
-»Zahtevajte dostop« — tudi svetovalcu v AC. Povezava nosi naključen id in ni
-uganljiva; ima jo, kdor jo je dobil od nas ali od stranke. Če Workspace deljenje
-navzven prepoveduje, se datoteka shrani brez njega, v dnevniku izvedb je
-opozorilo, povezava pa deluje vsem z dostopom do mape. Mapa priprav deljena
-**ni** in ne sme biti — v njej so dokumenti o stranki, ne za stranko.
+1. oba PDF-ja shrani na Drive (`LM-10 poročila strankam`, `LM-10 prodajne
+   priprave`) in ju deli **»vsi s povezavo, ogled«**;
+2. povezavi zapiše v stolpca `porociloPdf` in `prodajnaPriprava`;
+3. ju skupaj z ostalimi polji pošlje kontaktu v AC (`%PDF_LINK%`,
+   `%PDF_LINK_PRODAJA%`, `%LM10_ODDAJA%`).
 
-Napaka pri shranjevanju (Drive ne odgovarja, kvota) ne ustavi ničesar: stranka
-dobi PDF po e-pošti, vrstica in kontakt v AC nastaneta, v celici `porociloPdf`
-ostane `NAPAKA: …`, polje v AC izpade (`samoPovezava` — besedilo napake v CRM ne
-gre). Na `/exec` sta vrstici »Poročilo na Drivu« (čas zadnje shranjene kopije)
-in »Zadnja napaka poročila na Drivu«. Ponovnega shranjevanja ni: PDF nastane v
-brskalniku ob oddaji in skripta ga pozneje nima več — svetovalec ga ima v
-prilogi obvestila.
+Sprememba polja je **sprožilec**: avtomatizaciji v AC se ob njej zbudita in
+pošljeta sporočili. Pošiljatelj je s tem Datalabov račun v AC in ne račun, ki je
+skripto razmestil.
 
-**Vklop na obstoječi namestitvi** (skripta je že priklopljena na AC):
+**Zakaj povezave in ne priloge:** AC datotek v sporočila ne zna pripeti. Zato sta
+obe datoteki deljeni s povezavo — brez tega bi povezava stranki in svetovalcu
+odprla »Zahtevajte dostop«. Povezava nosi naključen id in ni uganljiva, a
+priprava je dokument **o** stranki: obvestil prodaji ne posredujte naprej.
+Preden gre prvi lead, poženite **`preizkusDeljenja`** (v urejevalniku) in
+izpisano povezavo odprite v zasebnem oknu — če Workspace deljenje navzven
+prepove, se datoteke shranijo, povezave pa ne delujejo.
 
-1. Prilepite novo različico `Koda.gs` in znova vpišite `E_NASLOV_ZA_OBVESTILA`.
-2. Poženite **`pripraviAC`** — ustvari manjkajoče polje *LM-10 poročilo stranki
-   (PDF)* in si zapomni njegov id. Dokler ne teče, skripta to polje preskoči,
-   ostala gredo naprej; vrstni red zato ni kritičen.
-3. **Razmestite novo različico** (*Razmesti → Upravljaj razmestitve → svinčnik →
-   Nova različica*). Novega dovoljenja ni: Drive skripta uporablja že za
-   priprave.
-4. Enkrat poženite **`urediStolpce`**, da stolpec `porociloPdf` pristane ob
-   `porociloStranki` in ne na koncu lista.
-5. Preverite na `/exec`: `ActiveCampaign: … polj: 15` in po prvi oddaji
-   `Poročilo na Drivu: <čas>`.
+**Dve avtomatizaciji, ne ena.** Sprožilca sta različna in eno sporočilo ne sme
+čakati na drugo:
 
-Leadi, oddani pred vklopom, povezave nimajo — PDF-ja skripta tedaj ni shranila.
+| Avtomatizacija | Sprožilec | Dejanje |
+|---|---|---|
+| poročilo stranki | *Field changes* → `PDF Link`, runs multiple times | *Wait 1 minute*, nato *Send email* s povezavo `%PDF_LINK%` |
+| obvestilo prodaji | *Field changes* → `LM-10 čas zadnje oddaje`, multiple times, pogoj »je na seznamu prodaje« | *Send notification* na prodajni naslov z obema povezavama |
+
+Čakanje ene minute pri prvi je namerno: kontakt pride na seznam šele s klicem,
+ki polje nastavi. Sprožilec druge je **čas oddaje** in ne povezava do priprave:
+če priprave ni (PDF ni nastal, HTML ni prišel), se povezava ne spremeni in
+prodaja obvestila ne bi dobila — čas oddaje se spremeni vedno. Vsebino sporočila
+stranki povzemite po `sestaviSporociloStranki`, obvestilo prodaji po
+`posljiObvestilo` (obe funkciji ostaneta v skripti kot vzorec in kot rezervna
+pot).
+
+**Brez podvajanja.** Ista povezava ob ponovni sinhronizaciji polja ne spremeni,
+zato ura (`posljiZaostaleVAC`) sporočila ne sproži drugič. Ob ponovnem obisku
+istega človeka pa nastaneta novi datoteki, polji se spremenita in sporočili
+odideta znova — kar je prav, ker gre za nov izračun.
+
+**Rok na vroči poti je 6 sekund** (`AC_ROK_PREK_AC_MS`, v načinu MailApp 4,5).
+Ob prekoračitvi klic v AC odpade, odgovor aplikaciji je vseeno `queued` in
+vrstico v minuti pobere ura — sporočili tedaj odideta z zamikom.
+
+**Kaj vidi stranka.** Odgovor aplikaciji je `customerReport: { sent: false,
+reason: 'queued' }`, kar na rezultatih pomeni »Poročilo pošiljamo na … Prispe v
+nekaj minutah« **in** gumb za prenos. Gumb ostane namenoma: potrditve ob oddaji
+ni, druga oddaja pa je onemogočena. Ob `unsubscribed` (kontakt se je v AC sam
+odjavil) sporočila ne bo — stranka ima gumb, svetovalec pa PDF v kartici
+kontakta.
+
+**Vklop na obstoječi namestitvi:**
+
+1. V AC ustvarite polji **PDF Link** in **PDF Link - PRODAJA** (Settings →
+   Fields, tip Text) in seznam za prodajo, če ga še ni.
+2. Prilepite novo različico `Koda.gs`, vpišite `E_NASLOV_ZA_OBVESTILA` in v
+   lastnosti skripte dodajte `AC_SEZNAM_PRODAJA`.
+3. Poženite **`preizkusDeljenja`**, nato **`pripraviAC`** (najde vaši polji,
+   ustvari `LM10_DAVCNA` in `LM10_ODDAJA`).
+4. Poženite **`posljiZaostaleVAC`**, dokler ne pokaže `Poslano: 0` — zaostanek
+   izpraznite, **preden** vklopite avtomatizaciji, sicer bodo obvestila odšla za
+   stare leade. Nato **`narociObstojeceVAC`**, da so obstoječi kontakti tudi na
+   seznamu prodaje.
+5. Sestavite obe avtomatizaciji (tabela zgoraj) in ju vklopite.
+6. **Razmestite novo različico** in preverite na `/exec`: vrstici `Pošta: prek
+   ActiveCampaigna` in `ActiveCampaign: seznam … + prodaja …`.
+
+Nazaj na MailApp: `POSTA_PREK_AC: false` in nova različica razmestitve;
+avtomatizaciji v AC tedaj izklopite, sicer bosta sporočili odšli dvakrat.
 
 ### Privolitve
 
@@ -616,6 +682,19 @@ reason: 'send_failed' }` in aplikacija stranki ponudi prenos. Napaka je v
 stolpcu `porociloStranki` in na `/exec`. Ponovnega pošiljanja ni: stranka ima
 gumb, svetovalec pa PDF v prilogi obvestila.
 
+**V načinu AC** je razporeditev drugačna, ker skripta ne pošilja:
+
+| Kaj odpove | Kaj se zgodi |
+|---|---|
+| Drive pri strankinem PDF-ju | `porociloPdf` dobi `NAPAKA: …`, polje `%PDF_LINK%` izpade, odgovor je `send_failed` in stranka ima gumb |
+| Drive pri pripravi | napaka gre ven (kot doslej): aplikacija pripravo prenese stranki, vrstica je zapisana |
+| klic v AC ali prekoračen rok | odgovor je `queued`, celica `activeCampaign` ostane prazna ali `NAPAKA`, vrstico v minuti pobere ura in avtomatizaciji se sprožita tedaj |
+| kontakt je v AC odjavljen | odgovor je `unsubscribed`, stranka ima gumb; svetovalec PDF odpre iz kartice kontakta |
+| deljenje na Drivu prepovedano | datoteki nastaneta, povezavi iz AC pa zahtevata dostop — vrstica »Zadnja napaka deljenja na Drivu« na `/exec`; preverite s `preizkusDeljenja` |
+
+Nobena od teh poti ne pošlje ničesar dvakrat: sporočilo sproži **sprememba
+polja**, in ista povezava ob ponovni sinhronizaciji polja ne spremeni.
+
 Aplikacija bere **telo** odgovora, ne le statusa: Apps Script napako skripte
 (žeton, prazno telo, nezapisana vrstica) vrne kot HTML s statusom 200, kar je
 prej štelo kot uspešna dostava. Zdaj je uspeh samo JSON z `ok: true`.
@@ -633,8 +712,9 @@ vsaka zahteva in razlog vsake napake.
 - **Osebni podatki.** Vrstica vsebuje ime, e-naslov, telefon in davčno številko.
   Preglednico delite le s tistimi, ki jo potrebujejo, in brisanje na zahtevo
   posameznika pomeni brisanje vrstice **in** datotek na Drive: priprave v
-  `LM-10 prodajne priprave` in poročila v `LM-10 poročila strankam` (to je
-  deljeno s povezavo; z brisanjem povezava ugasne).
+  `LM-10 prodajne priprave` in poročila v `LM-10 poročila strankam` (v načinu AC
+  sta deljeni s povezavo obe; z brisanjem povezava ugasne) **in** kontakta v
+  ActiveCampaignu, kjer je na obeh seznamih.
 - **Stolpci se dodajajo na konec.** Skripta piše po imenih iz glave, zato nov
   stolpec v `CSV_COLUMNS` sam pripne novo ime; stare vrstice ostanejo poravnane.
   Ročno prerazporejanje ali preimenovanje stolpcev to podre.

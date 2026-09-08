@@ -128,8 +128,12 @@ export function ResultsView({
    * Noga: obvestilo o poslani pošti ali gumb za prenos — nikoli gumb sam od sebe
    * ob pošti, ki je odšla (razen v internem načinu, za pregled). Brez podatka
    * (null) ostane gumb: rezerva je varna razlaga neznanega.
+   *
+   * 'queued' je vmes: poročilo pošilja CRM in prispe v nekaj minutah, potrditve
+   * pa ob oddaji ni — zato obvestilo IN gumb.
    */
   const reportEmailed = customerReport?.reason === 'emailed';
+  const reportQueued = customerReport?.reason === 'queued';
   const showDownload = customerReport?.downloadOffered ?? true;
 
   const isAccounting = segment.id === 'racunovodstvo';
@@ -339,7 +343,7 @@ export function ResultsView({
 
       <NextSteps
         consultingRequested={consultingRequested}
-        reportEmailed={reportEmailed}
+        reportEmailed={reportEmailed || reportQueued}
         onDownloadSalesPdf={onDownloadSalesPdf}
         internalMode={internalMode}
         followUpSequenceDebug={followUpSequenceDebug}
@@ -370,6 +374,17 @@ export function ResultsView({
                 'vaš e-naslov'
               )}
               .
+            </p>
+          ) : null}
+          {reportQueued ? (
+            <p role="status" className={styles.footerNote}>
+              {internalMode ? '[interno] ' : ''}Poročilo pošiljamo na{' '}
+              {customerReport?.emailedTo ? (
+                <strong className={styles.footerNoteStrong}>{customerReport.emailedTo}</strong>
+              ) : (
+                'vaš e-naslov'
+              )}
+              . Prispe v nekaj minutah; medtem ga lahko prenesete tukaj.
             </p>
           ) : null}
           {customerReport?.reason === 'not_sent' ? (

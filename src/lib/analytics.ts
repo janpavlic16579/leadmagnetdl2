@@ -56,10 +56,15 @@ export type AnalyticsEvent =
    * Prenos strankinega poročila z rezultatov. Vsak prenos je ročen (ob oddaji se
    * ne prenese nič). Odkar gre poročilo stranki po e-pošti, je gumb REZERVA:
    * `reason` pove, zakaj je bil sploh na voljo (no_webhook, delivery_failed,
-   * not_sent, unknown, internal), zato dogodek meri odpovedi pošte, ne zanimanja.
+   * not_sent, queued, unknown, internal), zato dogodek meri odpovedi pošte in
+   * čakanje na CRM, ne zanimanja.
    */
   | 'lm10_report_download'
-  /** Sprejemnik je strankino poročilo poslal na e-naslov iz obrazca. */
+  /**
+   * Strankino poročilo je na poti na e-naslov iz obrazca. `channel`: 'mailapp' =
+   * poslal ga je sprejemnik in to potrdil, 'activecampaign' = predal ga je CRM-ju,
+   * ki ga pošlje v nekaj minutah (potrditve ob oddaji ni, zato gumb ostane).
+   */
   | 'lm10_report_emailed'
   /**
    * Sprejemnik je zapis sprejel, poročila stranki pa NI poslal (`reason`: razlog

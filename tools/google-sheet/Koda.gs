@@ -20,16 +20,25 @@
  *    tudi Googlova stran z napako — je neuspela dostava, po kateri prodajno
  *    pripravo prenese stranki. Vsaka pot, ki ne konča z zapisano vrstico, mora
  *    zato pustiti napako ven (glej `doPost`).
- * 4. PRIPRAVA NIKOLI STRANKI. Strankino poročilo gre po e-pošti tudi STRANKI —
- *    na naslov iz obrazca, s samo njenim PDF-jem (`posljiPorociloStranki`).
- *    Odloča oznaka `audience` na prilogi: 'customer' gre stranki, 'sales' je
- *    priprava na pogovor in ne gre nikoli, tudi z napačnim imenom datoteke.
+ * 4. PRIPRAVA NIKOLI STRANKI. Strankino poročilo gre tudi STRANKI — na naslov
+ *    iz obrazca, s samo njenim PDF-jem. Odloča oznaka `audience` na prilogi:
+ *    'customer' je poročilo za stranko, 'sales' je priprava na pogovor in tej
+ *    poti ne ubere nikoli, tudi z napačnim imenom datoteke. Velja v obeh načinih
+ *    pošiljanja: v `posljiPorociloStranki` (MailApp) odloča o prilogi, v načinu
+ *    ActiveCampaign pa o tem, kateri PDF pristane v katerem polju (strankin v
+ *    %PDF_LINK%, priprava v %PDF_LINK_PRODAJA%).
  *
- * Telo lahko nosi še `attachments[]` — PDF-ja v base64 za prilogi obvestila
- * (glej `pripraviPriloge`); strankin PDF gre poleg tega še na Drive, povezava do
- * njega pa v vrstico in v ActiveCampaign (glej `shraniPorocilo`). Skripta mora
- * delati tudi brez njih: starejši build aplikacije jih ne pošlje, PDF pa v
- * brskalniku tudi kdaj ne nastane. Po vsaki
+ * KDO POŠILJA. Privzeto ActiveCampaign (`POSTA_PREK_AC`): skripta oba PDF-ja
+ * shrani na Drive, povezavi zapiše v vrstico in v polji kontakta, e-pošto stranki
+ * in obvestilo prodaji pa pošljeta avtomatizaciji v AC — s pošiljatelja Datalab
+ * in ne z računa, ki je skripto razmestil. Brez nastavljenega AC (ali z
+ * `POSTA_PREK_AC: false`) pošilja skripta sama, z MailApp, kot doslej.
+ *
+ * Telo lahko nosi še `attachments[]` — PDF-ja v base64 (prilogi obvestila v
+ * načinu MailApp, vir datotek za Drive v načinu AC; glej `pripraviPriloge`,
+ * `shraniPorocilo`, `shraniPripravo`). Skripta mora delati tudi brez njih:
+ * starejši build aplikacije jih ne pošlje, PDF pa v brskalniku tudi kdaj ne
+ * nastane. Po vsaki
  * spremembi te datoteke je treba razmestiti NOVO RAZLIČICO (Deploy → Manage
  * deployments → New version) in znova vpisati E_NASLOV_ZA_OBVESTILA, ker ga
  * datoteka v repozitoriju nima.
@@ -98,12 +107,13 @@ var NASTAVITVE = {
 
   /**
    * Strankino poročilo (PDF) se shrani na Drive, povezava gre v stolpec
-   * `porociloPdf` in v ActiveCampaign kot polje %LM10_POROCILO%.
+   * `porociloPdf` in v ActiveCampaign kot polje %PDF_LINK%.
    *
-   * Stranka PDF dobi po e-pošti ne glede na to (POSLJI_POROCILO_STRANKI); tu je
-   * kopija za CRM: svetovalec ga odpre iz kartice kontakta, avtomatizacija v AC
-   * pa lahko povezavo vstavi v sporočilo. Napaka pri shranjevanju ne ustavi
-   * ničesar — v celici ostane "NAPAKA: …", polje v AC izpade (`shraniPorocilo`).
+   * V načinu POSTA_PREK_AC je ta povezava EDINA pot, po kateri stranka dobi
+   * poročilo — brez nje avtomatizacija v AC nima česa poslati (doGet na to
+   * opozori). V načinu MailApp je kopija za CRM: PDF stranka dobi v prilogi,
+   * svetovalec pa ga odpre iz kartice kontakta. Napaka pri shranjevanju ne vrže:
+   * v celici ostane "NAPAKA: …", polje v AC izpade (`shraniPorocilo`).
    */
   SHRANI_POROCILO: true,
   IME_MAPE_POROCIL: 'LM-10 poročila strankam',
@@ -111,10 +121,15 @@ var NASTAVITVE = {
   /**
    * true = datoteka poročila je dostopna vsakomur s povezavo, samo za branje.
    * Brez tega povezava iz AC vsakomur razen računu skripte odpre "Zahtevajte
-   * dostop" — tudi svetovalcu in stranki v sporočilu iz AC. Povezava nosi
-   * naključen id in ni uganljiva; kdor jo ima, jo je dobil od nas ali od
-   * stranke. Velja SAMO za poročila: mapa priprav tega nima in ga ne sme dobiti
-   * (načelo 4 v glavi) — v njej so dokumenti O stranki.
+   * dostop" — tudi stranki v sporočilu iz AC. Povezava nosi naključen id in ni
+   * uganljiva; kdor jo ima, jo je dobil od nas ali od stranke.
+   *
+   * V načinu POSTA_PREK_AC je enako deljena tudi PRIPRAVA (`shraniPripravo`):
+   * obvestilo prodaji pride iz AC in svetovalec ga odpre v telefonu, brez
+   * prijave v Google. Zavestna odločitev — dokument O stranki je s tem dosegljiv
+   * vsakomur, ki povezavo pozna, zato obvestil ne posredujte naprej. V načinu
+   * MailApp ostane priprava nedeljena: tam gre kot priloga in povezave nihče ne
+   * potrebuje.
    */
   POROCILO_DOSTOPNO_S_POVEZAVO: true,
 
@@ -131,6 +146,25 @@ var NASTAVITVE = {
    * prenese sama: aplikacija ob takem odgovoru na rezultatih ponudi gumb.
    */
   POSLJI_POROCILO_STRANKI: true,
+
+  /**
+   * KDO POŠILJA obe sporočili — poročilo stranki in obvestilo prodaji.
+   *
+   * true (privzeto) = ActiveCampaign. Skripta oba PDF-ja shrani na Drive,
+   * povezavi zapiše v polji kontakta (%PDF_LINK%, %PDF_LINK_PRODAJA%), pošlje pa
+   * NIČESAR — sporočili odpravita avtomatizaciji v AC, sproženi ob spremembi
+   * polja. Pošiljatelj je s tem Datalabov račun v AC in ne račun, ki je skripto
+   * razmestil; cena je, da sporočili prispeta v minuti ali dveh in da nosita
+   * povezavi namesto prilog (AC prilog ne zna).
+   *
+   * false = skripta pošilja sama z MailApp, kot je bilo pred priklopom AC.
+   *
+   * VELJA SAMO OB NASTAVLJENEM AC (`postaPrekAC`): brez lastnosti AC_NASLOV /
+   * AC_KLJUC / AC_SEZNAM ta nastavitev ne stori ničesar in pošilja MailApp —
+   * sicer bi napačna nastavitev pomenila leada brez vsakega sporočila.
+   * Podrobnosti in postavitev avtomatizacij: README, razdelek ActiveCampaign.
+   */
+  POSTA_PREK_AC: true,
 
   /**
    * Prikazano ime pošiljatelja. NASLOV pošiljatelja je račun, ki je skripto
@@ -383,6 +417,16 @@ function doGet() {
   // je vrglo napako", brez brskanja po dnevniku izvedb.
   var vrstice = [
     'LM-10 zbiralnik deluje. List: ' + list.getName() + ', vrstic: ' + Math.max(0, list.getLastRow() - 1) + '.',
+    // Kdo pošilja — prva vrstica, ki jo je treba prebrati ob "sporočila ne
+    // prihajajo": v načinu AC skripta ne pošlje ničesar in iskati je treba v AC.
+    'Pošta: ' +
+      (postaPrekAC()
+        ? 'prek ActiveCampaigna — avtomatizaciji na poljih PDF_LINK (stranki) in ' +
+          'LM10_ODDAJA / PDF_LINK_PRODAJA (prodaji); MailApp ne pošilja' +
+          (NASTAVITVE.SHRANI_POROCILO
+            ? ''
+            : ' — POZOR: SHRANI_POROCILO je false, zato stranka poročila ne dobi')
+        : 'prek MailApp (poročilo stranki in obvestilo prodaji pošlje skripta)'),
     'Obvestila: ' + (NASTAVITVE.E_NASLOV_ZA_OBVESTILA ? 'nastavljena' : 'IZKLOPLJENA (prazen E_NASLOV_ZA_OBVESTILA)'),
     'Zadnja poslana pošta: ' + (lastnosti.getProperty('ZADNJA_POSTA') || 'še nobena'),
     'Zadnja napaka pošte: ' + (lastnosti.getProperty('ZADNJA_NAPAKA_POSTE') || 'brez'),
@@ -399,6 +443,9 @@ function doGet() {
         ? lastnosti.getProperty('ZADNJE_POROCILO_NA_DRIVU') || 'še nobeno'
         : 'IZKLOPLJENO (SHRANI_POROCILO)'),
     'Zadnja napaka poročila na Drivu: ' + (lastnosti.getProperty('ZADNJA_NAPAKA_POROCILA_NA_DRIVU') || 'brez'),
+    // Deljenje je tiha okvara: datoteke se shranijo, povezavi iz AC pa zahtevata
+    // dostop. Preverite s `preizkusDeljenja`, preden gre prvi lead.
+    'Zadnja napaka deljenja na Drivu: ' + (lastnosti.getProperty('DRIVE_NAPAKA_DELJENJA') || 'brez'),
     'Zadnje urejanje stolpcev: ' + (lastnosti.getProperty('ZADNJE_UREJANJE') || 'še nobeno'),
     'ActiveCampaign: ' + acStanje(),
     'Zadnji v AC: ' + (lastnosti.getProperty('AC_ZADNJI') || 'še nobeden'),
@@ -433,8 +480,9 @@ function doPost(e) {
   }
 
   // Merjeno od začetka obdelave: aplikacija čaka odgovor deset sekund (plus čas
-  // prenosa telesa) in vse, kar sledi (Drive, vrstica, AC, pošta stranki in
-  // prodaji), se dogaja znotraj njih.
+  // prenosa telesa) in vse, kar sledi, se dogaja znotraj njih — v načinu AC
+  // dva zapisa na Drive, vrstica in klici v AC, sicer isto brez deljenja, a s
+  // pošto stranki in prodaji.
   var zacetek = Date.now();
 
   var oddaja = JSON.parse(e.postData.contents);
@@ -450,12 +498,16 @@ function doPost(e) {
   var kljucavnica = LockService.getScriptLock();
   kljucavnica.waitLock(30000);
 
+  // Kdo pošilja obe sporočili (glej POSTA_PREK_AC). Enkrat prebrano, ker odloča
+  // o obliki datoteke priprave, o deljenju in o izidu poročila spodaj.
+  var prekAC = postaPrekAC();
+
   var napakaPriprave = null;
   try {
     var povezava = '';
-    if (NASTAVITVE.SHRANI_PRIPRAVO && oddaja.salesReportHtml) {
+    if (NASTAVITVE.SHRANI_PRIPRAVO) {
       try {
-        povezava = shraniPripravo(oddaja);
+        povezava = shraniPripravo(oddaja, prekAC);
       } catch (err) {
         // Vrstica je dragocenejša od povezave: najprej jo zapišemo, šele nato
         // napako vržemo naprej (spodaj), da aplikacija pripravo prenese stranki.
@@ -475,40 +527,58 @@ function doPost(e) {
     // ActiveCampaign — ZA vrstico in v svojem try/catch, iz istega razloga kot
     // pošta spodaj. Nikoli ne vrže: kar gre narobe, pristane kot "NAPAKA: …" v
     // stolpcu `activeCampaign`, od koder to pobere ura (`posljiZaostaleVAC`).
-    if (NASTAVITVE.AC.POSILJAJ_TAKOJ) {
-      acVrstico(zapisana, vrednosti, zacetek);
-    }
+    // V načinu AC je to hkrati trenutek, ko se kontaktu nastavita polji s
+    // povezavama — s tem se sprožita avtomatizaciji, ki pošljeta obe sporočili.
+    var izidAC = NASTAVITVE.AC.POSILJAJ_TAKOJ ? acVrstico(zapisana, vrednosti, zacetek, prekAC) : null;
 
     // Poročilo stranki — ZA vrstico in PRED obvestilom prodaji, ki izid ponovi.
     // Nikoli ne vrže; izid gre v vrstico in v odgovor aplikaciji (spodaj), ki
     // ob neposlanem poročilu stranki ponudi prenos.
-    var porociloStranki = posljiPorociloStranki(oddaja, vrednosti);
+    var porociloStranki = prekAC
+      ? izidPorocilaPrekAC(oddaja, vrednosti, povezavaPorocila, izidAC)
+      : posljiPorociloStranki(oddaja, vrednosti);
     zapisiIzidPorocila(zapisana, porociloStranki);
 
     // ŠELE ZA vrstico in v svojem try/catch. Obvestilo je priročnost, vrstica je
     // zapis: padla pošta (kvota, napačen naslov) ne sme pomeniti, da aplikacija
     // dostavo razume kot neuspelo in prodajno pripravo prenese stranki.
     var lastnosti = PropertiesService.getScriptProperties();
-    try {
-      // Dekodiranje prilog šele tu, znotraj try/catch pošte: vrstica je zapisana
-      // in je pokvarjena priloga ne sme prizadeti.
-      var priloge = pripraviPriloge(oddaja);
-      posljiObvestilo(vrednosti, priloge, porociloStranki);
-      // S številom prilog, da doGet od zunaj pove, ali razmeščena različica
-      // prilogi sploh pripenja.
+    if (prekAC) {
+      // Obvestilo prodaji pošlje avtomatizacija v AC (sprožilec je polje
+      // %LM10_ODDAJA% ali %PDF_LINK_PRODAJA%). Skripta samo zabeleži, kaj ji je
+      // dala — od zunaj je to edini znak, ali ima obvestilo obe povezavi.
       lastnosti.setProperty(
         'ZADNJA_POSTA',
-        new Date().toISOString() + ' (priloge: ' + priloge.length + ')',
+        new Date().toISOString() +
+          ' — prek AC (priprava: ' +
+          (povezava ? (povezava.indexOf('NAPAKA') === 0 ? 'napaka' : 'povezava') : 'brez') +
+          ', poročilo: ' +
+          (povezavaPorocila && povezavaPorocila.indexOf('NAPAKA') !== 0 ? 'povezava' : 'brez') +
+          ')',
       );
       lastnosti.deleteProperty('ZADNJA_NAPAKA_POSTE');
-    } catch (err) {
-      console.warn('Obvestila ni bilo mogoče poslati: ' + err);
-      // Zapisano, ker je odgovor doGet edino, kar je o tem vidno od zunaj.
-      // Naslovi so zakriti: doGet je javen.
-      lastnosti.setProperty(
-        'ZADNJA_NAPAKA_POSTE',
-        new Date().toISOString() + ' — ' + zakrijNaslove(String(err)),
-      );
+    } else {
+      try {
+        // Dekodiranje prilog šele tu, znotraj try/catch pošte: vrstica je zapisana
+        // in je pokvarjena priloga ne sme prizadeti.
+        var priloge = pripraviPriloge(oddaja);
+        posljiObvestilo(vrednosti, priloge, porociloStranki);
+        // S številom prilog, da doGet od zunaj pove, ali razmeščena različica
+        // prilogi sploh pripenja.
+        lastnosti.setProperty(
+          'ZADNJA_POSTA',
+          new Date().toISOString() + ' (priloge: ' + priloge.length + ')',
+        );
+        lastnosti.deleteProperty('ZADNJA_NAPAKA_POSTE');
+      } catch (err) {
+        console.warn('Obvestila ni bilo mogoče poslati: ' + err);
+        // Zapisano, ker je odgovor doGet edino, kar je o tem vidno od zunaj.
+        // Naslovi so zakriti: doGet je javen.
+        lastnosti.setProperty(
+          'ZADNJA_NAPAKA_POSTE',
+          new Date().toISOString() + ' — ' + zakrijNaslove(String(err)),
+        );
+      }
     }
   } finally {
     kljucavnica.releaseLock();
@@ -2053,6 +2123,10 @@ var RAZLOGI_POROCILA_STRANKI = {
   invalid_address: 'e-naslov ni videti veljaven',
   no_attachment: 'aplikacija ni poslala strankinega PDF-ja',
   send_failed: 'pošiljanje je vrglo napako',
+  // Načina POSTA_PREK_AC. `queued` ni napaka: sporočilo je predano AC in prispe
+  // v minuti ali dveh, česar odgovor ob oddaji ne more potrditi.
+  queued: 'predano ActiveCampaignu — avtomatizacija pošlje povezavo do PDF-ja',
+  unsubscribed: 'kontakt se je s seznama v AC odjavil sam — AC mu ne pošilja',
 };
 
 /**
@@ -2079,6 +2153,22 @@ function prilogaZaStranko(oddaja) {
 }
 
 /**
+ * Priprava na pogovor iz telesa zahteve kot Blob — ali null.
+ *
+ * Zrcalo `prilogaZaStranko` in enako strogo: šteje SAMO oznaka `audience:
+ * 'sales'`. Brez nje (starejši build) vrne null in `shraniPripravo` pade na
+ * HTML — raje starejša oblika istega dokumenta kot tveganje, da bi se pod
+ * pripravo shranilo strankino poročilo in bi ga prodaja dobila namesto priprave.
+ */
+function prilogaZaProdajo(oddaja) {
+  var vnosi = oddaja && Array.isArray(oddaja.attachments) ? oddaja.attachments : [];
+  for (var i = 0; i < vnosi.length; i++) {
+    if (vnosi[i] && vnosi[i].audience === 'sales') return dekodirajPrilogo(vnosi[i], i);
+  }
+  return null;
+}
+
+/**
  * Poročilo za stranko na e-naslov iz obrazca — z eno samo prilogo.
  *
  * To je obljuba obrazca ("PDF poročilo prejmete na vpisani e-naslov"). Aplikacija
@@ -2095,31 +2185,91 @@ function prilogaZaStranko(oddaja) {
  * Seznam iz `pripraviPriloge` (oba PDF-ja) sem ne pride nikoli; to je edino
  * mesto v skripti, ki stranki karkoli pošlje.
  */
-function posljiPorociloStranki(oddaja, vrednosti) {
-  var lastnosti = PropertiesService.getScriptProperties();
-  var neposlano = function (razlog) {
-    lastnosti.setProperty(
-      'ZADNJA_POSTA_STRANKI',
-      new Date().toISOString() + ' — ni poslano (' + razlog + ')',
-    );
-    return { poslano: false, razlog: razlog, naslov: '' };
-  };
+/**
+ * Neposlano poročilo z razlogom — zapisano tudi v lastnosti, da je vidno v doGet.
+ * Skupno obema načinoma (MailApp in AC), da je zapis povsod enak.
+ */
+function neposlanoPorocilo(razlog) {
+  PropertiesService.getScriptProperties().setProperty(
+    'ZADNJA_POSTA_STRANKI',
+    new Date().toISOString() + ' — ni poslano (' + razlog + ')',
+  );
+  return { poslano: false, razlog: razlog, naslov: '' };
+}
 
-  if (!NASTAVITVE.POSLJI_POROCILO_STRANKI) return neposlano('disabled');
+/**
+ * Skupne preverbe pred poročilom: nastavitev, naslov, priloga.
+ *
+ * Ločene od pošiljanja, ker veljajo v OBEH načinih — MailApp jih potrebuje pred
+ * `MailApp.sendEmail`, način AC pred razlagalo izida (`izidPorocilaPrekAC`).
+ * Vrne `{ razlog }` ob zavrnitvi ali `{ naslov, priloga }`, ko je vse v redu.
+ */
+function preveriPorociloStranki(oddaja, vrednosti) {
+  if (!NASTAVITVE.POSLJI_POROCILO_STRANKI) return { razlog: 'disabled' };
 
   var naslov = String(
     (vrednosti && vrednosti.email) || (oddaja && oddaja.record && oddaja.record.email) || '',
   ).trim();
-  if (!naslov) return neposlano('no_address');
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(naslov)) return neposlano('invalid_address');
+  if (!naslov) return { razlog: 'no_address' };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(naslov)) return { razlog: 'invalid_address' };
 
   var priloga = prilogaZaStranko(oddaja);
   if (!priloga) {
     // Navaden izid in ne opozorilo: starejši build ali PDF, ki v brskalniku ni
     // nastal. Aplikacija ob tem odgovoru ponudi prenos.
     console.log('Poročilo stranki ni poslano: v oddaji ni strankinega PDF-ja.');
-    return neposlano('no_attachment');
+    return { razlog: 'no_attachment' };
   }
+  return { naslov: naslov, priloga: priloga };
+}
+
+/**
+ * Izid poročila v načinu POSTA_PREK_AC — brez pošiljanja: sporočilo pošlje
+ * avtomatizacija v AC, ko se kontaktu spremeni polje %PDF_LINK%.
+ *
+ * Nikoli ne vrže in vedno vrne isto obliko kot `posljiPorociloStranki`, ker gre
+ * ta izid v isti stolpec in v isti odgovor aplikaciji. Razlogi po vrsti:
+ * skupne preverbe (nastavitev, naslov, priloga), nato stanje povezave na Drivu
+ * (`send_failed` — brez nje AC nima česa poslati), nato stanje kontakta
+ * (`unsubscribed` — odjavljenemu AC ne pošilja), sicer `queued`.
+ *
+ * `queued` pokriva tudi AC, ki je ob oddaji odpovedal ali odpadel zaradi roka:
+ * vrstico pobere ura, polje se tedaj nastavi in avtomatizacija sproži. Zato je
+ * to obljuba "prispe v nekaj minutah" in ne potrditev — aplikacija ob njej
+ * obdrži gumb za prenos.
+ */
+function izidPorocilaPrekAC(oddaja, vrednosti, povezavaPorocila, izidAC) {
+  var preverba = preveriPorociloStranki(oddaja, vrednosti);
+  if (preverba.razlog) return neposlanoPorocilo(preverba.razlog);
+
+  var povezava = String(povezavaPorocila || '');
+  if (!povezava || povezava.indexOf('NAPAKA') === 0) {
+    // Brez povezave polje ostane prazno in avtomatizacija se ne sproži. Razlog
+    // je zapisan že v stolpcu porociloPdf in v ZADNJA_NAPAKA_POROCILA_NA_DRIVU.
+    console.warn('Poročila ni mogoče predati AC: povezave do PDF-ja ni.');
+    return neposlanoPorocilo(povezava ? 'send_failed' : 'no_attachment');
+  }
+
+  if (izidAC && izidAC.poslano && izidAC.narocen === false) {
+    return neposlanoPorocilo('unsubscribed');
+  }
+
+  PropertiesService.getScriptProperties().setProperty(
+    'ZADNJA_POSTA_STRANKI',
+    new Date().toISOString() +
+      ' → prek AC, ' +
+      zakrijNaslove(preverba.naslov) +
+      (izidAC && izidAC.poslano ? '' : ' (AC ob oddaji ni uspel — pobere ura)'),
+  );
+  return { poslano: false, razlog: 'queued', naslov: preverba.naslov };
+}
+
+function posljiPorociloStranki(oddaja, vrednosti) {
+  var lastnosti = PropertiesService.getScriptProperties();
+  var preverba = preveriPorociloStranki(oddaja, vrednosti);
+  if (preverba.razlog) return neposlanoPorocilo(preverba.razlog);
+  var naslov = preverba.naslov;
+  var priloga = preverba.priloga;
 
   try {
     var sporocilo = sestaviSporociloStranki(vrednosti);
@@ -2222,6 +2372,7 @@ function ubezajHtml(besedilo) {
 function opisIzidaPorocila(izid) {
   if (!izid) return 'neznano';
   if (izid.poslano) return 'poslano na ' + izid.naslov;
+  if (izid.razlog === 'queued') return 'predano ActiveCampaignu (polje PDF_LINK) → ' + izid.naslov;
   return (
     'NI poslano (' +
     (RAZLOGI_POROCILA_STRANKI[izid.razlog] || izid.razlog) +
@@ -2235,9 +2386,12 @@ function zapisiIzidPorocila(zapisana, izid) {
     if (!zapisana || !zapisana.glava) return;
     var stolpec = zapisana.glava.indexOf(POROCILO_STRANKI) + 1;
     if (!stolpec) return;
+    var cas = Utilities.formatDate(new Date(), 'Europe/Ljubljana', 'yyyy-MM-dd HH:mm');
     var besedilo = izid.poslano
-      ? 'poslano ' + Utilities.formatDate(new Date(), 'Europe/Ljubljana', 'yyyy-MM-dd HH:mm')
-      : 'ni poslano: ' + (RAZLOGI_POROCILA_STRANKI[izid.razlog] || izid.razlog);
+      ? 'poslano ' + cas
+      : izid.razlog === 'queued'
+        ? 'prek AC ' + cas
+        : 'ni poslano: ' + (RAZLOGI_POROCILA_STRANKI[izid.razlog] || izid.razlog);
     zapisana.list.getRange(zapisana.vrstica, stolpec).setValue(besedilo);
   } catch (err) {
     console.warn('Izida pošte stranki ni bilo mogoče zapisati v vrstico: ' + err);
@@ -2258,17 +2412,29 @@ function stevilo(vrednost) {
 }
 
 /**
- * Prodajno pripravo shrani kot HTML na Drive in vrne povezavo.
+ * Prodajno pripravo shrani na Drive in vrne povezavo; prazen niz, kadar je v
+ * oddaji ni (ne PDF-ja ne HTML).
+ *
+ * V načinu `prekAC` se shrani PDF (priloga z oznako 'sales') in datoteka se deli
+ * s povezavo: obvestilo prodaji pride iz AC in mora se odpreti brez prijave v
+ * Google. Sicer — in kadar PDF-ja v oddaji ni — se shrani HTML kot doslej,
+ * nedeljen.
  *
  * Napako VRŽE naprej: priprava brez Drive ne obstaja nikjer, zato jo doPost po
  * zapisani vrstici pošlje aplikaciji, ki pripravo prenese stranki (načelo 3 v
  * glavi). Poročilo spodaj ravna drugače — glej `shraniPorocilo`.
  */
-function shraniPripravo(oddaja) {
+function shraniPripravo(oddaja, prekAC) {
+  var pdf = prekAC ? prilogaZaProdajo(oddaja) : null;
+  if (!pdf && !(oddaja && oddaja.salesReportHtml)) return '';
+
   var mapa = pridobiMapo(NASTAVITVE.IME_MAPE_PRIPRAV, 'ID_MAPE_PRIPRAV');
-  var datoteka = mapa.createFile(
-    Utilities.newBlob(oddaja.salesReportHtml, 'text/html', imeDatoteke('priprava', oddaja.record, '.html')),
-  );
+  var blob = pdf
+    ? Utilities.newBlob(pdf.getBytes(), 'application/pdf', imeDatoteke('priprava', oddaja.record, '.pdf'))
+    : Utilities.newBlob(oddaja.salesReportHtml, 'text/html', imeDatoteke('priprava', oddaja.record, '.html'));
+
+  var datoteka = mapa.createFile(blob);
+  if (prekAC) deliSPovezavo(datoteka);
   return datoteka.getUrl();
 }
 
@@ -2277,20 +2443,20 @@ function shraniPripravo(oddaja) {
  * poročila v oddaji ni (starejši build, PDF v brskalniku ni nastal), ali
  * "NAPAKA: …", kadar Drive odpove.
  *
- * Datoteka je NATANKO tista, ki gre stranki po e-pošti (`prilogaZaStranko`:
- * oznaka 'customer', nikoli priprava). Povezava gre v stolpec `porociloPdf` in
- * od tam v ActiveCampaign kot polje %LM10_POROCILO% — svetovalec PDF odpre iz
- * kartice kontakta, avtomatizacija v AC pa ga lahko vstavi v sporočilo.
+ * Datoteka je NATANKO tista, ki gre stranki (`prilogaZaStranko`: oznaka
+ * 'customer', nikoli priprava). Povezava gre v stolpec `porociloPdf` in od tam v
+ * ActiveCampaign kot polje %PDF_LINK% — v načinu POSTA_PREK_AC je to edina pot,
+ * po kateri stranka poročilo dobi, sicer pa kopija za CRM ob prilogi v pošti.
  *
  * NIKOLI NE VRŽE — drugače kot `shraniPripravo`. Priprava brez Drive ne obstaja
- * nikjer in aplikacija jo mora ob napaki prenesti stranki; poročilo pa stranka
- * dobi po e-pošti in prodaja v prilogi obvestila. Povezava je kopija za CRM in
- * kopija ne sme podreti izvirnika: ob napaki ostane v celici razlog, v AC gre
- * polje prazno (`samoPovezava`), vse ostalo teče naprej.
+ * nikjer in aplikacija jo mora ob napaki prenesti stranki. Poročilo je drugačno:
+ * v načinu MailApp ga stranka dobi v prilogi ne glede na Drive, v načinu AC pa
+ * odpoved Drive konča kot razlog `send_failed` v odgovoru in stranka dobi na
+ * rezultatih gumb. V obeh primerih ostane v celici razlog, v AC gre polje prazno
+ * (`samoPovezava`) in vse ostalo teče naprej.
  *
- * Svoja mapa in ne mapa priprav: deljenje s povezavo (spodaj) velja za
- * datoteko, a mapa priprav ga ne sme dobiti nikoli — v njej je dokument O
- * stranki.
+ * Svoja mapa in ne mapa priprav: poročilo je dokument ZA stranko in tudi tu ju
+ * ne mešamo (načelo 4 v glavi).
  */
 function shraniPorocilo(oddaja) {
   var priloga = prilogaZaStranko(oddaja);
@@ -2304,15 +2470,7 @@ function shraniPorocilo(oddaja) {
     var datoteka = mapa.createFile(
       Utilities.newBlob(priloga.getBytes(), 'application/pdf', imeDatoteke('porocilo', oddaja.record, '.pdf')),
     );
-    if (NASTAVITVE.POROCILO_DOSTOPNO_S_POVEZAVO) {
-      try {
-        datoteka.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      } catch (err) {
-        // Workspace zna deljenje navzven prepovedati. Povezava je še vedno
-        // uporabna vsem z dostopom do mape; opozorilo pove, zakaj drugim ni.
-        console.warn('Deljenja poročila s povezavo ni bilo mogoče vklopiti: ' + err);
-      }
-    }
+    deliSPovezavo(datoteka);
     var povezava = datoteka.getUrl();
     lastnosti.setProperty('ZADNJE_POROCILO_NA_DRIVU', new Date().toISOString());
     lastnosti.deleteProperty('ZADNJA_NAPAKA_POROCILA_NA_DRIVU');
@@ -2324,6 +2482,66 @@ function shraniPorocilo(oddaja) {
       new Date().toISOString() + ' — ' + zakrijNaslove(String(err)),
     );
     return 'NAPAKA: ' + err;
+  }
+}
+
+/**
+ * Datoteko deli "vsi s povezavo, samo ogled" — kadar to nastavitev dovoli.
+ *
+ * Brez deljenja povezava vsakomur razen računu skripte odpre "Zahtevajte
+ * dostop": stranki v sporočilu iz AC in svetovalcu v obvestilu. Zato je to
+ * privzeto (`POROCILO_DOSTOPNO_S_POVEZAVO`).
+ *
+ * Ne vrže: Workspace zna deljenje navzven prepovedati, datoteka pa je tedaj še
+ * vedno shranjena in povezava uporabna vsem z dostopom do mape. Ker je to
+ * okvara, ki je od zunaj videti kot "povezava iz e-pošte ne dela", gre razlog
+ * poleg dnevnika še v lastnost skripte, ki jo pokaže doGet — sicer bi ga bilo
+ * treba iskati v dnevniku izvedb. Pred prvim leadom to preveri
+ * `preizkusDeljenja`.
+ */
+function deliSPovezavo(datoteka) {
+  if (!NASTAVITVE.POROCILO_DOSTOPNO_S_POVEZAVO) return;
+  var lastnosti = PropertiesService.getScriptProperties();
+  try {
+    datoteka.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    lastnosti.deleteProperty('DRIVE_NAPAKA_DELJENJA');
+  } catch (err) {
+    console.warn('Deljenja datoteke ' + datoteka.getName() + ' s povezavo ni bilo mogoče vklopiti: ' + err);
+    lastnosti.setProperty('DRIVE_NAPAKA_DELJENJA', new Date().toISOString() + ' — ' + String(err));
+  }
+}
+
+/**
+ * ENKRATNI POSEG, ki ga poženete v urejevalniku (Zaženi) PRED prvim leadom v
+ * načinu POSTA_PREK_AC: preveri, ali račun sme deliti datoteke "vsi s povezavo".
+ *
+ * Obstaja iz istega razloga kot `preizkusPoste`. Če Workspace deljenje navzven
+ * prepove, se datoteke shranijo, povezavi v e-pošti iz AC pa stranki in
+ * svetovalcu odpreta "Zahtevajte dostop" — okvara, ki je v skripti ne bi videli,
+ * ker se vse ostalo zgodi pravilno. Ta funkcija jo pokaže takoj: izpisano
+ * povezavo odprite v ZASEBNEM oknu (brez prijave v Google).
+ *
+ * Za sabo ne pusti ničesar: datoteko na koncu vrže v koš.
+ */
+function preizkusDeljenja() {
+  var mapa = pridobiMapo(NASTAVITVE.IME_MAPE_POROCIL, 'ID_MAPE_POROCIL');
+  var datoteka = mapa.createFile(
+    Utilities.newBlob('Preizkus deljenja LM-10. To datoteko lahko izbrišete.', 'text/plain', 'lm10-preizkus-deljenja.txt'),
+  );
+  var napaka = '';
+  try {
+    deliSPovezavo(datoteka);
+    napaka = PropertiesService.getScriptProperties().getProperty('DRIVE_NAPAKA_DELJENJA') || '';
+    var izid = napaka
+      ? 'DELJENJE NI USPELO: ' + napaka + '\nPovezave iz ActiveCampaigna bodo zahtevale dostop. ' +
+        'Dovolite deljenje "vsi s povezavo" v nastavitvah Workspacea ali nastavite POSTA_PREK_AC: false.'
+      : 'Deljenje deluje. Odprite v ZASEBNEM oknu (brez prijave): ' + datoteka.getUrl() +
+        '\nČe se dokument odpre, bosta povezavi iz AC delovali tudi stranki in prodaji.';
+    console.log(izid);
+    return izid;
+  } finally {
+    // Šele za izpisom: povezava se v košu še odpre, mapa pa ostane čista.
+    datoteka.setTrashed(true);
   }
 }
 
@@ -2404,6 +2622,9 @@ var AC_LASTNOST = {
   NASLOV: 'AC_NASLOV',
   KLJUC: 'AC_KLJUC',
   SEZNAM: 'AC_SEZNAM',
+  // Neobvezen drugi seznam — pregled leadov za prodajo. Nanj gre vsak lead z
+  // istim statusom kot na prvega; obvestilo prodaji iz AC se veže nanj.
+  SEZNAM_PRODAJA: 'AC_SEZNAM_PRODAJA',
   POLJA: 'AC_IDJI_POLJ',
   OZNAKE: 'AC_IDJI_OZNAK',
   ZADNJI: 'AC_ZADNJI',
@@ -2422,6 +2643,18 @@ var AC_LASTNOST = {
  * nič slabega: celica ostane prazna in vrstico pobere ura.
  */
 var AC_ROK_MS = 4500;
+
+/**
+ * Isti rok v načinu POSTA_PREK_AC.
+ *
+ * Višji, ker se proračun desetih sekund porazdeli drugače: ZA klicem v AC ni
+ * več nobene pošte (obe pošlje AC), pred njim pa sta dva zapisa na Drive z
+ * deljenjem. Šest sekund pusti klicem v AC (sync + dva seznama + oznake) prostor
+ * tudi, kadar je CRM počasen, in še vedno pusti nekaj sekund do roka aplikacije.
+ * Ob prekoračitvi se ne izgubi nič: celica ostane prazna, vrstico pobere ura in
+ * sporočili odideta minuto pozneje.
+ */
+var AC_ROK_PREK_AC_MS = 6000;
 
 /**
  * Polja po meri v ActiveCampaign.
@@ -2446,9 +2679,28 @@ var AC_POLJA = [
   // Textarea in ne text: tveganja so cel stavek na tveganje, ločena s podpičji.
   { tag: 'LM10_TVEGANJA', naslov: 'LM-10 tveganja', vrsta: 'textarea', stolpec: 'risks' },
   { tag: 'LM10_POSVET', naslov: 'LM-10 prosi za posvet', vrsta: 'text', stolpec: KLICI_TAKOJ },
-  { tag: 'LM10_PRIPRAVA', naslov: 'LM-10 prodajna priprava', vrsta: 'text', stolpec: PRIPRAVA },
-  // Samo prava povezava: "NAPAKA: …" je za preglednico, v CRM-ju bi bila smet.
-  { tag: 'LM10_POROCILO', naslov: 'LM-10 poročilo stranki (PDF)', vrsta: 'text', stolpec: POROCILO_PDF, pretvori: samoPovezava },
+  // Povezavi do PDF-jev. Oznaki sta kratki in brez predpone LM10_, ker sta polji
+  // v AC ročno ustvarjeni PREJ — `pripraviAC` ju najde po oznaki in ne ustvarja.
+  // `samoPovezava`: "NAPAKA: …" je za preglednico, v CRM-ju bi bila smet, prazno
+  // polje pa je tudi znak, da se avtomatizacija ne sme sprožiti.
+  {
+    tag: 'PDF_LINK',
+    naslov: 'PDF Link',
+    vrsta: 'text',
+    stolpec: POROCILO_PDF,
+    pretvori: samoPovezava,
+    // Ob izklopljenem pošiljanju stranki polja ne pošljemo: v načinu AC bi ga
+    // sprememba polja poslala kljub nastavitvi.
+    izpusti: function () {
+      return postaPrekAC() && !NASTAVITVE.POSLJI_POROCILO_STRANKI;
+    },
+  },
+  { tag: 'PDF_LINK_PRODAJA', naslov: 'PDF Link - PRODAJA', vrsta: 'text', stolpec: PRIPRAVA, pretvori: samoPovezava },
+  { tag: 'LM10_DAVCNA', naslov: 'LM-10 davčna številka', vrsta: 'text', stolpec: 'taxNumber' },
+  // Čas zadnje oddaje. V CRM-ju je podatek, hkrati pa je to EDINO polje, ki se
+  // spremeni ob VSAKI oddaji — tudi ko PDF-ja ni in povezavi ostaneta stari.
+  // Zato je zanesljiv sprožilec za obvestilo prodaji (glej README).
+  { tag: 'LM10_ODDAJA', naslov: 'LM-10 čas zadnje oddaje', vrsta: 'text', stolpec: PREJETO },
   { tag: 'LM10_SEKVENCA', naslov: 'LM-10 sekvenca', vrsta: 'text', stolpec: 'followUpSequence' },
   { tag: 'LM10_VIR', naslov: 'LM-10 vir (utm_source)', vrsta: 'text', stolpec: 'utmSource' },
   { tag: 'LM10_VLOGA', naslov: 'LM-10 vloga', vrsta: 'text', stolpec: 'role' },
@@ -2465,7 +2717,22 @@ function acStanje() {
   var n = acNastavitve();
   if (!n) return 'IZKLOPLJEN (manjkajo lastnosti AC_NASLOV / AC_KLJUC / AC_SEZNAM)';
   var polj = Object.keys(acIdjiPolj()).length;
-  return 'seznam ' + n.seznam + ', polj: ' + polj + (polj ? '' : ' — POŽENITE pripraviAC');
+  return (
+    'seznam ' + n.seznam +
+    (n.seznamProdaja ? ' + prodaja ' + n.seznamProdaja : ' (brez seznama za prodajo — AC_SEZNAM_PRODAJA)') +
+    ', polj: ' + polj + (polj ? '' : ' — POŽENITE pripraviAC')
+  );
+}
+
+/**
+ * Ali obe sporočili pošilja ActiveCampaign.
+ *
+ * Nastavitev SAMA ne zadošča: brez priklopljenega AC bi lead ostal brez vsakega
+ * sporočila. Zato je pogoj tudi `acNastavitve()` — isto varovalo kot pri
+ * aplikaciji, ki brez VITE_LEAD_WEBHOOK_URL pade na lokalne prenose.
+ */
+function postaPrekAC() {
+  return Boolean(NASTAVITVE.POSTA_PREK_AC && acNastavitve());
 }
 
 /**
@@ -2485,7 +2752,18 @@ function acNastavitve() {
   // Konec s poševnico in morebitni /api/3 dol: naslov iz AC (Settings →
   // Developer) je zapisan kot https://ime.api-us1.com, prilepi pa se marsikaj.
   naslov = naslov.replace(/\/+$/, '').replace(/\/api\/3$/, '');
-  return { naslov: naslov, kljuc: kljuc, seznam: seznam };
+  return {
+    naslov: naslov,
+    kljuc: kljuc,
+    seznam: seznam,
+    // Neobvezen; prazen niz pomeni "samo en seznam" in vse deluje kot doslej.
+    seznamProdaja: String(lastnosti.getProperty(AC_LASTNOST.SEZNAM_PRODAJA) || '').trim(),
+  };
+}
+
+/** Vsi seznami, na katere gre kontakt. Prvi je seznam strank in odloča o pošti. */
+function acSeznami(n) {
+  return n.seznamProdaja ? [n.seznam, n.seznamProdaja] : [n.seznam];
 }
 
 /**
@@ -2554,15 +2832,19 @@ function pripraviAC() {
     );
   }
 
-  var seznam = acZahteva('lists/' + n.seznam, 'get');
-  var imeSeznama = seznam && seznam.list ? seznam.list.name : '(brez imena)';
+  var imena = [acImeSeznama(n.seznam) + ' (id ' + n.seznam + ')'];
+  if (n.seznamProdaja) {
+    imena.push('prodaja: ' + acImeSeznama(n.seznamProdaja) + ' (id ' + n.seznamProdaja + ')');
+  }
 
   var obstojeca = acObstojecaPolja();
   var idji = {};
   var ustvarjena = [];
+  var najdena = [];
   AC_POLJA.forEach(function (polje) {
     if (obstojeca[polje.tag]) {
       idji[polje.tag] = obstojeca[polje.tag];
+      najdena.push(polje.tag);
       return;
     }
     idji[polje.tag] = acUstvariPolje(polje);
@@ -2572,13 +2854,21 @@ function pripraviAC() {
   PropertiesService.getScriptProperties().setProperty(AC_LASTNOST.POLJA, JSON.stringify(idji));
 
   var izid =
-    'Povezava deluje. Seznam: ' + imeSeznama + ' (id ' + n.seznam + ').\n' +
-    'Polja po meri: ' + Object.keys(idji).length + ' pripravljenih' +
-    (ustvarjena.length ? ', na novo ustvarjena: ' + ustvarjena.join(', ') : ', vsa so že obstajala') +
-    '.\n' +
+    'Povezava deluje. Seznami: ' + imena.join(', ') + '.\n' +
+    'Polja po meri: ' + Object.keys(idji).length + ' pripravljenih.\n' +
+    // Najdena posebej: polji PDF_LINK sta v AC ustvarjeni ročno in ta vrstica je
+    // edini dokaz, da ju je skripta prepoznala po oznaki (in ne naredila svojih).
+    'Že obstajala: ' + (najdena.length ? najdena.join(', ') : '—') + '.\n' +
+    'Na novo ustvarjena: ' + (ustvarjena.length ? ustvarjena.join(', ') : '—') + '.\n' +
     'Naslednji korak: razmestite novo različico (Deploy → Manage deployments → svinčnik → New version).';
   console.log(izid);
   return izid;
+}
+
+/** Ime seznama v AC ali nadomestek — samo za izpis `pripraviAC`. */
+function acImeSeznama(id) {
+  var odgovor = acZahteva('lists/' + id, 'get');
+  return odgovor && odgovor.list ? odgovor.list.name : '(brez imena)';
 }
 
 /** Vsa polja po meri v računu, kot slovar oznaka → id. */
@@ -2641,8 +2931,12 @@ function acIdjiPolj() {
 }
 
 /**
- * Kontakt v AC: ustvari ali posodobi, doda na seznam, pripne oznake.
- * Vrne id kontakta.
+ * Kontakt v AC: ustvari ali posodobi, doda na sezname, pripne oznake.
+ * Vrne `{ id, narocen }` — id kontakta in ali je naročen na seznam strank.
+ *
+ * `narocen` ni okrasje: v načinu POSTA_PREK_AC od njega zavisi, ali bo stranka
+ * poročilo sploh dobila (odjavljenemu AC ne pošilja), in to pove aplikaciji, ki
+ * tedaj ponudi prenos.
  *
  * `contact/sync` je namenoma izbran namesto `contacts`: ujema po e-naslovu, zato
  * drugi obisk istega človeka ne naredi dvojnika, ampak dopolni, kar je vnesel
@@ -2664,6 +2958,7 @@ function posljiVAC(vrednosti) {
   AC_POLJA.forEach(function (polje) {
     var id = idji[polje.tag];
     if (!id) return;
+    if (polje.izpusti && polje.izpusti()) return;
     var vrednost = acVrednost(vrednosti, polje.stolpec);
     if (polje.pretvori) vrednost = polje.pretvori(vrednost);
     if (vrednost === '') return;
@@ -2682,9 +2977,9 @@ function posljiVAC(vrednosti) {
   var id = odgovor && odgovor.contact ? String(odgovor.contact.id) : '';
   if (!id) throw new Error('AC ni vrnil id-ja kontakta.');
 
-  acNaSeznam(id, vrednosti, n.seznam);
+  var narocen = acNaSeznam(id, vrednosti, acSeznami(n));
   acOznaci(id, acOznake(vrednosti));
-  return id;
+  return { id: id, narocen: narocen };
 }
 
 /**
@@ -2700,35 +2995,50 @@ function posljiVAC(vrednosti) {
  * KDOR SE JE SAM ODJAVIL, OSTANE ODJAVLJEN. Status 1 kontakt, ki je v kampanji
  * kliknil na odjavo, tiho naroči znova — dokumentacija AC za `contactLists` na
  * to izrecno opozarja. Zato skripta pred naročilom brez sveže privolitve preveri
- * stanje na seznamu in odjavljenega pusti pri miru. Privolitev v obrazcu je nova
+ * stanje na seznamih in odjavljenega pusti pri miru. Privolitev v obrazcu je nova
  * privolitev in ponovno naročilo dovoli. `vsili` preskoči preverjanje in je za
  * `narociObstojeceVAC`, ki popravlja status, ki ga je nastavila ta skripta sama.
+ *
+ * `seznami` je polje: prvi je seznam strank, drugi (neobvezen) pregled leadov za
+ * prodajo. Status je na obeh isti — gre za isto privolitev. Preverjanje je ENO
+ * za vse sezname (en klic, glej `acStanjaSeznamov`), ker je na vroči poti vsak
+ * klic v AC merljiv del roka.
+ *
+ * Vrne, ali je kontakt naročen na PRVI seznam: od tega je odvisno, ali mu AC sme
+ * poslati poročilo (`izidPorocilaPrekAC`).
  */
-function acNaSeznam(idKontakta, vrednosti, idSeznama, vsili) {
+function acNaSeznam(idKontakta, vrednosti, seznami, vsili) {
   var privolitev =
     jeResnica(vrednosti.consentOffers) || jeResnica(vrednosti.consentContent);
   var status = NASTAVITVE.AC.SAMO_S_PRIVOLITVIJO && !privolitev ? 2 : 1;
+  var stanja = status === 1 && !privolitev && !vsili ? acStanjaSeznamov(idKontakta) : {};
 
-  if (status === 1 && !privolitev && !vsili && acJeOdjavljen(idKontakta, idSeznama)) {
-    console.log(
-      'Kontakt ' + idKontakta + ' se je s seznama ' + idSeznama + ' odjavil sam; ostane odjavljen.',
-    );
-    return;
+  var narocenNaPrvega = false;
+  for (var i = 0; i < seznami.length; i++) {
+    var idSeznama = String(seznami[i]);
+    if (stanja[idSeznama] === '2') {
+      console.log(
+        'Kontakt ' + idKontakta + ' se je s seznama ' + idSeznama + ' odjavil sam; ostane odjavljen.',
+      );
+      continue;
+    }
+    acZahteva('contactLists', 'post', {
+      contactList: { list: idSeznama, contact: idKontakta, status: status },
+    });
+    if (i === 0) narocenNaPrvega = status === 1;
   }
-
-  acZahteva('contactLists', 'post', {
-    contactList: { list: idSeznama, contact: idKontakta, status: status },
-  });
+  return narocenNaPrvega;
 }
 
-/** Ali je kontakt na tem seznamu odjavljen (status 2). Kontakta, ki na seznamu še ni, to ne zadeva. */
-function acJeOdjavljen(idKontakta, idSeznama) {
+/** Statusi kontakta po seznamih (id → status kot niz). Kar ni na seznamu, manjka. */
+function acStanjaSeznamov(idKontakta) {
   var odgovor = acZahteva('contacts/' + idKontakta + '/contactLists', 'get');
   var seznami = (odgovor && odgovor.contactLists) || [];
-  for (var i = 0; i < seznami.length; i++) {
-    if (String(seznami[i].list) === String(idSeznama)) return String(seznami[i].status) === '2';
-  }
-  return false;
+  var stanja = {};
+  seznami.forEach(function (vnos) {
+    stanja[String(vnos.list)] = String(vnos.status);
+  });
+  return stanja;
 }
 
 /**
@@ -2868,22 +3178,29 @@ function samoPovezava(vrednost) {
  *
  * Nikoli ne vrže. Vse, kar gre tu narobe, se konča z "NAPAKA: …" v stolpcu
  * `activeCampaign` — od koder to v minuti ali dveh pobere ura.
+ *
+ * Vrne, kaj se je zgodilo, ker je v načinu POSTA_PREK_AC od tega odvisen izid
+ * poročila stranki (`izidPorocilaPrekAC`): `null` = AC ni nastavljen,
+ * `{ poslano: false, preskoceno: true }` = rok, `{ poslano: true, id, narocen }`
+ * = uspeh, `{ poslano: false, napaka }` = padel klic.
  */
-function acVrstico(zapisana, vrednosti, zacetek) {
+function acVrstico(zapisana, vrednosti, zacetek, prekAC) {
   var lastnosti = PropertiesService.getScriptProperties();
-  if (!acNastavitve()) return;
+  if (!acNastavitve()) return null;
 
-  if (Date.now() - zacetek > AC_ROK_MS) {
+  var rok = prekAC ? AC_ROK_PREK_AC_MS : AC_ROK_MS;
+  if (Date.now() - zacetek > rok) {
     // Celica ostane prazna, kar je za uro isto kot napaka: vrstico bo pobrala.
-    console.warn('AC preskočen na vroči poti (rok ' + AC_ROK_MS + ' ms); pobere ga ura.');
-    return;
+    console.warn('AC preskočen na vroči poti (rok ' + rok + ' ms); pobere ga ura.');
+    return { poslano: false, preskoceno: true };
   }
 
   try {
-    var id = posljiVAC(vrednosti);
-    acZapisiIzid(zapisana, id);
-    lastnosti.setProperty(AC_LASTNOST.ZADNJI, new Date().toISOString() + ' — kontakt ' + id);
+    var izid = posljiVAC(vrednosti);
+    acZapisiIzid(zapisana, izid.id);
+    lastnosti.setProperty(AC_LASTNOST.ZADNJI, new Date().toISOString() + ' — kontakt ' + izid.id);
     lastnosti.deleteProperty(AC_LASTNOST.ZADNJA_NAPAKA);
+    return { poslano: true, id: izid.id, narocen: izid.narocen };
   } catch (err) {
     console.warn('Leada ni bilo mogoče poslati v AC: ' + err);
     acZapisiIzid(zapisana, 'NAPAKA: ' + err);
@@ -2891,6 +3208,7 @@ function acVrstico(zapisana, vrednosti, zacetek) {
       AC_LASTNOST.ZADNJA_NAPAKA,
       new Date().toISOString() + ' — ' + zakrijNaslove(String(err)),
     );
+    return { poslano: false, napaka: String(err) };
   }
 }
 
@@ -2951,8 +3269,8 @@ function posljiZaostaleVAC() {
       for (var j = 0; j < glava.length; j++) vrednosti[glava[j]] = podatki[i][j];
 
       try {
-        var id = posljiVAC(vrednosti);
-        list.getRange(i + 2, stolpecAC).setValue(id);
+        var izidVrstice = posljiVAC(vrednosti);
+        list.getRange(i + 2, stolpecAC).setValue(izidVrstice.id);
         poslano++;
       } catch (err) {
         console.warn('Vrstica ' + (i + 2) + ' ni šla v AC: ' + err);
@@ -3013,7 +3331,7 @@ function narociObstojeceVAC() {
     for (var j = 0; j < glava.length; j++) vrednosti[glava[j]] = podatki[i][j];
 
     try {
-      acNaSeznam(id, vrednosti, n.seznam, true);
+      acNaSeznam(id, vrednosti, acSeznami(n), true);
       acOznaci(id, acOznake(vrednosti));
       narocenih++;
     } catch (err) {

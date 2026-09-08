@@ -68,6 +68,7 @@ import type {
  * | ne      | —       | —                     | gumb za prenos (kot doslej)          |
  * | da      | ne      | —                     | gumb za prenos                       |
  * | da      | da      | poslano               | obvestilo z naslovom, gumba ni       |
+ * | da      | da      | predano CRM ('queued')| obvestilo "prispe v nekaj minutah" IN gumb |
  * | da      | da      | ni poslano + razlog   | gumb + vrstica "nismo mogli poslati" |
  * | da      | da      | nič (star sprejemnik) | gumb, brez vrstice                   |
  *
@@ -148,7 +149,13 @@ export interface CustomerReportDelivery {
   emailedTo: string | null;
   /** Gumb za prenos na rezultatih: vedno, kadar pošte ni bilo; v internem načinu tudi ob pošti. */
   downloadOffered: boolean;
-  reason: 'emailed' | 'no_webhook' | 'no_record' | 'delivery_failed' | 'not_sent' | 'unknown';
+  /**
+   * 'queued' = sprejemnik je poročilo predal CRM-ju in ta ga pošlje v nekaj
+   * minutah. Ločen od 'emailed', ker potrditve ni: rezultati tedaj povedo, da je
+   * poročilo na poti, gumb pa OSTANE — zamujena avtomatizacija ne sme pomeniti
+   * stranke brez dokumenta (druga oddaja je onemogočena).
+   */
+  reason: 'emailed' | 'queued' | 'no_webhook' | 'no_record' | 'delivery_failed' | 'not_sent' | 'unknown';
   /** Razlog sprejemnika pri 'not_sent' — za sled, ne za besedilo stranki. */
   detail?: CustomerReportReason;
 }
@@ -404,9 +411,15 @@ export async function deliverLead(
  */
 function customerReportOf(outcome: CustomerReportOutcome, input: DeliverLeadInput): CustomerReportDelivery {
   if (outcome.sent) {
-    track('lm10_report_emailed', { segment: input.segment.id });
+    track('lm10_report_emailed', { segment: input.segment.id, channel: 'mailapp' });
     // Interni način: gumb ostane za pregled dokumenta, obvestilo pove, da je odšel.
     return { emailedTo: input.contact.email, downloadOffered: input.internalMode, reason: 'emailed' };
+  }
+  if (outcome.reason === 'queued') {
+    // Poslal bo CRM, v minuti ali dveh. Isti dogodek kot pri pošti sprejemnika,
+    // ločen s `channel` — merilo je "poročilo je na poti", ne kdo ga je oddal.
+    track('lm10_report_emailed', { segment: input.segment.id, channel: 'activecampaign' });
+    return { emailedTo: input.contact.email, downloadOffered: true, reason: 'queued' };
   }
   if (outcome.reason === 'unknown') {
     return { emailedTo: null, downloadOffered: true, reason: 'unknown' };

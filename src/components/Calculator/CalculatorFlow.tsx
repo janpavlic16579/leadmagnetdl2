@@ -164,7 +164,15 @@ export function CalculatorFlow({
    * sodi): obvestilo tedaj pove "na vaš e-naslov", brez naslova.
    */
   const [customerReport, setCustomerReport] = useState<CustomerReportDelivery | null>(() =>
-    restored?.reportSent ? { emailedTo: null, downloadOffered: internalMode, reason: 'emailed' } : null,
+    restored?.reportDelivery
+      ? {
+          emailedTo: null,
+          // Pri 'queued' gumb ostane: poročilo je še na poti in stranka mora imeti
+          // dokument tudi, če avtomatizacija zamuja (druge oddaje ni).
+          downloadOffered: restored.reportDelivery === 'queued' || internalMode,
+          reason: restored.reportDelivery,
+        }
+      : null,
   );
 
   /**
@@ -224,7 +232,7 @@ export function CalculatorFlow({
   /**
    * Napredek preživi osvežitev strani.
    *
-   * Shranjuje se tudi po oddaji — z zastavicama `submitted` in `reportSent`, brez kontakta. Prej
+   * Shranjuje se tudi po oddaji — s `submitted` in `reportDelivery`, brez kontakta. Prej
    * se je zapis ob oddaji pobrisal, ker je bil tok končan; zdaj oddaji sledijo
    * rezultati in osvežitev na njih ne sme vrniti vprašalnika. Zapis umre s sejo
    * zavihka (sessionStorage), zato naslednji obiskovalec istega računalnika ne
@@ -240,7 +248,10 @@ export function CalculatorFlow({
       triageSelection,
       inputsModuleId,
       submitted,
-      reportSent: customerReport?.reason === 'emailed',
+      reportDelivery:
+        customerReport?.reason === 'emailed' || customerReport?.reason === 'queued'
+          ? customerReport.reason
+          : null,
     });
   }, [step, basicInfo, profile, moduleInputs, triageScores, triageSelection, inputsModuleId, submitted, customerReport]);
 

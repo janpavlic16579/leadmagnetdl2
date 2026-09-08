@@ -40,9 +40,15 @@ export interface LeadAttachment {
 }
 
 /**
- * Zakaj sprejemnik poročila stranki NI poslal — ključi iz Koda.gs
+ * Zakaj sprejemnik poročila stranki ni poslal SAM — ključi iz Koda.gs
  * (`RAZLOGI_POROCILA_STRANKI`); 'unknown' = odgovor tega ne pove (star
  * sprejemnik, neberljivo telo, neznan ključ).
+ *
+ * 'queued' je poseben: ni odpoved, ampak "poslal bo ActiveCampaign v nekaj
+ * minutah" (sprejemnik v načinu POSTA_PREK_AC). Rezultati ob njem povedo, da je
+ * poročilo na poti, in OBDRŽIJO gumb za prenos — potrditve ob oddaji ni.
+ * 'unsubscribed' pa je odpoved: kontakt se je v CRM odjavil in mu ta pot ne
+ * more pisati.
  */
 export type CustomerReportReason =
   | 'disabled'
@@ -50,6 +56,8 @@ export type CustomerReportReason =
   | 'invalid_address'
   | 'no_attachment'
   | 'send_failed'
+  | 'queued'
+  | 'unsubscribed'
   | 'unknown';
 
 export type CustomerReportOutcome = { sent: true } | { sent: false; reason: CustomerReportReason };
@@ -117,8 +125,9 @@ export { leadWebhookUrl } from './webhookUrl';
  * prenos, preden strežnik telo sploh dobi. Prekoračitev ni le čas: dostava se šteje kot
  * neuspela in prodajna priprava gre stranki (deliverLead.ts), zato je daljši rok
  * cenejši od lažnega padca. Z osmih na deset sekund, odkar sprejemnik pred
- * odgovorom pošlje še dve sporočili (stranki in prodaji): lažen padec zdaj
- * pomeni tudi gumb za prenos ob pošti, ki je že na poti.
+ * odgovorom opravi še delo za obe sporočili — shrani oba PDF-ja na Drive in
+ * pokliče CRM (v načinu MailApp namesto tega pošlje dve sporočili): lažen padec
+ * zdaj pomeni tudi gumb za prenos ob pošti, ki je že na poti.
  */
 const REQUEST_TIMEOUT_MS = 10_000;
 /** Počasna mobilna povezava, s katero računamo prenos telesa: ~50 kB/s. */
@@ -149,6 +158,8 @@ const CUSTOMER_REPORT_REASONS: readonly CustomerReportReason[] = [
   'invalid_address',
   'no_attachment',
   'send_failed',
+  'queued',
+  'unsubscribed',
 ];
 
 /**

@@ -204,6 +204,16 @@ describe('submitLead', () => {
       delivered: true,
       customerReport: { sent: false, reason: 'no_attachment' },
     });
+
+    // Načina, v katerem pošilja CRM: 'queued' ni odpoved, 'unsubscribed' je.
+    // Oba morata priti skozi nespremenjena, sicer bi ju rezultati brali kot 'unknown'.
+    for (const reason of ['queued', 'unsubscribed'] as const) {
+      const crm = vi.fn().mockResolvedValue(odgovor({ ok: true, customerReport: { sent: false, reason } }));
+      expect(await submitLead(SUBMISSION, 'https://x', crm as never)).toEqual({
+        delivered: true,
+        customerReport: { sent: false, reason },
+      });
+    }
   });
 
   it('odgovor starejšega sprejemnika, neznan razlog ali neberljivo telo: dostava uspela, pošta neznana', async () => {

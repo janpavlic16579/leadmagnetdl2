@@ -22,7 +22,7 @@ const PROGRESS: StoredProgress = {
   triageSelection: ['zamude'],
   inputsModuleId: 'zamude',
   submitted: false,
-  reportSent: false,
+  reportDelivery: null,
 };
 
 describe('progressStorage', () => {
@@ -79,20 +79,37 @@ describe('progressStorage', () => {
   });
 
   it('poslano poročilo preživi osvežitev — brez naslova', () => {
-    saveProgress({ ...PROGRESS, step: 'results', submitted: true, reportSent: true });
-    expect(readProgress()?.reportSent).toBe(true);
+    saveProgress({ ...PROGRESS, step: 'results', submitted: true, reportDelivery: 'emailed' });
+    expect(readProgress()?.reportDelivery).toBe('emailed');
     // Naslov je kontakt; zastavica pove le, da je poročilo odšlo.
     expect(store.get('lm10-napredek') ?? '').not.toContain('@');
   });
 
-  it('zapis brez zastavice o poslanem poročilu pomeni, da poročilo ni odšlo', () => {
+  it('poročilo, predano CRM-ju, preživi osvežitev kot queued — gumb mora ostati', () => {
+    saveProgress({ ...PROGRESS, step: 'results', submitted: true, reportDelivery: 'queued' });
+    expect(readProgress()?.reportDelivery).toBe('queued');
+  });
+
+  it('zapis brez podatka o poročilu pomeni, da poročilo ni odšlo', () => {
     // Dodano brez dviga sheme: zapis iz prejšnje različice orodja se ne zavrže,
     // rezultati pa mu ponudijo gumb za prenos — varna razlaga manjkajočega polja.
     saveProgress(PROGRESS);
     const stored = JSON.parse(store.get('lm10-napredek') ?? '{}') as Record<string, unknown>;
-    delete stored.reportSent;
+    delete stored.reportDelivery;
     store.set('lm10-napredek', JSON.stringify(stored));
-    expect(readProgress()?.reportSent).toBe(false);
+    expect(readProgress()?.reportDelivery).toBe(null);
+  });
+
+  it('star zapis z zastavico reportSent se prebere kot poslano poročilo', () => {
+    // Prejšnja različica orodja je hranila logično `reportSent`. Zapis mora
+    // preživeti objavo, sicer bi osvežitev na rezultatih ponudila gumb tudi
+    // tistemu, ki je poročilo že dobil.
+    saveProgress({ ...PROGRESS, step: 'results', submitted: true });
+    const stored = JSON.parse(store.get('lm10-napredek') ?? '{}') as Record<string, unknown>;
+    delete stored.reportDelivery;
+    stored.reportSent = true;
+    store.set('lm10-napredek', JSON.stringify(stored));
+    expect(readProgress()?.reportDelivery).toBe('emailed');
   });
 
   it('clearProgress zapis odstrani', () => {

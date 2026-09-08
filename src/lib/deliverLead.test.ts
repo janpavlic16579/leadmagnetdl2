@@ -463,6 +463,48 @@ describe('Dostava po oddaji', () => {
       expect(h.state().salesReportSet).toBe(false);
     });
 
+    it('sprejemnik je poročilo predal CRM-ju: naslov v obvestilu IN gumb ostane', async () => {
+      const real = await loadDeliveryModules();
+      const h = harness(
+        {
+          leadWebhookUrl: () => 'https://example.test/webhook',
+          submitLead: async () => ({ delivered: true, customerReport: { sent: false, reason: 'queued' } }),
+        },
+        real,
+      );
+
+      await deliverLead(scenario(), h.modules, h.hooks);
+
+      // Gumb ostane: poročilo je na poti, potrditve ni in druge oddaje ni.
+      expect(h.state().customerReport).toEqual({
+        emailedTo: 'test@example.com',
+        downloadOffered: true,
+        reason: 'queued',
+      });
+      // Dostava JE uspela: priprava ostane na strežniku.
+      expect(h.state().salesReportSet).toBe(false);
+    });
+
+    it('kontakt je v CRM odjavljen: gumb in razlog sprejemnika', async () => {
+      const real = await loadDeliveryModules();
+      const h = harness(
+        {
+          leadWebhookUrl: () => 'https://example.test/webhook',
+          submitLead: async () => ({ delivered: true, customerReport: { sent: false, reason: 'unsubscribed' } }),
+        },
+        real,
+      );
+
+      await deliverLead(scenario(), h.modules, h.hooks);
+
+      expect(h.state().customerReport).toEqual({
+        emailedTo: null,
+        downloadOffered: true,
+        reason: 'not_sent',
+        detail: 'unsubscribed',
+      });
+    });
+
     it('star sprejemnik brez odgovora o pošti: gumb, brez vrstice o napaki', async () => {
       const real = await loadDeliveryModules();
       const h = harness(
