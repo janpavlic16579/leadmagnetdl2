@@ -1410,6 +1410,7 @@ test('narociObstojeceVAC naroči kontakte z id-jem v celici; prazne in NAPAKA pu
   zahteve.length = 0;
 
   assert.equal(skripta.narociObstojeceVAC(), 'Naročenih: 1, padlo: 0.');
+  assert.match(lastnosti.get('AC_NAROCILO_OBSTOJECIH'), / — Naročenih: 1, padlo: 0\.$/, 'izid je viden na /exec');
   assert.equal(preverjanjaStanja(zahteve), 0, 'naročilo je vsiljeno — stanja ne preverja');
   assert.deepEqual(naSeznam(zahteve), [{ list: '245', contact: '77', status: 1 }]);
   assert.deepEqual(pripeteOznake(zahteve), [...OZNAKE_OSNOVNE, 'LM-10 posvet']);

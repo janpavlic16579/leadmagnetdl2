@@ -516,7 +516,7 @@ pa jih ni, dokler filtra po statusu ne nastavite na *Any*.
 **Po preklopu s `true` na `false`** enkrat poženite `narociObstojeceVAC`: leade,
 ki so v AC že pristali kot odjavljeni, naroči in jim pripne oznaki privolitve.
 Ne poganjajte ga, če se je kdo s seznama že odjavil sam — naročilo vsili mimo
-varovala.
+varovala. Izid je na `/exec` v vrstici `Ponovno naročilo obstoječih`.
 
 ### Stolpec `activeCampaign`
 
