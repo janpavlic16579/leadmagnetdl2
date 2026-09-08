@@ -30,6 +30,10 @@
  *     ponarejenim UrlFetchApp, ki zahteve zapisuje: kontakt gre na seznam kot
  *     naročen, privolitev postane oznaka, kdor se je sam odjavil, brez sveže
  *     privolitve ostane odjavljen, enkratni poseg naroči že poslane kontakte.
+ *  7. Strankin PDF na Drivu (shraniPorocilo): datoteka gre v svojo mapo, deljena
+ *     s povezavo, priprava v svojo brez deljenja; povezava je v stolpcu
+ *     porociloPdf in v polju LM10_POROCILO v AC. Ob odpovedi Drive ostane v
+ *     celici NAPAKA, polje v AC izpade, vrstica in pošta stranki tečeta naprej.
  *
  * Kaj ponaredek NAMENOMA ne posnema: razlage vrednosti v pravi preglednici. Niz
  * "'+386 …" ostane z uvodnim opuščajem, "true" ostane niz — kaj bi preglednica
@@ -39,11 +43,11 @@
  * preizkus meri njeno logiko, ne pasti. Stolpci čez rob lista pa vržejo napako
  * tako kot pri Googlu — brez tega bi `zagotoviStolpce` lahko tiho izginil.
  *
- * Nepokrito ostane: Drive (shraniPripravo). Je v doPost za vrstico in v svojem
- * try/catch; tu je prazen objekt. UrlFetchApp je prazen, dokler ga preizkus AC
- * ne nadomesti (`ponarediAC`) — brez lastnosti AC_* skripta AC preskoči. MailApp
- * je ponarejen: sporočila se zbirajo v `posta`, da test vidi naslovnika, prilogi
- * in besedilo.
+ * DriveApp je ponarejen (`ustvariDrive`): mape po imenu in id-ju, datoteke z
+ * imenom, tipom, bajti in deljenjem, vse vidno v `drive.datoteke`. UrlFetchApp
+ * je prazen, dokler ga preizkus AC ne nadomesti (`ponarediAC`) — brez lastnosti
+ * AC_* skripta AC preskoči. MailApp je ponarejen: sporočila se zbirajo v
+ * `posta`, da test vidi naslovnika, prilogi in besedilo.
  */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -359,9 +363,67 @@ function formatDate(datum, casovniPas, vzorec) {
   return vzorec.replace(/yyyy|MM|dd|HH|mm|ss|M|d|H/g, (znak) => zamenjave[znak]);
 }
 
+/**
+ * Drive, kolikor ga skripta potrebuje: mape po imenu in id-ju, datoteke z
+ * imenom, tipom, bajti in deljenjem. Vse ostane v `datoteke` in `mape`, da test
+ * vidi, KAM je kaj šlo in ali je deljeno.
+ */
+function ustvariDrive() {
+  const mape = new Map();
+  const datoteke = [];
+  let stevec = 0;
+  const DriveApp = {
+    Access: { ANYONE_WITH_LINK: 'ANYONE_WITH_LINK', PRIVATE: 'PRIVATE' },
+    Permission: { VIEW: 'VIEW', EDIT: 'EDIT' },
+    createFolder(ime) {
+      const id = `mapa-${++stevec}`;
+      const mapa = {
+        getId: () => id,
+        getName: () => ime,
+        createFile(blob) {
+          const datoteka = {
+            id: `datoteka-${++stevec}`,
+            mapa: ime,
+            ime: blob.getName(),
+            tip: blob.getContentType(),
+            bajti: blob.getBytes(),
+            deljenje: null,
+          };
+          datoteka.url = `https://drive.google.com/file/d/${datoteka.id}/view`;
+          datoteke.push(datoteka);
+          const rocaj = {
+            getId: () => datoteka.id,
+            getName: () => datoteka.ime,
+            getUrl: () => datoteka.url,
+            setSharing(dostop, dovoljenje) {
+              datoteka.deljenje = `${dostop}/${dovoljenje}`;
+              return rocaj;
+            },
+          };
+          return rocaj;
+        },
+      };
+      mape.set(id, mapa);
+      return mapa;
+    },
+    getFolderById(id) {
+      const mapa = mape.get(id);
+      if (!mapa) throw new Error(`Mape ${id} ni.`);
+      return mapa;
+    },
+    getFoldersByName(ime) {
+      const najdene = [...mape.values()].filter((mapa) => mapa.getName() === ime);
+      let i = 0;
+      return { hasNext: () => i < najdene.length, next: () => najdene[i++] };
+    },
+  };
+  return { DriveApp, mape, datoteke };
+}
+
 /** Globali Apps Scripta, kolikor jih skripta na preizkušenih poteh potrebuje. */
 function ustvariGoogle() {
   const preglednica = ustvariPreglednico();
+  const drive = ustvariDrive();
   const lastnosti = new Map();
   const dnevnik = { log: [], warn: [] };
   /** Vsa sporočila, ki bi jih skripta poslala — stranki in prodaji, po vrsti. */
@@ -444,7 +506,7 @@ function ustvariGoogle() {
       },
       getRemainingDailyQuota: () => 100,
     },
-    DriveApp: {},
+    DriveApp: drive.DriveApp,
     UrlFetchApp: {},
     console: {
       log: (...a) => dnevnik.log.push(a.join(' ')),
@@ -455,7 +517,7 @@ function ustvariGoogle() {
     // skripta zapiše, ne bi prestali `instanceof Date` na tej strani.
     Date,
   };
-  return { globali, preglednica, lastnosti, dnevnik, posta };
+  return { globali, preglednica, lastnosti, dnevnik, posta, drive };
 }
 
 /** Naloži Koda.gs v svež kontekst; funkcije skripte so lastnosti vrnjenega objekta. */
@@ -1275,7 +1337,7 @@ function ponarediAC(skripta, lastnosti, { stanjeNaSeznamu = null } = {}) {
   lastnosti.set('AC_NASLOV', `${AC_NASLOV}/`);
   lastnosti.set('AC_KLJUC', 'kljuc');
   lastnosti.set('AC_SEZNAM', '245');
-  lastnosti.set('AC_IDJI_POLJ', JSON.stringify({ LM10_PODJETJE: '1', LM10_PANOGA: '2' }));
+  lastnosti.set('AC_IDJI_POLJ', JSON.stringify({ LM10_PODJETJE: '1', LM10_PANOGA: '2', LM10_POROCILO: '3' }));
 
   const zahteve = [];
   const odgovor = (koda, telo) => ({
@@ -1424,4 +1486,81 @@ test('narociObstojeceVAC naroči kontakte z id-jem v celici; prazne in NAPAKA pu
   assert.equal(poImenih(leadi, 4).activeCampaign, '77');
   assert.match(lastnosti.get('AC_ZADNJI'), / — ura: Poslano: 2, padlo: 0\.$/);
   assert.deepEqual(dnevnik.warn, []);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Strankin PDF na Drivu in povezava v ActiveCampaign
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Vrednost polja z danim id-jem v vsakem contact/sync po vrsti; null, kadar polja ni. */
+const poljeVAC = (zahteve, id) =>
+  zahteve
+    .filter((z) => z.pot === 'contact/sync')
+    .map((z) => z.telo.contact.fieldValues.find((polje) => polje.field === id) ?? null);
+
+test('doPost s prilogama shrani strankin PDF na Drive: povezava v stolpcu porociloPdf in v polju LM10_POROCILO', () => {
+  const { skripta, preglednica, lastnosti, dnevnik, drive } = naloziSkripto();
+  const zahteve = ponarediAC(skripta, lastnosti);
+
+  const odgovor = post(skripta, oddaja(LEAD, { attachments: prilogi(), salesReportHtml: '<h1>Priprava</h1>' }));
+  assert.deepEqual(odgovor, { ok: true, customerReport: { sent: true } });
+
+  // Dve datoteki v dveh mapah: priprava v svoji brez deljenja, poročilo v svoji, deljeno s povezavo.
+  assert.deepEqual(
+    drive.datoteke.map((d) => [d.mapa, d.ime, d.tip, d.deljenje]),
+    [
+      ['LM-10 prodajne priprave', 'priprava-2026-09-05-Kovinar d.o.o.html', 'text/html', null],
+      ['LM-10 poročila strankam', 'porocilo-2026-09-05-Kovinar d.o.o.pdf', 'application/pdf', 'ANYONE_WITH_LINK/VIEW'],
+    ],
+  );
+  const [priprava, porocilo] = drive.datoteke;
+  assert.equal(Buffer.from(porocilo.bajti).toString(), '%PDF-1.4 poročilo za stranko', 'na Drive gre strankin PDF, ne priprava');
+
+  const v = poImenih(preglednica.getSheetByName('Leadi'), 2);
+  assert.equal(v.prodajnaPriprava, priprava.url);
+  assert.equal(v.porociloPdf, porocilo.url);
+  assert.deepEqual(poljeVAC(zahteve, '3'), [{ field: '3', value: porocilo.url }], 'povezava je v AC');
+
+  assert.match(lastnosti.get('ZADNJE_POROCILO_NA_DRIVU'), /^\d{4}-/);
+  assert.equal(lastnosti.has('ZADNJA_NAPAKA_POROCILA_NA_DRIVU'), false);
+  assert.match(skripta.doGet().getContent(), /Poročilo na Drivu: \d{4}-/);
+  assert.deepEqual(dnevnik.warn, []);
+
+  // Druga oddaja brez prilog: mapi ostaneta isti (id iz lastnosti), celica prazna, polja v AC ni.
+  post(skripta, oddaja({ ...LEAD, email: 'bor@primer.si' }));
+  assert.equal(drive.mape.size, 2, 'mapi se ne podvajata');
+  assert.equal(poImenih(preglednica.getSheetByName('Leadi'), 3).porociloPdf, '');
+  assert.deepEqual(poljeVAC(zahteve, '3'), [{ field: '3', value: porocilo.url }, null]);
+});
+
+test('Drive odpove: vrstica, pošta stranki in AC gredo naprej — v celici NAPAKA, polje v AC izpade', () => {
+  const { skripta, preglednica, lastnosti, dnevnik, posta } = naloziSkripto();
+  const zahteve = ponarediAC(skripta, lastnosti);
+  const odpoved = () => {
+    throw new Error('Drive ne odgovarja');
+  };
+  skripta.DriveApp = { ...skripta.DriveApp, getFoldersByName: odpoved, getFolderById: odpoved, createFolder: odpoved };
+
+  assert.deepEqual(post(skripta, oddaja(LEAD, { attachments: prilogi() })), { ok: true, customerReport: { sent: true } });
+  assert.equal(posta.length, 1, 'stranka dobi poročilo po e-pošti kljub Drivu');
+  assert.equal(posta[0].to, 'ana@kovinar.si');
+
+  const v = poImenih(preglednica.getSheetByName('Leadi'), 2);
+  assert.match(String(v.porociloPdf), /^NAPAKA: Error: Drive ne odgovarja/);
+  assert.equal(v.activeCampaign, '77', 'kontakt je v AC');
+  assert.deepEqual(poljeVAC(zahteve, '3'), [null], '"NAPAKA" v CRM ne gre');
+  assert.match(lastnosti.get('ZADNJA_NAPAKA_POROCILA_NA_DRIVU'), /Drive ne odgovarja/);
+  assert.match(skripta.doGet().getContent(), /Zadnja napaka poročila na Drivu: .*Drive ne odgovarja/);
+  assert.deepEqual(dnevnik.warn, ['Poročila ni bilo mogoče shraniti na Drive: Error: Drive ne odgovarja']);
+});
+
+test('SHRANI_POROCILO: false — nič na Drive, celica prazna, stranka poročilo vseeno dobi', () => {
+  const { skripta, preglednica, drive, posta } = naloziSkripto();
+  skripta.NASTAVITVE.SHRANI_POROCILO = false;
+
+  assert.deepEqual(post(skripta, oddaja(LEAD, { attachments: prilogi() })), { ok: true, customerReport: { sent: true } });
+  assert.equal(drive.datoteke.length, 0);
+  assert.equal(poImenih(preglednica.getSheetByName('Leadi'), 2).porociloPdf, '');
+  assert.equal(posta.length, 1);
+  assert.match(skripta.doGet().getContent(), /Poročilo na Drivu: IZKLOPLJENO/);
 });
