@@ -460,9 +460,9 @@ Dokler nastavitev ni, se ne zgodi nič — zbiralnik dela natanko kot doslej.
    preveri ključ, izpiše ime seznama in v AC ustvari manjkajoča polja po meri.
    Varno jo je pognati večkrat.
 6. **Poženite `posljiZaostaleVAC`** — pošlje leade, ki so se v preglednici
-   nabrali pred priklopom (do 30 na zagon; poženite večkrat, dokler izpis ne
+   nabrali pred priklopom (do 5 na zagon; poženite večkrat, dokler izpis ne
    pokaže `Poslano: 0`).
-7. **Poženite `namestiUroZaAC`** — vsakih deset minut pobere, kar ni prišlo skozi
+7. **Poženite `namestiUroZaAC`** — vsako minuto pobere, kar ni prišlo skozi
    takoj. Zažene se enkrat; ponovni zagon starih ur ne podvoji.
 8. **Razmestite novo različico** (*Razmesti → Upravljaj razmestitve → svinčnik →
    Nova različica*). Brez tega ob oddajah teče stara koda.
@@ -518,7 +518,7 @@ Da stolpec pristane na svojem mestu med že zapisanimi vrsticami, enkrat poženi
 Ob oddaji gre kontakt v AC takoj, a le, če je do tedaj poteklo manj kot 4,5
 sekunde. Aplikacija namreč čaka odgovor deset sekund in ob prekoračitvi razume
 dostavo kot neuspelo ter prodajno pripravo prenese stranki. Počasen CRM tega ne
-sme povzročiti, zato ob zamudi klic odpade in vrstico čez nekaj minut pobere ura.
+sme povzročiti, zato ob zamudi klic odpade in vrstico v minuti ali dveh pobere ura.
 Iz istega razloga napaka v AC nikoli ne pade ven: pristane v stolpcu in gre v
 ponovni poskus.
 
