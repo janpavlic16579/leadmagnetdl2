@@ -26,8 +26,10 @@
  *    priprava na pogovor in ne gre nikoli, tudi z napačnim imenom datoteke.
  *
  * Telo lahko nosi še `attachments[]` — PDF-ja v base64 za prilogi obvestila
- * (glej `pripraviPriloge`). Skripta mora delati tudi brez njih: starejši build
- * aplikacije jih ne pošlje, PDF pa v brskalniku tudi kdaj ne nastane. Po vsaki
+ * (glej `pripraviPriloge`); strankin PDF gre poleg tega še na Drive, povezava do
+ * njega pa v vrstico in v ActiveCampaign (glej `shraniPorocilo`). Skripta mora
+ * delati tudi brez njih: starejši build aplikacije jih ne pošlje, PDF pa v
+ * brskalniku tudi kdaj ne nastane. Po vsaki
  * spremembi te datoteke je treba razmestiti NOVO RAZLIČICO (Deploy → Manage
  * deployments → New version) in znova vpisati E_NASLOV_ZA_OBVESTILA, ker ga
  * datoteka v repozitoriju nima.
@@ -93,6 +95,28 @@ var NASTAVITVE = {
    */
   SHRANI_PRIPRAVO: true,
   IME_MAPE_PRIPRAV: 'LM-10 prodajne priprave',
+
+  /**
+   * Strankino poročilo (PDF) se shrani na Drive, povezava gre v stolpec
+   * `porociloPdf` in v ActiveCampaign kot polje %LM10_POROCILO%.
+   *
+   * Stranka PDF dobi po e-pošti ne glede na to (POSLJI_POROCILO_STRANKI); tu je
+   * kopija za CRM: svetovalec ga odpre iz kartice kontakta, avtomatizacija v AC
+   * pa lahko povezavo vstavi v sporočilo. Napaka pri shranjevanju ne ustavi
+   * ničesar — v celici ostane "NAPAKA: …", polje v AC izpade (`shraniPorocilo`).
+   */
+  SHRANI_POROCILO: true,
+  IME_MAPE_POROCIL: 'LM-10 poročila strankam',
+
+  /**
+   * true = datoteka poročila je dostopna vsakomur s povezavo, samo za branje.
+   * Brez tega povezava iz AC vsakomur razen računu skripte odpre "Zahtevajte
+   * dostop" — tudi svetovalcu in stranki v sporočilu iz AC. Povezava nosi
+   * naključen id in ni uganljiva; kdor jo ima, jo je dobil od nas ali od
+   * stranke. Velja SAMO za poročila: mapa priprav tega nima in ga ne sme dobiti
+   * (načelo 4 v glavi) — v njej so dokumenti O stranki.
+   */
+  POROCILO_DOSTOPNO_S_POVEZAVO: true,
 
   /**
    * Komu gre obvestilo ob vsaki oddaji. Prazno = brez obvestil.
@@ -179,6 +203,13 @@ var PRIPRAVA = 'prodajnaPriprava';
  * ne da bi brskal po pošti.
  */
 var POROCILO_STRANKI = 'porociloStranki';
+
+/**
+ * Povezava do strankinega PDF-ja na Drivu (`shraniPorocilo`) — isti dokument,
+ * kot ga stranka dobi po e-pošti. Od tod gre v ActiveCampaign (%LM10_POROCILO%),
+ * da ga svetovalec odpre iz kartice kontakta, ne da bi brskal po pošti.
+ */
+var POROCILO_PDF = 'porociloPdf';
 
 /**
  * Kontakt prodaje v sporočilu stranki — isti kot v aplikaciji
@@ -285,6 +316,7 @@ var VRSTNI_RED = [
   PRIPRAVA,
   // Ob pripravi: oba stolpca povesta, ali ima druga stran svoj dokument.
   POROCILO_STRANKI,
+  POROCILO_PDF,
   AC_STOLPEC,
   'role',
   'roleOther',
@@ -360,6 +392,13 @@ function doGet() {
       (NASTAVITVE.POSLJI_POROCILO_STRANKI ? 'vklopljeno' : 'IZKLOPLJENO (POSLJI_POROCILO_STRANKI)'),
     'Zadnje poročilo stranki: ' + (lastnosti.getProperty('ZADNJA_POSTA_STRANKI') || 'še nobeno'),
     'Zadnja napaka poročila stranki: ' + (lastnosti.getProperty('ZADNJA_NAPAKA_POSTE_STRANKI') || 'brez'),
+    // Kopija poročila na Drivu (povezava v AC): čas in ne povezava — doGet je
+    // javen, povezava pa odpre strankin dokument.
+    'Poročilo na Drivu: ' +
+      (NASTAVITVE.SHRANI_POROCILO
+        ? lastnosti.getProperty('ZADNJE_POROCILO_NA_DRIVU') || 'še nobeno'
+        : 'IZKLOPLJENO (SHRANI_POROCILO)'),
+    'Zadnja napaka poročila na Drivu: ' + (lastnosti.getProperty('ZADNJA_NAPAKA_POROCILA_NA_DRIVU') || 'brez'),
     'Zadnje urejanje stolpcev: ' + (lastnosti.getProperty('ZADNJE_UREJANJE') || 'še nobeno'),
     'ActiveCampaign: ' + acStanje(),
     'Zadnji v AC: ' + (lastnosti.getProperty('AC_ZADNJI') || 'še nobeden'),
@@ -425,7 +464,12 @@ function doPost(e) {
       }
     }
 
-    var vrednosti = zdruziVrednosti(oddaja, povezava);
+    // Strankin PDF na Drive — PRED vrstico, ker gre povezava v vrstico in od tam
+    // v AC, in NIKOLI ne vrže (glej `shraniPorocilo`): kopija ne sme podreti
+    // izvirnika, ki ga stranka dobi po e-pošti.
+    var povezavaPorocila = NASTAVITVE.SHRANI_POROCILO ? shraniPorocilo(oddaja) : '';
+
+    var vrednosti = zdruziVrednosti(oddaja, povezava, povezavaPorocila);
     var zapisana = zapisiVrstico(vrednosti);
 
     // ActiveCampaign — ZA vrstico in v svojem try/catch, iz istega razloga kot
@@ -501,10 +545,13 @@ function odgovorOddaje(porociloStranki) {
  * za primer, ko bi zahtevo poslal kdo drug (ali starejša različica aplikacije):
  * bolje pol vrstice kot izgubljen lead.
  */
-function zdruziVrednosti(oddaja, povezavaPriprave) {
+function zdruziVrednosti(oddaja, povezavaPriprave, povezavaPorocila) {
   var vrednosti = {};
   vrednosti[PREJETO] = new Date();
   vrednosti[PRIPRAVA] = povezavaPriprave;
+  // Vedno, tudi prazno: stolpec mora obstajati ob vsaki oddaji, da ura ob
+  // ponovnem pošiljanju v AC povezavo najde po imenu.
+  vrednosti[POROCILO_PDF] = povezavaPorocila || '';
 
   if (oddaja.sheet && oddaja.sheet.columns && oddaja.sheet.row) {
     for (var i = 0; i < oddaja.sheet.columns.length; i++) {
@@ -1173,6 +1220,7 @@ var POJASNILA = {
   hourCostsEstimated: 'true = vsaj ena urna postavka ni vnesena, ampak izbrana ali privzeta.',
   followUpSequence: 'Ključ sekvence za CRM. Ne pove ničesar o stranki.',
   activeCampaign: 'Id kontakta v ActiveCampaignu. Prazno ali "NAPAKA:" pomeni, da tam še ni — tako vrstico pobere ura (posljiZaostaleVAC).',
+  porociloPdf: 'Povezava do strankinega PDF-ja na Drivu — isti dokument, kot ga je dobila po e-pošti; gre tudi v ActiveCampaign (%LM10_POROCILO%). "NAPAKA:" = Drive je odpovedal, stranka ima PDF vseeno.',
   poklicano: 'Obkljukajte, ko je klic opravljen.',
   sestanek: 'Izid klica: sestanek / ne želi / drugič.',
   opombe: 'Prosto besedilo. Oblikovano kot navadno besedilo, da datumi in formule ostanejo, kot jih vpišete.',
@@ -1231,6 +1279,7 @@ function urediVidez(list, glava) {
     sestanek: 120,
     opombe: 320,
     prodajnaPriprava: 220,
+    porociloPdf: 220,
     selectedModules: 220,
   };
 
@@ -2211,43 +2260,114 @@ function stevilo(vrednost) {
 /**
  * Prodajno pripravo shrani kot HTML na Drive in vrne povezavo.
  *
- * Mapa se poišče po imenu in ustvari le prvič; njen id se zapomni med zagoni,
- * ker je iskanje po imenu ob vsaki oddaji nepotrebno počasno in bi ob
- * preimenovanju mape tiho ustvarilo drugo.
+ * Napako VRŽE naprej: priprava brez Drive ne obstaja nikjer, zato jo doPost po
+ * zapisani vrstici pošlje aplikaciji, ki pripravo prenese stranki (načelo 3 v
+ * glavi). Poročilo spodaj ravna drugače — glej `shraniPorocilo`.
  */
 function shraniPripravo(oddaja) {
-  var mapa = pridobiMapo();
-  var zapis = oddaja.record;
-  var ime =
-    'priprava-' +
+  var mapa = pridobiMapo(NASTAVITVE.IME_MAPE_PRIPRAV, 'ID_MAPE_PRIPRAV');
+  var datoteka = mapa.createFile(
+    Utilities.newBlob(oddaja.salesReportHtml, 'text/html', imeDatoteke('priprava', oddaja.record, '.html')),
+  );
+  return datoteka.getUrl();
+}
+
+/**
+ * Strankino poročilo (PDF) shrani na Drive in vrne povezavo — prazen niz, kadar
+ * poročila v oddaji ni (starejši build, PDF v brskalniku ni nastal), ali
+ * "NAPAKA: …", kadar Drive odpove.
+ *
+ * Datoteka je NATANKO tista, ki gre stranki po e-pošti (`prilogaZaStranko`:
+ * oznaka 'customer', nikoli priprava). Povezava gre v stolpec `porociloPdf` in
+ * od tam v ActiveCampaign kot polje %LM10_POROCILO% — svetovalec PDF odpre iz
+ * kartice kontakta, avtomatizacija v AC pa ga lahko vstavi v sporočilo.
+ *
+ * NIKOLI NE VRŽE — drugače kot `shraniPripravo`. Priprava brez Drive ne obstaja
+ * nikjer in aplikacija jo mora ob napaki prenesti stranki; poročilo pa stranka
+ * dobi po e-pošti in prodaja v prilogi obvestila. Povezava je kopija za CRM in
+ * kopija ne sme podreti izvirnika: ob napaki ostane v celici razlog, v AC gre
+ * polje prazno (`samoPovezava`), vse ostalo teče naprej.
+ *
+ * Svoja mapa in ne mapa priprav: deljenje s povezavo (spodaj) velja za
+ * datoteko, a mapa priprav ga ne sme dobiti nikoli — v njej je dokument O
+ * stranki.
+ */
+function shraniPorocilo(oddaja) {
+  var priloga = prilogaZaStranko(oddaja);
+  if (!priloga) return '';
+
+  var lastnosti = PropertiesService.getScriptProperties();
+  try {
+    var mapa = pridobiMapo(NASTAVITVE.IME_MAPE_POROCIL, 'ID_MAPE_POROCIL');
+    // Nov blob z imenom po vzorcu priprav (datum, podjetje): ime iz aplikacije
+    // nosi segment in datum, ne podjetja, mapa pa se bere po podjetjih.
+    var datoteka = mapa.createFile(
+      Utilities.newBlob(priloga.getBytes(), 'application/pdf', imeDatoteke('porocilo', oddaja.record, '.pdf')),
+    );
+    if (NASTAVITVE.POROCILO_DOSTOPNO_S_POVEZAVO) {
+      try {
+        datoteka.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      } catch (err) {
+        // Workspace zna deljenje navzven prepovedati. Povezava je še vedno
+        // uporabna vsem z dostopom do mape; opozorilo pove, zakaj drugim ni.
+        console.warn('Deljenja poročila s povezavo ni bilo mogoče vklopiti: ' + err);
+      }
+    }
+    var povezava = datoteka.getUrl();
+    lastnosti.setProperty('ZADNJE_POROCILO_NA_DRIVU', new Date().toISOString());
+    lastnosti.deleteProperty('ZADNJA_NAPAKA_POROCILA_NA_DRIVU');
+    return povezava;
+  } catch (err) {
+    console.warn('Poročila ni bilo mogoče shraniti na Drive: ' + err);
+    lastnosti.setProperty(
+      'ZADNJA_NAPAKA_POROCILA_NA_DRIVU',
+      new Date().toISOString() + ' — ' + zakrijNaslove(String(err)),
+    );
+    return 'NAPAKA: ' + err;
+  }
+}
+
+/**
+ * Ime datoteke na Drivu: predpona, datum oddaje in podjetje — da se mapa bere
+ * brez odpiranja. Znaki, ki jih Drive ali ljudje v imenih ne marajo, postanejo
+ * podčrtaj; pika ali presledek na koncu odpadeta, da za "d.o.o." ne nastane
+ * dvojna pika pred končnico.
+ */
+function imeDatoteke(predpona, zapis, koncnica) {
+  zapis = zapis || {};
+  return (
+    predpona +
+    '-' +
     String(zapis.timestampISO || '').slice(0, 10) +
     '-' +
     String(zapis.companyName || 'neznano')
       .replace(/[^\wčšžćđČŠŽĆĐ .-]+/g, '_')
       .replace(/[ .]+$/, '') +
-    '.html';
-
-  var datoteka = mapa.createFile(
-    Utilities.newBlob(oddaja.salesReportHtml, 'text/html', ime),
+    koncnica
   );
-  return datoteka.getUrl();
 }
 
-function pridobiMapo() {
+/**
+ * Mapa na Drivu po imenu. Ustvari se le prvič; id se zapomni v lastnosti
+ * skripte, ker je iskanje po imenu ob vsaki oddaji nepotrebno počasno in bi ob
+ * preimenovanju mape tiho ustvarilo drugo. Ena funkcija za obe mapi (priprave,
+ * poročila), vsaka s svojo lastnostjo.
+ */
+function pridobiMapo(imeMape, imeLastnosti) {
   var lastnosti = PropertiesService.getScriptProperties();
-  var id = lastnosti.getProperty('ID_MAPE_PRIPRAV');
+  var id = lastnosti.getProperty(imeLastnosti);
   if (id) {
     try {
       return DriveApp.getFolderById(id);
     } catch (err) {
       // Mapa je bila izbrisana ali premaknjena v koš — spodaj nastane nova.
-      lastnosti.deleteProperty('ID_MAPE_PRIPRAV');
+      lastnosti.deleteProperty(imeLastnosti);
     }
   }
 
-  var najdene = DriveApp.getFoldersByName(NASTAVITVE.IME_MAPE_PRIPRAV);
-  var mapa = najdene.hasNext() ? najdene.next() : DriveApp.createFolder(NASTAVITVE.IME_MAPE_PRIPRAV);
-  lastnosti.setProperty('ID_MAPE_PRIPRAV', mapa.getId());
+  var najdene = DriveApp.getFoldersByName(imeMape);
+  var mapa = najdene.hasNext() ? najdene.next() : DriveApp.createFolder(imeMape);
+  lastnosti.setProperty(imeLastnosti, mapa.getId());
   return mapa;
 }
 
@@ -2308,8 +2428,8 @@ var AC_ROK_MS = 4500;
  *
  * `tag` je personalizacijska oznaka (v AC vidna kot %LM10_PANOGA%) in je ključ,
  * po katerem skripta polje najde — naslov se sme v AC preimenovati, oznaka ne.
- * `stolpec` je ime stolpca v preglednici; `pretvori` obstaja tam, kjer je za
- * človeka v CRM-ju uporabna druga oblika kot v preglednici.
+ * `stolpec` je ime stolpca v preglednici; `pretvori` (neobvezno) vrednost iz
+ * preglednice preoblikuje za CRM — prazen niz pomeni, da polje izpade.
  *
  * Polja ustvari `pripraviAC` in ne oddaja: ustvarjanje polja je poseg v tuj
  * sistem in sodi v zaveden enkraten korak, ne na pot, po kateri teče vsak lead.
@@ -2327,6 +2447,8 @@ var AC_POLJA = [
   { tag: 'LM10_TVEGANJA', naslov: 'LM-10 tveganja', vrsta: 'textarea', stolpec: 'risks' },
   { tag: 'LM10_POSVET', naslov: 'LM-10 prosi za posvet', vrsta: 'text', stolpec: KLICI_TAKOJ },
   { tag: 'LM10_PRIPRAVA', naslov: 'LM-10 prodajna priprava', vrsta: 'text', stolpec: PRIPRAVA },
+  // Samo prava povezava: "NAPAKA: …" je za preglednico, v CRM-ju bi bila smet.
+  { tag: 'LM10_POROCILO', naslov: 'LM-10 poročilo stranki (PDF)', vrsta: 'text', stolpec: POROCILO_PDF, pretvori: samoPovezava },
   { tag: 'LM10_SEKVENCA', naslov: 'LM-10 sekvenca', vrsta: 'text', stolpec: 'followUpSequence' },
   { tag: 'LM10_VIR', naslov: 'LM-10 vir (utm_source)', vrsta: 'text', stolpec: 'utmSource' },
   { tag: 'LM10_VLOGA', naslov: 'LM-10 vloga', vrsta: 'text', stolpec: 'role' },
@@ -2543,6 +2665,7 @@ function posljiVAC(vrednosti) {
     var id = idji[polje.tag];
     if (!id) return;
     var vrednost = acVrednost(vrednosti, polje.stolpec);
+    if (polje.pretvori) vrednost = polje.pretvori(vrednost);
     if (vrednost === '') return;
     polja.push({ field: id, value: vrednost });
   });
@@ -2733,6 +2856,11 @@ function acVrednost(vrednosti, ime) {
   if (vrednost === undefined || vrednost === null) return '';
   if (vrednost instanceof Date) return Utilities.formatDate(vrednost, 'Europe/Ljubljana', 'yyyy-MM-dd HH:mm');
   return String(vrednost).trim();
+}
+
+/** Samo pravo povezavo; vse drugo (prazno, "NAPAKA: …") izpade. */
+function samoPovezava(vrednost) {
+  return /^https?:\/\//.test(vrednost) ? vrednost : '';
 }
 
 /**

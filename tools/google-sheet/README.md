@@ -9,8 +9,10 @@ preglednici sami. Brez strežnika, brez zunanje storitve, brez stroška.
 (`CSV_COLUMNS` v `src/lib/exportRecord.ts`): čas, dejavnost, segment, velikostni
 razred, kontakt, privolitve, vsi koši zneskov, izbrana področja, triažne ocene,
 zanesljivost, urni postavki z izvorom, `utm_source` in follow-up sekvenca. Skripta
-doda še `prejeto` (čas prejema) in `prodajnaPriprava` (povezava do dokumenta na
-Drive). Ob vsaki oddaji lahko pošlje tudi obvestilo na e-pošto (spodaj).
+doda še `prejeto` (čas prejema), `prodajnaPriprava` (povezava do priprave na
+Drive) in `porociloPdf` (povezava do strankinega PDF-ja na Drive — ta gre tudi v
+ActiveCampaign, glej [Povezava do strankinega PDF-ja](#povezava-do-strankinega-pdf-ja)).
+Ob vsaki oddaji lahko pošlje tudi obvestilo na e-pošto (spodaj).
 
 **Kdo v list `Leadi` NE pride.** Kdor vprašalnik zapusti pred obrazcem — brez
 e-naslova in brez privolitve zapisa ni (`buildLeadExportRecord` tedaj vrne `null`).
@@ -135,6 +137,11 @@ svetovalec posredovati iz priloge). Na naslovu `/exec` (`doGet`) so še vrstice
 poročila stranki« (naslovi zakriti). Pošta stranki gre **za** vrstico in v
 svojem `try/catch`: padla pošta ne vrže napake, vrstica in obvestilo prodaji
 ostaneta, aplikacija pa ob `sent: false` ponudi prenos.
+
+**Kopija na Drivu.** Isti PDF, ki gre stranki, skripta shrani še v mapo
+`LM-10 poročila strankam` (`shraniPorocilo`), povezavo zapiše v stolpec
+`porociloPdf` in jo pošlje v ActiveCampaign kot polje `%LM10_POROCILO%` — glej
+[Povezava do strankinega PDF-ja](#povezava-do-strankinega-pdf-ja).
 
 **Preizkus iz urejevalnika:** funkcija **`preizkusPorocilaStranki`** pošlje
 vzorčno sporočilo z vzorčnim PDF-jem na prvi naslov iz `E_NASLOV_ZA_OBVESTILA`
@@ -323,14 +330,19 @@ glavo po `VRSTNI_RED`; da paket z `events` in `visit` konča na `Dogodki`; da
 strani vnosov, nadaljevanje po osvežitvi, interni obisk, blokada obrazca)
 sestavi `Lijak` s pravimi števili — obiskov po korakih, „končalo tu", mediana
 časa, blokade po polju, nadaljevanja posebej; in da paket brez id-ja obiska
-vrže napako; in da poročilo stranki po e-pošti gre na naslov iz oddaje s samo
+vrže napako; da poročilo stranki po e-pošti gre na naslov iz oddaje s samo
 njenim PDF-jem (nikoli s pripravo), ob manjkajočem naslovu, prilogi ali padli
-pošti pa odgovor pove razlog, vrstica in obvestilo prodaji pa ostaneta.
+pošti pa odgovor pove razlog, vrstica in obvestilo prodaji pa ostaneta; da
+kontakt gre v ActiveCampaign naročen, s privolitvijo kot oznako, in da kdor se
+je sam odjavil, ostane odjavljen; in da strankin PDF pristane na Drivu v svoji
+mapi, deljen s povezavo, povezava pa v stolpcu `porociloPdf` in v polju v AC —
+ob odpovedi Drive pa vrstica, pošta stranki in AC tečejo naprej.
 Ponarejena preglednica ob `setValues` preveri obliko obsega in `getLastRow`
 računa iz vsebine, ne iz oblik; `MailApp` je ponarejen in sporočila zbira, da
-test vidi naslovnika, prilogi in besedilo. Česar ne pokrije: Drive,
-ActiveCampaign in to, kako prava preglednica razlaga zapisane nize (uvodni
-opuščaj, pretvorba `"true"`) — ponaredek hrani natanko to, kar skripta zapiše.
+test vidi naslovnika, prilogi in besedilo; `DriveApp` (mape, datoteke, deljenje)
+in `UrlFetchApp` (zahteve v AC) prav tako. Česar ne pokrije: to, kako prava
+preglednica razlaga zapisane nize (uvodni opuščaj, pretvorba `"true"`) —
+ponaredek hrani natanko to, kar skripta zapiše.
 
 ## Lijak — kje obiskovalci odnehajo
 
@@ -472,10 +484,11 @@ Dokler nastavitev ni, se ne zgodi nič — zbiralnik dela natanko kot doslej.
 
 ### Kaj pride v ActiveCampaign
 
-Standardna polja: e-naslov, ime, priimek, telefon. Poleg njih štirinajst polj po
+Standardna polja: e-naslov, ime, priimek, telefon. Poleg njih petnajst polj po
 meri z oznakami `%LM10_…%` (podjetje, panoga, zaposleni, prihodek, letni izračun,
 enkratni kapital, zanesljivost, področja, tveganja, posvet, povezava do prodajne
-priprave, sekvenca, vir, vloga) — uporabna so v personalizaciji e-pošte.
+priprave, povezava do strankinega PDF-ja, sekvenca, vir, vloga) — uporabna so v
+personalizaciji e-pošte.
 
 Oznake so tisto, na kar se v AC obesi avtomatizacija:
 
@@ -492,6 +505,48 @@ Predpono `LM-10` spremenite v `NASTAVITVE.AC.OSNOVNA_OZNAKA`.
 
 V CRM **ne gredo** surov JSON vnosov, triažne ocene in podrobnosti izračuna. Te
 ostanejo v preglednici; CRM ni prostor zanje.
+
+### Povezava do strankinega PDF-ja
+
+Polje `%LM10_POROCILO%` je povezava do istega PDF-ja, ki ga je stranka dobila po
+e-pošti. Skripta ga ob oddaji shrani v mapo `LM-10 poročila strankam` na Drivu
+(`shraniPorocilo`; nastavitvi `SHRANI_POROCILO` in `IME_MAPE_POROCIL`), povezavo
+zapiše v stolpec `porociloPdf` in jo od tam pošlje v AC skupaj z ostalimi polji
+— tudi takrat, ko lead pobere ura. Svetovalec PDF odpre iz kartice kontakta;
+avtomatizacija v AC ga lahko vstavi v sporočilo (»vaše poročilo:
+%LM10_POROCILO%«).
+
+**Datoteka je deljena s povezavo, samo za branje** (`POROCILO_DOSTOPNO_S_POVEZAVO`,
+privzeto `true`). Brez tega bi povezava vsakomur razen računu skripte odprla
+»Zahtevajte dostop« — tudi svetovalcu v AC. Povezava nosi naključen id in ni
+uganljiva; ima jo, kdor jo je dobil od nas ali od stranke. Če Workspace deljenje
+navzven prepoveduje, se datoteka shrani brez njega, v dnevniku izvedb je
+opozorilo, povezava pa deluje vsem z dostopom do mape. Mapa priprav deljena
+**ni** in ne sme biti — v njej so dokumenti o stranki, ne za stranko.
+
+Napaka pri shranjevanju (Drive ne odgovarja, kvota) ne ustavi ničesar: stranka
+dobi PDF po e-pošti, vrstica in kontakt v AC nastaneta, v celici `porociloPdf`
+ostane `NAPAKA: …`, polje v AC izpade (`samoPovezava` — besedilo napake v CRM ne
+gre). Na `/exec` sta vrstici »Poročilo na Drivu« (čas zadnje shranjene kopije)
+in »Zadnja napaka poročila na Drivu«. Ponovnega shranjevanja ni: PDF nastane v
+brskalniku ob oddaji in skripta ga pozneje nima več — svetovalec ga ima v
+prilogi obvestila.
+
+**Vklop na obstoječi namestitvi** (skripta je že priklopljena na AC):
+
+1. Prilepite novo različico `Koda.gs` in znova vpišite `E_NASLOV_ZA_OBVESTILA`.
+2. Poženite **`pripraviAC`** — ustvari manjkajoče polje *LM-10 poročilo stranki
+   (PDF)* in si zapomni njegov id. Dokler ne teče, skripta to polje preskoči,
+   ostala gredo naprej; vrstni red zato ni kritičen.
+3. **Razmestite novo različico** (*Razmesti → Upravljaj razmestitve → svinčnik →
+   Nova različica*). Novega dovoljenja ni: Drive skripta uporablja že za
+   priprave.
+4. Enkrat poženite **`urediStolpce`**, da stolpec `porociloPdf` pristane ob
+   `porociloStranki` in ne na koncu lista.
+5. Preverite na `/exec`: `ActiveCampaign: … polj: 15` in po prvi oddaji
+   `Poročilo na Drivu: <čas>`.
+
+Leadi, oddani pred vklopom, povezave nimajo — PDF-ja skripta tedaj ni shranila.
 
 ### Privolitve
 
@@ -547,7 +602,9 @@ jo tedaj prenese stranki (rezervna pot, opisana v `src/lib/deliverLead.ts`).
 Skripta zato napake **ne pogoltne**: če vrstice ni mogoče zapisati, jo vrže
 naprej in aplikacija pade v rezervno pot. Če odpove samo shranjevanje priprave na
 Drive, se vrstica vseeno zapiše (lead je dragocenejši), v stolpcu
-`prodajnaPriprava` pa ostane besedilo napake.
+`prodajnaPriprava` pa ostane besedilo napake. Če odpove shranjevanje strankinega
+PDF-ja na Drive, napaka ne pride niti do aplikacije: v stolpcu `porociloPdf`
+ostane `NAPAKA: …`, stranka pa ima PDF iz pošte.
 
 Klic v ActiveCampaign je za zapisom vrstice in v svojem `try/catch`: padel CRM
 ne sme pomeniti, da aplikacija dostavo razume kot neuspelo. Napaka pristane v
@@ -575,7 +632,9 @@ vsaka zahteva in razlog vsake napake.
   leadov, ne matična evidenca.
 - **Osebni podatki.** Vrstica vsebuje ime, e-naslov, telefon in davčno številko.
   Preglednico delite le s tistimi, ki jo potrebujejo, in brisanje na zahtevo
-  posameznika pomeni brisanje vrstice **in** datoteke priprave na Drive.
+  posameznika pomeni brisanje vrstice **in** datotek na Drive: priprave v
+  `LM-10 prodajne priprave` in poročila v `LM-10 poročila strankam` (to je
+  deljeno s povezavo; z brisanjem povezava ugasne).
 - **Stolpci se dodajajo na konec.** Skripta piše po imenih iz glave, zato nov
   stolpec v `CSV_COLUMNS` sam pripne novo ime; stare vrstice ostanejo poravnane.
   Ročno prerazporejanje ali preimenovanje stolpcev to podre.
