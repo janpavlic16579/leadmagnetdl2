@@ -24,6 +24,48 @@
   cursor: not-allowed;
 }
 
+/*
+ * Gumb, ki DELA (aria-busy): oddaja obrazca in prenos PDF-ja. Ostane onemogočen,
+ * a ne siv — siva ploskev bere kot »ugasnjeno«, rumena s krogcem kot »dela«.
+ * Pravilo stoji ZA :disabled in :hover z enako specifičnostjo, zato ju prevlada:
+ * zaseden gumb ni siv in se ob lebdenju ne potemni.
+ */
+.primaryButton[aria-busy='true'] {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  opacity: 1;
+  cursor: progress;
+}
+
+/*
+ * Krogec ob napisu »Pripravljam …« (components/Results/BusyLabel.tsx).
+ * currentColor: v obeh temah barva besedila na rumeni podlagi.
+ *
+ * Animira se SAMO transform: tako teče na sestavljalni niti in se vrti tudi,
+ * ko glavna nit gradi PDF (jsPDF in base64 jo blokirata po več sto ms) — prav
+ * takrat je krogec edini znak, da aplikacija ni obstala.
+ *
+ * Ob prefers-reduced-motion ga globalno pravilo v tokens.css splošči v en obrat
+ * 0,01 ms: ostane statičen obroč, sporočilo nosi napis. Namerno brez izjeme.
+ */
+.spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -0.15em;
+  margin-right: var(--space-2);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .secondaryButton {
   min-height: 48px;
   padding: 0 var(--space-4);

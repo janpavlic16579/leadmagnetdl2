@@ -20,6 +20,8 @@ import { RiskCard } from './RiskCard';
 import { NextSteps } from './NextSteps';
 import { SALES_CONTACT } from '../../config/salesContact';
 import buttonStyles from '../../styles/buttons.module.css';
+import { nextPaint } from '../../lib/nextPaint';
+import { BusyLabel } from './BusyLabel';
 import styles from './ResultsView.module.css';
 
 /**
@@ -110,6 +112,9 @@ export function ResultsView({
     if (downloading) return;
     setDownloading(true);
     setDownloadFailed(false);
+    // Isti razlog kot v EmailGate: krogec mora biti na zaslonu, preden gradnja
+    // PDF-ja zasede glavno nit (lib/nextPaint).
+    await nextPaint();
     try {
       await onDownloadPdf();
     } catch {
@@ -388,8 +393,9 @@ export function ResultsView({
                 className={buttonStyles.primaryButton}
                 onClick={handleDownload}
                 disabled={downloading}
+                aria-busy={downloading}
               >
-                {downloading ? 'Pripravljam …' : SHARED_COPY.resultsPrimaryCta}
+                {downloading ? <BusyLabel /> : SHARED_COPY.resultsPrimaryCta}
               </button>
             ) : null}
           </div>

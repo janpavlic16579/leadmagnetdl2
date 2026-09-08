@@ -2,10 +2,12 @@ import { useId, useRef, useState } from 'react';
 import { track } from '../../lib/analytics';
 import { isFilled, isValidEmail, normalizeTaxNumber, phoneState, taxNumberState } from '../../lib/validation';
 import { useStepHeading } from '../../lib/useStepHeading';
+import { nextPaint } from '../../lib/nextPaint';
 import type { LeadConsents, LeadContact } from '../../types';
 import type { ResolvedSegmentCopy } from '../../config/copy';
 import buttonStyles from '../../styles/buttons.module.css';
 import styles from './EmailGate.module.css';
+import { BusyLabel } from './BusyLabel';
 
 /**
  * Pravilnik o zasebnosti, na katerega se sklicuje obvezna privolitev.
@@ -171,6 +173,9 @@ export function EmailGate({ copy, stepLabel, onSubmit, onBack }: EmailGateProps)
 
     setBusy(true);
     setFailed(false);
+    // Šele ko je zaseden gumb IZRISAN: sicer bi ga sinhrona gradnja PDF-ja
+    // prehitela in krogec bi se pokazal, ko je delo že opravljeno (lib/nextPaint).
+    await nextPaint();
     try {
       await onSubmit({
         contact: {
@@ -534,9 +539,10 @@ export function EmailGate({ copy, stepLabel, onSubmit, onBack }: EmailGateProps)
             type="submit"
             className={buttonStyles.primaryButton}
             disabled={busy}
+            aria-busy={busy}
             aria-describedby={showBlockedSummary || failed ? alertId : undefined}
           >
-            {busy ? 'Pripravljam …' : SUBMIT_LABEL}
+            {busy ? <BusyLabel /> : SUBMIT_LABEL}
           </button>
         </div>
       </form>
