@@ -485,6 +485,8 @@ Oznake so tisto, na kar se v AC obesi avtomatizacija:
 | `LM-10 panoga: …` | po dejavnosti iz vprašalnika |
 | `LM-10 sekvenca: …` | po izbrani follow-up sekvenci |
 | `LM-10 posvet` | obiskovalec je prosil za pregled številk |
+| `LM-10 privolitev: ponudbe` | v obrazcu je privolil v ponudbe PANTHEON |
+| `LM-10 privolitev: vsebine` | v obrazcu je privolil v vsebine in dogodke |
 
 Predpono `LM-10` spremenite v `NASTAVITVE.AC.OSNOVNA_OZNAKA`.
 
@@ -493,15 +495,28 @@ ostanejo v preglednici; CRM ni prostor zanje.
 
 ### Privolitve
 
-Na seznam pride vsak, ki odda obrazec — to je namen seznama. Naročen (status
-*active*) pa je le tisti, ki je v obrazcu privolil v ponudbe ali vsebine; ostali
-pridejo na seznam kot *unsubscribed*. Razlika ni kozmetična: kampanja, poslana na
-seznam, gre samo na naročene, zato nekdo, ki je hotel le svoj izračun, iz tega
-seznama ne more dobiti oglasnega sporočila. To je zahteva ZEKom-2 za neposredno
-trženje.
+Na seznam pride vsak, ki odda obrazec, in to kot *naročen* (status *active*) —
+seznam je pregled nad tem, kdo je vprašalnik izpolnil. Tržna privolitev iz
+obrazca gre zraven kot oznaki `LM-10 privolitev: ponudbe` in `LM-10 privolitev:
+vsebine`. Kampanj zato **ne pošiljajte na cel seznam**, ampak na segment po
+oznaki: nekdo, ki je hotel le svoj izračun, oznake nima in oglasnega sporočila
+ne sme dobiti (ZEKom-2, neposredno trženje). Skripta tega sama ne more
+uveljaviti — uveljavi se v AC, pri vsaki kampanji.
 
-`NASTAVITVE.AC.SAMO_S_PRIVOLITVIJO: false` varovalo izklopi in naroči vse. Preden
-ga izklopite, mora biti pravna podlaga zapisana drugje — skripta o njej ne ve nič.
+Kdor se je s seznama sam odjavil (klik na odjavo v kampanji), ostane odjavljen,
+tudi če vprašalnik izpolni znova brez privolitve: skripta pred naročilom preveri
+stanje na seznamu. Če ob ponovnem obisku privoli, je to nova privolitev in
+kontakt je naročen znova.
+
+`NASTAVITVE.AC.SAMO_S_PRIVOLITVIJO: true` uveljavi privolitev s statusom:
+naročen je le, kdor je privolil, ostali pridejo na seznam kot *unsubscribed*.
+Pozor: privzeti pogled seznama v AC odjavljenih ne kaže — leadi so tam, videti
+pa jih ni, dokler filtra po statusu ne nastavite na *Any*.
+
+**Po preklopu s `true` na `false`** enkrat poženite `narociObstojeceVAC`: leade,
+ki so v AC že pristali kot odjavljeni, naroči in jim pripne oznaki privolitve.
+Ne poganjajte ga, če se je kdo s seznama že odjavil sam — naročilo vsili mimo
+varovala.
 
 ### Stolpec `activeCampaign`
 
