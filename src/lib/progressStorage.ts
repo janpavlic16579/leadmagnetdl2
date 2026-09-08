@@ -45,16 +45,22 @@ export interface StoredProgress {
   /** Obrazec je oddan — edino, kar se iz obrazca shrani (glej glavo). */
   submitted: boolean;
   /**
-   * Sprejemnik je strankino poročilo poslal na e-naslov iz obrazca. Brez naslova
-   * (ta je kontakt in v shrambo ne sodi): po osvežitvi rezultati povedo "poslali
-   * smo ga na vaš e-naslov" namesto gumba za prenos. Dodano brez dviga sheme —
-   * star zapis brez polja pomeni false, torej gumb, in nič se ne razlaga napačno.
+   * Kam je šlo strankino poročilo: 'emailed' = sprejemnik ga je poslal,
+   * 'queued' = predal ga je CRM-ju in prispe v nekaj minutah, null = ni šlo (ali
+   * ni znano). Brez naslova — ta je kontakt in v shrambo ne sodi; po osvežitvi
+   * rezultati povedo "na vaš e-naslov".
+   *
+   * Razlika šteje: pri 'queued' mora gumb za prenos ostati tudi po osvežitvi,
+   * pri 'emailed' ne. Dodano brez dviga sheme — zapis prejšnje različice je nosil
+   * logično `reportSent` in ga `readProgress` prebere kot 'emailed'.
    */
-  reportSent: boolean;
+  reportDelivery: 'emailed' | 'queued' | null;
 }
 
 interface Envelope extends StoredProgress {
   version: number;
+  /** Zapis prejšnje različice orodja; bere ga `readProgress`, piše ga nihče več. */
+  reportSent?: boolean;
 }
 
 export function saveProgress(progress: StoredProgress): void {
@@ -107,7 +113,7 @@ export function readProgress(): StoredProgress | null {
       triageSelection: envelope.triageSelection ?? null,
       inputsModuleId: envelope.inputsModuleId ?? null,
       submitted: envelope.submitted ?? false,
-      reportSent: envelope.reportSent ?? false,
+      reportDelivery: envelope.reportDelivery ?? (envelope.reportSent ? 'emailed' : null),
     };
   } catch {
     return null;

@@ -31,9 +31,13 @@
  *     naročen, privolitev postane oznaka, kdor se je sam odjavil, brez sveže
  *     privolitve ostane odjavljen, enkratni poseg naroči že poslane kontakte.
  *  7. Strankin PDF na Drivu (shraniPorocilo): datoteka gre v svojo mapo, deljena
- *     s povezavo, priprava v svojo brez deljenja; povezava je v stolpcu
- *     porociloPdf in v polju LM10_POROCILO v AC. Ob odpovedi Drive ostane v
- *     celici NAPAKA, polje v AC izpade, vrstica in pošta stranki tečeta naprej.
+ *     s povezavo, priprava v svojo; povezavi sta v stolpcih porociloPdf in
+ *     prodajnaPriprava ter v poljih PDF_LINK in PDF_LINK_PRODAJA v AC. Ob
+ *     odpovedi Drive ostane v celici NAPAKA, polje v AC izpade, vrstica teče naprej.
+ *  8. Pošta prek ActiveCampaigna (POSTA_PREK_AC): skripta ne pošlje NIČESAR,
+ *     oba PDF-ja gresta na Drive deljena s povezavo, kontakt na oba seznama
+ *     (stranke + prodaja), odgovor aplikaciji je `queued`; brez PDF-ja, ob
+ *     samoodjavi, ob prekoračenem roku in ob zavrnjenem deljenju pove razlog.
  *
  * Kaj ponaredek NAMENOMA ne posnema: razlage vrednosti v pravi preglednici. Niz
  * "'+386 …" ostane z uvodnim opuščajem, "true" ostane niz — kaj bi preglednica
@@ -371,6 +375,8 @@ function formatDate(datum, casovniPas, vzorec) {
 function ustvariDrive() {
   const mape = new Map();
   const datoteke = [];
+  // Workspace zna deljenje navzven prepovedati; s tem to posnemamo.
+  const stanje = { zavrniDeljenje: false };
   let stevec = 0;
   const DriveApp = {
     Access: { ANYONE_WITH_LINK: 'ANYONE_WITH_LINK', PRIVATE: 'PRIVATE' },
@@ -388,6 +394,7 @@ function ustvariDrive() {
             tip: blob.getContentType(),
             bajti: blob.getBytes(),
             deljenje: null,
+            vKosu: false,
           };
           datoteka.url = `https://drive.google.com/file/d/${datoteka.id}/view`;
           datoteke.push(datoteka);
@@ -396,7 +403,12 @@ function ustvariDrive() {
             getName: () => datoteka.ime,
             getUrl: () => datoteka.url,
             setSharing(dostop, dovoljenje) {
+              if (stanje.zavrniDeljenje) throw new Error('Sharing restricted by admin');
               datoteka.deljenje = `${dostop}/${dovoljenje}`;
+              return rocaj;
+            },
+            setTrashed(vKosu) {
+              datoteka.vKosu = vKosu !== false;
               return rocaj;
             },
           };
@@ -417,7 +429,7 @@ function ustvariDrive() {
       return { hasNext: () => i < najdene.length, next: () => najdene[i++] };
     },
   };
-  return { DriveApp, mape, datoteke };
+  return { DriveApp, mape, datoteke, stanje };
 }
 
 /** Globali Apps Scripta, kolikor jih skripta na preizkušenih poteh potrebuje. */
@@ -1332,12 +1344,27 @@ const AC_NASLOV = 'https://primer.api-us1.com';
  * AC vrne o kontaktu na seznamu 245 (null = kontakta na seznamu še ni). Kontakt
  * ima vedno id 77, oznake id "oznaka:<ime>", da so v zahtevah berljive.
  */
-function ponarediAC(skripta, lastnosti, { stanjeNaSeznamu = null } = {}) {
+function ponarediAC(
+  skripta,
+  lastnosti,
+  { stanjeNaSeznamu = null, stanjeNaSeznamuProdaja = null, seznamProdaja = '' } = {},
+) {
   // S poševnico na koncu, kot jo ljudje prilepijo — skripta jo mora odrezati.
   lastnosti.set('AC_NASLOV', `${AC_NASLOV}/`);
   lastnosti.set('AC_KLJUC', 'kljuc');
   lastnosti.set('AC_SEZNAM', '245');
-  lastnosti.set('AC_IDJI_POLJ', JSON.stringify({ LM10_PODJETJE: '1', LM10_PANOGA: '2', LM10_POROCILO: '3' }));
+  if (seznamProdaja) lastnosti.set('AC_SEZNAM_PRODAJA', seznamProdaja);
+  lastnosti.set(
+    'AC_IDJI_POLJ',
+    JSON.stringify({
+      LM10_PODJETJE: '1',
+      LM10_PANOGA: '2',
+      PDF_LINK: '3',
+      PDF_LINK_PRODAJA: '4',
+      LM10_DAVCNA: '5',
+      LM10_ODDAJA: '6',
+    }),
+  );
 
   const zahteve = [];
   const odgovor = (koda, telo) => ({
@@ -1351,9 +1378,15 @@ function ponarediAC(skripta, lastnosti, { stanjeNaSeznamu = null } = {}) {
     zahteve.push({ url, pot, metoda: moznosti.method, zeton: moznosti.headers['Api-Token'], telo });
     if (pot === 'contact/sync') return odgovor(201, { contact: { id: '77' } });
     if (pot === 'contacts/77/contactLists') {
-      return odgovor(200, {
-        contactLists: stanjeNaSeznamu === null ? [] : [{ list: '245', status: stanjeNaSeznamu }],
-      });
+      const seznami = [];
+      if (stanjeNaSeznamu !== null) seznami.push({ list: '245', status: stanjeNaSeznamu });
+      if (stanjeNaSeznamuProdaja !== null && seznamProdaja) {
+        seznami.push({ list: seznamProdaja, status: stanjeNaSeznamuProdaja });
+      }
+      return odgovor(200, { contactLists: seznami });
+    }
+    if (pot.startsWith('lists/')) {
+      return odgovor(200, { list: { name: pot === 'lists/245' ? 'LEADI' : 'PRODAJA' } });
     }
     if (pot === 'contactLists') return odgovor(201, { contactList: telo.contactList });
     if (pot === 'contactTags') return odgovor(201, { contactTag: telo.contactTag });
@@ -1405,8 +1438,12 @@ test('AC z vroče poti: kontakt sinhroniziran, naročen na seznam, privolitev ko
     fieldValues: [
       { field: '1', value: 'Kovinar d.o.o.' },
       { field: '2', value: 'Proizvodnja — kovine' },
+      { field: '5', value: '01234567' },
+      { field: '6', value: sync.telo.contact.fieldValues[3].value },
     ],
   });
+  // Brez prilog povezav ni, čas oddaje pa gre vedno — to je sprožilec obvestila prodaji.
+  assert.match(sync.telo.contact.fieldValues[3].value, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
 
   assert.deepEqual(naSeznam(zahteve), [{ list: '245', contact: '77', status: 1 }], 'naročen, ne odjavljen');
   assert.equal(preverjanjaStanja(zahteve), 0, 's privolitvijo stanja na seznamu ni treba preverjati');
@@ -1419,7 +1456,10 @@ test('AC brez tržne privolitve: nov kontakt je vseeno naročen, privolitvenih o
   const zahteve = ponarediAC(skripta, lastnosti);
 
   const brez = { ...LEAD, consentOffers: 'false', consentContent: 'false', consentConsulting: 'false' };
-  assert.equal(skripta.posljiVAC(brez), '77');
+  // Objekt iz konteksta vm ima svoj prototip: primerjamo polji, ne objekta.
+  const izidBrez = skripta.posljiVAC(brez);
+  assert.equal(izidBrez.id, '77');
+  assert.equal(izidBrez.narocen, true, 'brez tržne privolitve je vseeno naročen');
   assert.equal(preverjanjaStanja(zahteve), 1, 'brez privolitve se pred naročilom preveri stanje na seznamu');
   assert.deepEqual(naSeznam(zahteve), [{ list: '245', contact: '77', status: 1 }]);
   assert.deepEqual(pripeteOznake(zahteve), OZNAKE_OSNOVNE);
@@ -1430,17 +1470,17 @@ test('AC: kdor se je sam odjavil, brez sveže privolitve ostane odjavljen — s 
   const { skripta, lastnosti, dnevnik } = naloziSkripto();
   const zahteve = ponarediAC(skripta, lastnosti, { stanjeNaSeznamu: '2' });
 
-  assert.equal(
-    skripta.posljiVAC({ ...LEAD, consentOffers: 'false', consentContent: 'false' }),
-    '77',
-    'id se vrne — vrstica ni napaka in ura je ne ponavlja',
-  );
+  const izidOdjavljen = skripta.posljiVAC({ ...LEAD, consentOffers: 'false', consentContent: 'false' });
+  assert.equal(izidOdjavljen.id, '77', 'id se vrne — vrstica ni napaka in ura je ne ponavlja');
+  assert.equal(izidOdjavljen.narocen, false, 'narocen: false pove, da mu AC ne bo pisal');
   assert.deepEqual(naSeznam(zahteve), [], 'naročila ni');
   assert.deepEqual(pripeteOznake(zahteve), [...OZNAKE_OSNOVNE, 'LM-10 posvet'], 'oznake gredo vseeno');
   assert.ok(dnevnik.log.some((v) => v.includes('odjavil sam')));
 
   zahteve.length = 0;
-  assert.equal(skripta.posljiVAC({ ...LEAD, consentOffers: 'false', consentContent: 'true' }), '77');
+  const izidZnova = skripta.posljiVAC({ ...LEAD, consentOffers: 'false', consentContent: 'true' });
+  assert.equal(izidZnova.id, '77');
+  assert.equal(izidZnova.narocen, true, 'sveža privolitev naroči znova');
   assert.equal(preverjanjaStanja(zahteve), 0, 'privolitev v obrazcu je nova privolitev');
   assert.deepEqual(naSeznam(zahteve), [{ list: '245', contact: '77', status: 1 }]);
   assert.ok(pripeteOznake(zahteve).includes('LM-10 privolitev: vsebine'));
@@ -1498,9 +1538,12 @@ const poljeVAC = (zahteve, id) =>
     .filter((z) => z.pot === 'contact/sync')
     .map((z) => z.telo.contact.fieldValues.find((polje) => polje.field === id) ?? null);
 
-test('doPost s prilogama shrani strankin PDF na Drive: povezava v stolpcu porociloPdf in v polju LM10_POROCILO', () => {
+test('doPost s prilogama shrani strankin PDF na Drive: povezava v stolpcu porociloPdf in v polju PDF_LINK', () => {
   const { skripta, preglednica, lastnosti, dnevnik, drive } = naloziSkripto();
   const zahteve = ponarediAC(skripta, lastnosti);
+  // Pot MailApp: pošilja skripta, priprava se shrani kot HTML in ni deljena.
+  // Način AC ima svoje teste spodaj.
+  skripta.NASTAVITVE.POSTA_PREK_AC = false;
 
   const odgovor = post(skripta, oddaja(LEAD, { attachments: prilogi(), salesReportHtml: '<h1>Priprava</h1>' }));
   assert.deepEqual(odgovor, { ok: true, customerReport: { sent: true } });
@@ -1536,6 +1579,7 @@ test('doPost s prilogama shrani strankin PDF na Drive: povezava v stolpcu poroci
 test('Drive odpove: vrstica, pošta stranki in AC gredo naprej — v celici NAPAKA, polje v AC izpade', () => {
   const { skripta, preglednica, lastnosti, dnevnik, posta } = naloziSkripto();
   const zahteve = ponarediAC(skripta, lastnosti);
+  skripta.NASTAVITVE.POSTA_PREK_AC = false;
   const odpoved = () => {
     throw new Error('Drive ne odgovarja');
   };
@@ -1557,10 +1601,201 @@ test('Drive odpove: vrstica, pošta stranki in AC gredo naprej — v celici NAPA
 test('SHRANI_POROCILO: false — nič na Drive, celica prazna, stranka poročilo vseeno dobi', () => {
   const { skripta, preglednica, drive, posta } = naloziSkripto();
   skripta.NASTAVITVE.SHRANI_POROCILO = false;
+  // Brez AC je način tako ali tako MailApp; nastavitev je tu zaradi berljivosti.
+  skripta.NASTAVITVE.POSTA_PREK_AC = false;
 
   assert.deepEqual(post(skripta, oddaja(LEAD, { attachments: prilogi() })), { ok: true, customerReport: { sent: true } });
   assert.equal(drive.datoteke.length, 0);
   assert.equal(poImenih(preglednica.getSheetByName('Leadi'), 2).porociloPdf, '');
   assert.equal(posta.length, 1);
   assert.match(skripta.doGet().getContent(), /Poročilo na Drivu: IZKLOPLJENO/);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Pošta prek ActiveCampaigna (POSTA_PREK_AC)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Naložena skripta v načinu AC z obema seznamoma; vrne vse iz naloziSkripto plus zahteve. */
+function vAcNacinu(moznosti = {}) {
+  const g = naloziSkripto();
+  const zahteve = ponarediAC(g.skripta, g.lastnosti, { seznamProdaja: '247', ...moznosti });
+  // Naslov prodaje je nastavljen, da bi ga MailApp lahko uporabil — dokaz, da v
+  // načinu AC ne pošlje ničesar, je s tem močnejši.
+  g.skripta.NASTAVITVE.E_NASLOV_ZA_OBVESTILA = 'prodaja@primer.si';
+  return { ...g, zahteve };
+}
+
+const opisiDatoteke = (drive) => drive.datoteke.map((d) => [d.mapa, d.ime, d.tip, d.deljenje]);
+
+test('pošta prek AC: oba PDF-ja na Drive deljena s povezavo, MailApp molči, kontakt na oba seznama', () => {
+  const { skripta, preglednica, lastnosti, dnevnik, drive, posta, zahteve } = vAcNacinu();
+
+  const odgovor = post(skripta, oddaja(LEAD, { attachments: prilogi(), salesReportHtml: '<h1>Priprava</h1>' }));
+  assert.deepEqual(odgovor, { ok: true, customerReport: { sent: false, reason: 'queued' } });
+  assert.equal(posta.length, 0, 'v načinu AC skripta ne pošlje ne stranki ne prodaji');
+
+  // Priprava je PDF (ne HTML) in obe datoteki sta deljeni: povezavi iz AC morata
+  // delovati brez prijave v Google.
+  assert.deepEqual(opisiDatoteke(drive), [
+    ['LM-10 prodajne priprave', 'priprava-2026-09-05-Kovinar d.o.o.pdf', 'application/pdf', 'ANYONE_WITH_LINK/VIEW'],
+    ['LM-10 poročila strankam', 'porocilo-2026-09-05-Kovinar d.o.o.pdf', 'application/pdf', 'ANYONE_WITH_LINK/VIEW'],
+  ]);
+  const [priprava, porocilo] = drive.datoteke;
+  assert.equal(Buffer.from(priprava.bajti).toString(), '%PDF-1.4 priprava na pogovor');
+  assert.equal(Buffer.from(porocilo.bajti).toString(), '%PDF-1.4 poročilo za stranko', 'dokumenta se ne zamenjata');
+
+  const v = poImenih(preglednica.getSheetByName('Leadi'), 2);
+  assert.equal(v.prodajnaPriprava, priprava.url);
+  assert.equal(v.porociloPdf, porocilo.url);
+  assert.match(String(v.porociloStranki), /^prek AC \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+  assert.equal(v.activeCampaign, '77');
+
+  // Polji, na kateri sta obešeni avtomatizaciji, in podatka za obvestilo prodaji.
+  assert.deepEqual(poljeVAC(zahteve, '3'), [{ field: '3', value: porocilo.url }], 'PDF_LINK = strankin PDF');
+  assert.deepEqual(poljeVAC(zahteve, '4'), [{ field: '4', value: priprava.url }], 'PDF_LINK_PRODAJA = priprava');
+  assert.deepEqual(poljeVAC(zahteve, '5'), [{ field: '5', value: '01234567' }]);
+  assert.match(poljeVAC(zahteve, '6')[0].value, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+
+  assert.deepEqual(naSeznam(zahteve), [
+    { list: '245', contact: '77', status: 1 },
+    { list: '247', contact: '77', status: 1 },
+  ]);
+  assert.equal(preverjanjaStanja(zahteve), 0, 's privolitvijo stanja ni treba preverjati');
+
+  assert.match(lastnosti.get('ZADNJA_POSTA_STRANKI'), /→ prek AC, a\*{3}@kovinar\.si/);
+  assert.match(lastnosti.get('ZADNJA_POSTA'), /— prek AC \(priprava: povezava, poročilo: povezava\)$/);
+  const stanje = skripta.doGet().getContent();
+  assert.match(stanje, /Pošta: prek ActiveCampaigna/);
+  assert.match(stanje, /ActiveCampaign: seznam 245 \+ prodaja 247/);
+  assert.match(stanje, /Zadnja napaka deljenja na Drivu: brez/);
+  assert.deepEqual(dnevnik.warn, []);
+});
+
+test('pošta prek AC brez strankinega PDF-ja: no_attachment, priprava pade na HTML, čas oddaje gre vseeno', () => {
+  const { skripta, preglednica, drive, posta, zahteve } = vAcNacinu();
+
+  const odgovor = post(skripta, oddaja(LEAD, { salesReportHtml: '<h1>Priprava</h1>' }));
+  assert.deepEqual(odgovor, { ok: true, customerReport: { sent: false, reason: 'no_attachment' } });
+  assert.equal(posta.length, 0);
+
+  assert.deepEqual(opisiDatoteke(drive), [
+    ['LM-10 prodajne priprave', 'priprava-2026-09-05-Kovinar d.o.o.html', 'text/html', 'ANYONE_WITH_LINK/VIEW'],
+  ]);
+  const v = poImenih(preglednica.getSheetByName('Leadi'), 2);
+  assert.equal(v.prodajnaPriprava, drive.datoteke[0].url);
+  assert.equal(v.porociloPdf, '');
+  assert.equal(v.porociloStranki, 'ni poslano: aplikacija ni poslala strankinega PDF-ja');
+
+  assert.deepEqual(poljeVAC(zahteve, '3'), [null], 'brez povezave se PDF_LINK ne pošlje — stranki nič ne odide');
+  assert.deepEqual(poljeVAC(zahteve, '4'), [{ field: '4', value: drive.datoteke[0].url }]);
+  assert.ok(poljeVAC(zahteve, '6')[0], 'čas oddaje gre vedno — prodaja obvestilo dobi');
+
+  // Druga oddaja brez priprave: povezave ni, sprožilec prodaje pa se vseeno spremeni.
+  post(skripta, oddaja({ ...LEAD, email: 'bor@primer.si', timestampISO: '2026-09-06T09:00:00.000Z' }));
+  assert.equal(drive.datoteke.length, 1, 'brez PDF-ja in brez HTML se ne shrani nič');
+  assert.equal(poImenih(preglednica.getSheetByName('Leadi'), 3).prodajnaPriprava, '');
+  assert.deepEqual(poljeVAC(zahteve, '4')[1], null);
+  assert.ok(poljeVAC(zahteve, '6')[1], 'čas oddaje je edini zanesljivi sprožilec');
+});
+
+test('pošta prek AC: samoodjavljenemu AC ne pošilja — razlog unsubscribed, s privolitvijo queued', () => {
+  const { skripta, preglednica, drive, zahteve } = vAcNacinu({
+    stanjeNaSeznamu: '2',
+    stanjeNaSeznamuProdaja: '2',
+  });
+
+  const brez = { ...LEAD, consentOffers: 'false', consentContent: 'false' };
+  const odgovor = post(skripta, oddaja(brez, { attachments: prilogi() }));
+  assert.deepEqual(odgovor, { ok: true, customerReport: { sent: false, reason: 'unsubscribed' } });
+  assert.deepEqual(naSeznam(zahteve), [], 'na noben seznam ga ne naročimo znova');
+  assert.equal(drive.datoteke.length, 2, 'datoteki nastaneta — svetovalec ju odpre iz kartice');
+
+  const v = poImenih(preglednica.getSheetByName('Leadi'), 2);
+  assert.equal(v.porociloStranki, 'ni poslano: kontakt se je s seznama v AC odjavil sam — AC mu ne pošilja');
+  assert.equal(v.activeCampaign, '77');
+  assert.deepEqual(poljeVAC(zahteve, '3'), [{ field: '3', value: drive.datoteke[1].url }], 'polje se vseeno nastavi');
+
+  // S svežo privolitvijo je naročen znova in poročilo gre v vrsto.
+  zahteve.length = 0;
+  const drugi = post(skripta, oddaja({ ...LEAD, email: 'bor@primer.si' }, { attachments: prilogi() }));
+  assert.deepEqual(drugi, { ok: true, customerReport: { sent: false, reason: 'queued' } });
+  assert.deepEqual(naSeznam(zahteve), [
+    { list: '245', contact: '77', status: 1 },
+    { list: '247', contact: '77', status: 1 },
+  ]);
+});
+
+test('pošta prek AC ob prekoračenem roku: queued, celica prazna, ura pošlje z obema povezavama', () => {
+  const { skripta, preglednica, dnevnik, zahteve } = vAcNacinu();
+  skripta.AC_ROK_PREK_AC_MS = -1;
+
+  const odgovor = post(skripta, oddaja(LEAD, { attachments: prilogi(), salesReportHtml: '<h1>P</h1>' }));
+  assert.deepEqual(odgovor, { ok: true, customerReport: { sent: false, reason: 'queued' } }, 'ura pošlje — obljuba drži');
+  assert.equal(zahteve.length, 0, 'na vroči poti v AC ne gremo');
+  assert.equal(poImenih(preglednica.getSheetByName('Leadi'), 2).activeCampaign, '');
+  assert.ok(dnevnik.warn.some((v) => v.includes('AC preskočen')));
+
+  assert.equal(skripta.posljiZaostaleVAC(), 'Poslano: 1, padlo: 0.');
+  assert.ok(poljeVAC(zahteve, '3')[0], 'ura nastavi PDF_LINK — avtomatizacija stranki se sproži tedaj');
+  assert.ok(poljeVAC(zahteve, '4')[0], 'in PDF_LINK_PRODAJA za obvestilo prodaji');
+  assert.equal(poImenih(preglednica.getSheetByName('Leadi'), 2).activeCampaign, '77');
+});
+
+test('pošta prek AC ob zavrnjenem deljenju: povezavi ostaneta, napaka je na /exec', () => {
+  const { skripta, drive, dnevnik } = vAcNacinu();
+  drive.stanje.zavrniDeljenje = true;
+
+  const odgovor = post(skripta, oddaja(LEAD, { attachments: prilogi() }));
+  assert.deepEqual(odgovor, { ok: true, customerReport: { sent: false, reason: 'queued' } });
+  assert.deepEqual(
+    drive.datoteke.map((d) => d.deljenje),
+    [null, null],
+    'datoteki sta shranjeni, deljenje pa ne',
+  );
+  assert.equal(dnevnik.warn.filter((v) => v.includes('Deljenja datoteke')).length, 2);
+  assert.match(skripta.doGet().getContent(), /Zadnja napaka deljenja na Drivu: .*Sharing restricted/);
+});
+
+test('POSTA_PREK_AC: false z nastavljenim AC — pošilja MailApp kot doslej', () => {
+  const { skripta, preglednica, drive, posta, zahteve } = vAcNacinu();
+  skripta.NASTAVITVE.POSTA_PREK_AC = false;
+
+  const odgovor = post(skripta, oddaja(LEAD, { attachments: prilogi(), salesReportHtml: '<h1>P</h1>' }));
+  assert.deepEqual(odgovor, { ok: true, customerReport: { sent: true } });
+  assert.equal(posta.length, 2, 'stranki in prodaji');
+  assert.deepEqual(opisiDatoteke(drive), [
+    ['LM-10 prodajne priprave', 'priprava-2026-09-05-Kovinar d.o.o.html', 'text/html', null],
+    ['LM-10 poročila strankam', 'porocilo-2026-09-05-Kovinar d.o.o.pdf', 'application/pdf', 'ANYONE_WITH_LINK/VIEW'],
+  ]);
+  assert.equal(poImenih(preglednica.getSheetByName('Leadi'), 2).activeCampaign, '77');
+  assert.ok(poljeVAC(zahteve, '3')[0], 'povezava do poročila gre v CRM tudi tu');
+  assert.match(skripta.doGet().getContent(), /Pošta: prek MailApp/);
+});
+
+test('POSLJI_POROCILO_STRANKI: false v načinu AC — PDF_LINK se ne pošlje, sprožilca stranki ni', () => {
+  const { skripta, preglednica, posta, zahteve } = vAcNacinu();
+  skripta.NASTAVITVE.POSLJI_POROCILO_STRANKI = false;
+
+  const odgovor = post(skripta, oddaja(LEAD, { attachments: prilogi(), salesReportHtml: '<h1>P</h1>' }));
+  assert.deepEqual(odgovor, { ok: true, customerReport: { sent: false, reason: 'disabled' } });
+  assert.equal(posta.length, 0);
+  assert.deepEqual(poljeVAC(zahteve, '3'), [null], 'polje bi sprožilo pošto kljub izklopu');
+  assert.ok(poljeVAC(zahteve, '4')[0], 'prodaja obvestilo vseeno dobi');
+  assert.equal(poImenih(preglednica.getSheetByName('Leadi'), 2).porociloStranki, 'ni poslano: pošiljanje je izklopljeno (POSLJI_POROCILO_STRANKI)');
+});
+
+test('narociObstojeceVAC z obema seznamoma: obstoječi kontakti pristanejo tudi na seznamu prodaje', () => {
+  const { skripta, preglednica, zahteve } = vAcNacinu();
+
+  post(skripta, oddaja(LEAD, { attachments: prilogi() }));
+  const leadi = preglednica.getSheetByName('Leadi');
+  assert.equal(poImenih(leadi, 2).activeCampaign, '77');
+  zahteve.length = 0;
+
+  assert.equal(skripta.narociObstojeceVAC(), 'Naročenih: 1, padlo: 0.');
+  assert.deepEqual(naSeznam(zahteve), [
+    { list: '245', contact: '77', status: 1 },
+    { list: '247', contact: '77', status: 1 },
+  ]);
+  assert.equal(preverjanjaStanja(zahteve), 0, 'naročilo je vsiljeno — stanja ne preverja');
 });

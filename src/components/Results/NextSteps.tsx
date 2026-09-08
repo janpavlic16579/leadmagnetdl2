@@ -6,9 +6,9 @@ interface NextStepsProps {
   /** Obiskovalec je na obrazcu obkljukal poziv za svetovanje. */
   consultingRequested: boolean;
   /**
-   * Strankino poročilo je odšlo po e-pošti (obvestilo je v nogi rezultatov).
-   * Tu samo pot, kadar ga v nabiralniku ni: svetovalec ga ima v prilogi
-   * obvestila in ga zna posredovati.
+   * Strankino poročilo je odšlo po e-pošti ali je pri CRM-ju na poti (obvestilo
+   * je v nogi rezultatov). Tu samo pot, kadar ga v nabiralniku ni: svetovalec ga
+   * ima in ga zna posredovati.
    */
   reportEmailed?: boolean;
   /**
