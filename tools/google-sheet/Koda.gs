@@ -143,8 +143,21 @@ var NASTAVITVE = {
      */
     POSILJAJ_TAKOJ: true,
 
-    /** Koliko zaostalih vrstic sme pobrati en zagon ure (izvedba ima 6 minut). */
-    NAJVEC_NA_ZAGON: 30,
+    /**
+     * Koliko zaostalih vrstic sme pobrati en zagon ure.
+     *
+     * Nizko namenoma. Ura drži ISTO ključavnico kot oddaja leada, in to ves čas
+     * svoje zanke — pri vsaki vrstici gredo trije klici v ActiveCampaign, torej
+     * bi trideset vrstic ključavnico držalo tudi pol minute. Oddaja, ki bi
+     * medtem prišla, bi čakala; aplikacija ima na voljo deset sekund, ob
+     * prekoračitvi pa razume dostavo kot neuspelo in prodajno pripravo — dokument
+     * O stranki — prenese stranki.
+     *
+     * Pet vrstic drži ključavnico nekaj sekund. Zaostanek se zato pobere v več
+     * zaporednih zagonih, kar pri minutnem intervalu (`namestiUroZaAC`) ni ovira:
+     * pet leadov na minuto je tristo na uro.
+     */
+    NAJVEC_NA_ZAGON: 5,
   },
 
   /** Prazno = skripta teče v preglednici (Razširitve → Apps Script). */
@@ -2688,7 +2701,7 @@ function acVrednost(vrednosti, ime) {
  * Klic v AC z vroče poti oddaje: rok, lasten try/catch in zapis izida v celico.
  *
  * Nikoli ne vrže. Vse, kar gre tu narobe, se konča z "NAPAKA: …" v stolpcu
- * `activeCampaign` — od koder to čez nekaj minut pobere ura.
+ * `activeCampaign` — od koder to v minuti ali dveh pobere ura.
  */
 function acVrstico(zapisana, vrednosti, zacetek) {
   var lastnosti = PropertiesService.getScriptProperties();
@@ -2795,15 +2808,24 @@ function posljiZaostaleVAC() {
 }
 
 /**
- * Ura, ki vsakih deset minut pobere zaostanek. Poženite enkrat, ročno.
+ * Ura, ki vsako minuto pobere zaostanek. Poženite enkrat, ročno.
+ *
+ * Minuta in ne deset: okno med padlo oddajo in popravkom je s tem najkrajše, kar
+ * Apps Script dovoli (dovoljeni intervali so 1, 5, 10, 15 in 30 minut). Cena sta
+ * dve reči, ki ju je vredno poznati — dnevna kvota za sprožilce (90 minut pri
+ * navadnem računu, 6 ur pri Workspacu; 1440 zagonov na dan je pri sekundi do treh
+ * na zagon med 24 in 72 minutami) in gostejše potegovanje za ključavnico z oddajo.
+ * Drugo je pokrito z `NAJVEC_NA_ZAGON: 5`; prvo je treba spremljati, če
+ * preglednica zelo zraste — ob izčrpani kvoti utihnejo VSI sprožilci projekta,
+ * tudi dnevni za lijak, in to tiho.
  *
  * Prej pobriše svoje starejše ure: dvakrat pognana funkcija bi sicer pustila dva
  * sprožilca in vsak lead bi šel v AC dvakrat.
  */
 function namestiUroZaAC() {
   odstraniUroZaAC();
-  ScriptApp.newTrigger('posljiZaostaleVAC').timeBased().everyMinutes(10).create();
-  console.log('Ura nameščena: posljiZaostaleVAC vsakih 10 minut.');
+  ScriptApp.newTrigger('posljiZaostaleVAC').timeBased().everyMinutes(1).create();
+  console.log('Ura nameščena: posljiZaostaleVAC vsako minuto.');
 }
 
 function odstraniUroZaAC() {
