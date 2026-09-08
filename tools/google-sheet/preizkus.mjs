@@ -26,6 +26,10 @@
  *     stranki natanko eno sporočilo s samo njenim PDF-jem, priprava nikoli —
  *     tudi z napačnim imenom; brez naslova, brez priloge, ob izklopu in ob padli
  *     pošti odgovor pove razlog, vrstica in obvestilo prodaji pa ostaneta.
+ *  6. ActiveCampaign (posljiVAC, acNaSeznam, narociObstojeceVAC, ura) s
+ *     ponarejenim UrlFetchApp, ki zahteve zapisuje: kontakt gre na seznam kot
+ *     naročen, privolitev postane oznaka, kdor se je sam odjavil, brez sveže
+ *     privolitve ostane odjavljen, enkratni poseg naroči že poslane kontakte.
  *
  * Kaj ponaredek NAMENOMA ne posnema: razlage vrednosti v pravi preglednici. Niz
  * "'+386 …" ostane z uvodnim opuščajem, "true" ostane niz — kaj bi preglednica
@@ -35,9 +39,11 @@
  * preizkus meri njeno logiko, ne pasti. Stolpci čez rob lista pa vržejo napako
  * tako kot pri Googlu — brez tega bi `zagotoviStolpce` lahko tiho izginil.
  *
- * Nepokrito ostane: Drive (shraniPripravo) in ActiveCampaign. Oboje je v doPost
- * za vrstico in v svojem try/catch; tu sta prazna objekta. MailApp je ponarejen:
- * sporočila se zbirajo v `posta`, da test vidi naslovnika, prilogi in besedilo.
+ * Nepokrito ostane: Drive (shraniPripravo). Je v doPost za vrstico in v svojem
+ * try/catch; tu je prazen objekt. UrlFetchApp je prazen, dokler ga preizkus AC
+ * ne nadomesti (`ponarediAC`) — brez lastnosti AC_* skripta AC preskoči. MailApp
+ * je ponarejen: sporočila se zbirajo v `posta`, da test vidi naslovnika, prilogi
+ * in besedilo.
  */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -1250,4 +1256,171 @@ test('paket brez id-ja obiska vrže napako in ne pusti sledi', () => {
 
   // Brez dogodkov tudi lijaka ni — z napako, ki pove, kaj manjka.
   assert.throws(() => skripta.sestaviLijak(), /"Dogodki" je prazen/);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ActiveCampaign
+// ═══════════════════════════════════════════════════════════════════════════
+
+const AC_NASLOV = 'https://primer.api-us1.com';
+
+/**
+ * ActiveCampaign kot ponarejen UrlFetchApp: vsako zahtevo zapiše v vrnjeno polje
+ * in odgovori najmanj, kar skripta potrebuje. `stanjeNaSeznamu` je status, ki ga
+ * AC vrne o kontaktu na seznamu 245 (null = kontakta na seznamu še ni). Kontakt
+ * ima vedno id 77, oznake id "oznaka:<ime>", da so v zahtevah berljive.
+ */
+function ponarediAC(skripta, lastnosti, { stanjeNaSeznamu = null } = {}) {
+  // S poševnico na koncu, kot jo ljudje prilepijo — skripta jo mora odrezati.
+  lastnosti.set('AC_NASLOV', `${AC_NASLOV}/`);
+  lastnosti.set('AC_KLJUC', 'kljuc');
+  lastnosti.set('AC_SEZNAM', '245');
+  lastnosti.set('AC_IDJI_POLJ', JSON.stringify({ LM10_PODJETJE: '1', LM10_PANOGA: '2' }));
+
+  const zahteve = [];
+  const odgovor = (koda, telo) => ({
+    getResponseCode: () => koda,
+    getContentText: () => JSON.stringify(telo),
+  });
+  const odgovori = (url, moznosti) => {
+    const predpona = `${AC_NASLOV}/api/3/`;
+    const pot = url.startsWith(predpona) ? url.slice(predpona.length) : url;
+    const telo = moznosti.payload ? JSON.parse(moznosti.payload) : null;
+    zahteve.push({ url, pot, metoda: moznosti.method, zeton: moznosti.headers['Api-Token'], telo });
+    if (pot === 'contact/sync') return odgovor(201, { contact: { id: '77' } });
+    if (pot === 'contacts/77/contactLists') {
+      return odgovor(200, {
+        contactLists: stanjeNaSeznamu === null ? [] : [{ list: '245', status: stanjeNaSeznamu }],
+      });
+    }
+    if (pot === 'contactLists') return odgovor(201, { contactList: telo.contactList });
+    if (pot === 'contactTags') return odgovor(201, { contactTag: telo.contactTag });
+    if (pot.startsWith('tags?')) {
+      const ime = decodeURIComponent(pot.split('search=')[1]);
+      return odgovor(200, { tags: [{ id: `oznaka:${ime}`, tag: ime }] });
+    }
+    throw new Error(`Ponaredek AC ne pozna poti ${pot}`);
+  };
+  skripta.UrlFetchApp = {
+    fetch: odgovori,
+    fetchAll: (seznam) => Array.from(seznam, (m) => odgovori(m.url, m)),
+  };
+  return zahteve;
+}
+
+/** Imena oznak, ki jih je skripta pripela — iz zahtev contactTags, po vrsti. */
+const pripeteOznake = (zahteve) =>
+  zahteve.filter((z) => z.pot === 'contactTags').map((z) => z.telo.contactTag.tag.replace(/^oznaka:/, ''));
+/** Naročila na seznam (telo contactList), po vrsti. */
+const naSeznam = (zahteve) => zahteve.filter((z) => z.pot === 'contactLists').map((z) => z.telo.contactList);
+/** Kolikokrat je skripta pred naročilom preverila stanje kontakta na seznamu. */
+const preverjanjaStanja = (zahteve) => zahteve.filter((z) => z.pot === 'contacts/77/contactLists').length;
+
+const OZNAKE_OSNOVNE = ['LM-10', 'LM-10 panoga: Proizvodnja — kovine', 'LM-10 sekvenca: proizvodnja-visoko'];
+
+test('AC z vroče poti: kontakt sinhroniziran, naročen na seznam, privolitev kot oznaka, id v celici', () => {
+  const { skripta, preglednica, lastnosti, dnevnik } = naloziSkripto();
+  const zahteve = ponarediAC(skripta, lastnosti);
+
+  post(skripta, oddaja(LEAD));
+
+  const leadi = preglednica.getSheetByName('Leadi');
+  assert.equal(poImenih(leadi, 2).activeCampaign, '77', 'id kontakta v celici — ura je ne bo ponavljala');
+  assert.match(lastnosti.get('AC_ZADNJI'), / — kontakt 77$/);
+  assert.equal(lastnosti.get('AC_ZADNJA_NAPAKA'), undefined);
+  assert.ok(
+    zahteve.every((z) => z.url.startsWith(`${AC_NASLOV}/api/3/`) && z.zeton === 'kljuc'),
+    'naslov brez podvojene poševnice, ključ v glavi vsake zahteve',
+  );
+
+  const sync = zahteve.find((z) => z.pot === 'contact/sync');
+  assert.equal(sync.metoda, 'post');
+  assert.deepEqual(sync.telo.contact, {
+    email: 'ana@kovinar.si',
+    firstName: 'Ana',
+    lastName: 'Novak',
+    phone: '+386 41 123 456',
+    fieldValues: [
+      { field: '1', value: 'Kovinar d.o.o.' },
+      { field: '2', value: 'Proizvodnja — kovine' },
+    ],
+  });
+
+  assert.deepEqual(naSeznam(zahteve), [{ list: '245', contact: '77', status: 1 }], 'naročen, ne odjavljen');
+  assert.equal(preverjanjaStanja(zahteve), 0, 's privolitvijo stanja na seznamu ni treba preverjati');
+  assert.deepEqual(pripeteOznake(zahteve), [...OZNAKE_OSNOVNE, 'LM-10 posvet', 'LM-10 privolitev: ponudbe']);
+  assert.deepEqual(dnevnik.warn, []);
+});
+
+test('AC brez tržne privolitve: nov kontakt je vseeno naročen, privolitvenih oznak ni', () => {
+  const { skripta, lastnosti, dnevnik } = naloziSkripto();
+  const zahteve = ponarediAC(skripta, lastnosti);
+
+  const brez = { ...LEAD, consentOffers: 'false', consentContent: 'false', consentConsulting: 'false' };
+  assert.equal(skripta.posljiVAC(brez), '77');
+  assert.equal(preverjanjaStanja(zahteve), 1, 'brez privolitve se pred naročilom preveri stanje na seznamu');
+  assert.deepEqual(naSeznam(zahteve), [{ list: '245', contact: '77', status: 1 }]);
+  assert.deepEqual(pripeteOznake(zahteve), OZNAKE_OSNOVNE);
+  assert.deepEqual(dnevnik.warn, []);
+});
+
+test('AC: kdor se je sam odjavil, brez sveže privolitve ostane odjavljen — s privolitvijo je naročen znova', () => {
+  const { skripta, lastnosti, dnevnik } = naloziSkripto();
+  const zahteve = ponarediAC(skripta, lastnosti, { stanjeNaSeznamu: '2' });
+
+  assert.equal(
+    skripta.posljiVAC({ ...LEAD, consentOffers: 'false', consentContent: 'false' }),
+    '77',
+    'id se vrne — vrstica ni napaka in ura je ne ponavlja',
+  );
+  assert.deepEqual(naSeznam(zahteve), [], 'naročila ni');
+  assert.deepEqual(pripeteOznake(zahteve), [...OZNAKE_OSNOVNE, 'LM-10 posvet'], 'oznake gredo vseeno');
+  assert.ok(dnevnik.log.some((v) => v.includes('odjavil sam')));
+
+  zahteve.length = 0;
+  assert.equal(skripta.posljiVAC({ ...LEAD, consentOffers: 'false', consentContent: 'true' }), '77');
+  assert.equal(preverjanjaStanja(zahteve), 0, 'privolitev v obrazcu je nova privolitev');
+  assert.deepEqual(naSeznam(zahteve), [{ list: '245', contact: '77', status: 1 }]);
+  assert.ok(pripeteOznake(zahteve).includes('LM-10 privolitev: vsebine'));
+  assert.deepEqual(dnevnik.warn, []);
+});
+
+test('AC s SAMO_S_PRIVOLITVIJO: true — brez privolitve status 2, stanja ne preverja', () => {
+  const { skripta, lastnosti } = naloziSkripto();
+  const zahteve = ponarediAC(skripta, lastnosti);
+  skripta.NASTAVITVE.AC.SAMO_S_PRIVOLITVIJO = true;
+
+  skripta.posljiVAC({ ...LEAD, consentOffers: 'false', consentContent: 'false' });
+  assert.deepEqual(naSeznam(zahteve), [{ list: '245', contact: '77', status: 2 }]);
+  assert.equal(preverjanjaStanja(zahteve), 0);
+});
+
+test('narociObstojeceVAC naroči kontakte z id-jem v celici; prazne in NAPAKA pusti uri', () => {
+  const { skripta, preglednica, lastnosti, dnevnik } = naloziSkripto();
+  const zahteve = ponarediAC(skripta, lastnosti, { stanjeNaSeznamu: '2' });
+
+  // Trije leadi, vsak dobi id; drugemu celico izpraznimo, tretjemu vpišemo napako.
+  post(skripta, oddaja({ ...LEAD, consentOffers: 'false', consentContent: 'false' }));
+  post(skripta, oddaja({ ...LEAD, email: 'bor@primer.si', firstName: 'Bor' }));
+  post(skripta, oddaja({ ...LEAD, email: 'cvetka@primer.si', firstName: 'Cvetka' }));
+  const leadi = preglednica.getSheetByName('Leadi');
+  const stolpecAC = vrstice(leadi)[0].indexOf('activeCampaign') + 1;
+  leadi.getRange(3, stolpecAC).setValue('');
+  leadi.getRange(4, stolpecAC).setValue('NAPAKA: nekaj');
+  zahteve.length = 0;
+
+  assert.equal(skripta.narociObstojeceVAC(), 'Naročenih: 1, padlo: 0.');
+  assert.equal(preverjanjaStanja(zahteve), 0, 'naročilo je vsiljeno — stanja ne preverja');
+  assert.deepEqual(naSeznam(zahteve), [{ list: '245', contact: '77', status: 1 }]);
+  assert.deepEqual(pripeteOznake(zahteve), [...OZNAKE_OSNOVNE, 'LM-10 posvet']);
+  assert.equal(zahteve.some((z) => z.pot === 'contact/sync'), false, 'kontakta ne sinhronizira znova');
+
+  // Ura pobere, kar je enkratni poseg pustil pri miru.
+  zahteve.length = 0;
+  assert.equal(skripta.posljiZaostaleVAC(), 'Poslano: 2, padlo: 0.');
+  assert.equal(zahteve.filter((z) => z.pot === 'contact/sync').length, 2);
+  assert.equal(poImenih(leadi, 3).activeCampaign, '77');
+  assert.equal(poImenih(leadi, 4).activeCampaign, '77');
+  assert.match(lastnosti.get('AC_ZADNJI'), / — ura: Poslano: 2, padlo: 0\.$/);
+  assert.deepEqual(dnevnik.warn, []);
 });

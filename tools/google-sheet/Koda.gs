@@ -128,11 +128,15 @@ var NASTAVITVE = {
    */
   AC: {
     /**
-     * Na seznam pridejo vsi, naročen (status 1) pa je le, kdor je privolil v
-     * ponudbe ali vsebine; ostali gredo na seznam kot odjavljeni (status 2) in
-     * kampanje jih ne dosežejo. false naroči vse — glej `acNaSeznam`.
+     * false = vsak lead gre na seznam kot NAROČEN (status 1). Tržna privolitev
+     * iz obrazca gre zraven kot oznaki `LM-10 privolitev: ponudbe` in
+     * `LM-10 privolitev: vsebine` (glej `acOznake`) — kampanje se segmentirajo
+     * po njih, ne po statusu na seznamu.
+     * true = naročen je le, kdor je privolil; ostali pridejo na seznam kot
+     * ODJAVLJENI (status 2). Pozor: privzeti pogled seznama v AC odjavljenih ne
+     * kaže — leadi so tam, videti pa jih ni. Glej `acNaSeznam`.
      */
-    SAMO_S_PRIVOLITVIJO: true,
+    SAMO_S_PRIVOLITVIJO: false,
 
     /** Predpona vseh oznak v AC. Po njej se v CRM-ju loči, od kod je kontakt. */
     OSNOVNA_OZNAKA: 'LM-10',
@@ -2556,26 +2560,47 @@ function posljiVAC(vrednosti) {
 }
 
 /**
- * Kontakt na seznam — s statusom, ki ga določa privolitev.
+ * Kontakt na seznam — privzeto kot naročen (status 1).
  *
- * Na seznam pride VSAK, ker ste seznam naredili za pregled nad tem, kdo je
- * vprašalnik izpolnil. Status pa loči: 1 (naročen) samo tistemu, ki je v obrazcu
- * privolil v ponudbe ali vsebine, 2 (odjavljen) vsem drugim. Razlika ni
- * kozmetična — kampanja, poslana na seznam, gre samo na status 1, zato nekdo, ki
- * je hotel le svoj izračun, iz tega seznama ne more dobiti oglasnega sporočila
- * (ZEKom-2, člen o neposrednem trženju).
+ * Na seznam pride VSAK, ker je seznam pregled nad tem, kdo je vprašalnik
+ * izpolnil. Kdo sme dobiti oglasno sporočilo, pove oznaka `privolitev: …`
+ * (glej `acOznake`), ne status: kampanje gredo na segment po oznaki in ne na
+ * cel seznam — to je zahteva ZEKom-2 za neposredno trženje in skripta je sama ne
+ * more uveljaviti. `SAMO_S_PRIVOLITVIJO: true` jo uveljavi s statusom (brez
+ * privolitve = odjavljen), a odjavljenih v privzetem pogledu seznama ni videti.
  *
- * `NASTAVITVE.AC.SAMO_S_PRIVOLITVIJO: false` to varovalo izklopi in naroči vse.
- * Preden ga izklopite, se prepričajte, da je pravna podlaga za to zapisana
- * drugje — skripta o njej ne ve nič.
+ * KDOR SE JE SAM ODJAVIL, OSTANE ODJAVLJEN. Status 1 kontakt, ki je v kampanji
+ * kliknil na odjavo, tiho naroči znova — dokumentacija AC za `contactLists` na
+ * to izrecno opozarja. Zato skripta pred naročilom brez sveže privolitve preveri
+ * stanje na seznamu in odjavljenega pusti pri miru. Privolitev v obrazcu je nova
+ * privolitev in ponovno naročilo dovoli. `vsili` preskoči preverjanje in je za
+ * `narociObstojeceVAC`, ki popravlja status, ki ga je nastavila ta skripta sama.
  */
-function acNaSeznam(idKontakta, vrednosti, idSeznama) {
+function acNaSeznam(idKontakta, vrednosti, idSeznama, vsili) {
   var privolitev =
     jeResnica(vrednosti.consentOffers) || jeResnica(vrednosti.consentContent);
   var status = NASTAVITVE.AC.SAMO_S_PRIVOLITVIJO && !privolitev ? 2 : 1;
+
+  if (status === 1 && !privolitev && !vsili && acJeOdjavljen(idKontakta, idSeznama)) {
+    console.log(
+      'Kontakt ' + idKontakta + ' se je s seznama ' + idSeznama + ' odjavil sam; ostane odjavljen.',
+    );
+    return;
+  }
+
   acZahteva('contactLists', 'post', {
     contactList: { list: idSeznama, contact: idKontakta, status: status },
   });
+}
+
+/** Ali je kontakt na tem seznamu odjavljen (status 2). Kontakta, ki na seznamu še ni, to ne zadeva. */
+function acJeOdjavljen(idKontakta, idSeznama) {
+  var odgovor = acZahteva('contacts/' + idKontakta + '/contactLists', 'get');
+  var seznami = (odgovor && odgovor.contactLists) || [];
+  for (var i = 0; i < seznami.length; i++) {
+    if (String(seznami[i].list) === String(idSeznama)) return String(seznami[i].status) === '2';
+  }
+  return false;
 }
 
 /**
@@ -2583,7 +2608,7 @@ function acNaSeznam(idKontakta, vrednosti, idSeznama) {
  *
  * Oznaka je v AC edino, na kar se da obesiti avtomatizacijo ("ko dobi oznako X,
  * začni sekvenco"), zato tu ni okrasje, ampak sprožilec. Zato so ozke in
- * predvidljive: osnovna za vse, panoga, sekvenca in posvet.
+ * predvidljive: osnovna za vse, panoga, sekvenca, posvet in tržna privolitev.
  */
 function acOznake(vrednosti) {
   var osnova = String(NASTAVITVE.AC.OSNOVNA_OZNAKA || 'LM-10');
@@ -2596,6 +2621,14 @@ function acOznake(vrednosti) {
   if (sekvenca) oznake.push(osnova + ' sekvenca: ' + sekvenca);
 
   if (jePosvet(vrednosti.consentConsulting)) oznake.push(osnova + ' posvet');
+
+  // Tržna privolitev kot oznaka in ne kot status na seznamu (glej
+  // SAMO_S_PRIVOLITVIJO): kampanja za ponudbe gre na segment "ima oznako
+  // privolitev: ponudbe", ne na cel seznam. Samo pritrdilni oznaki — nasprotna
+  // ("brez privolitve") bi ob ponovnem obisku s privolitvijo ostala pripeta in
+  // si s pritrdilno nasprotovala; oznak skripta ne odstranjuje.
+  if (jeResnica(vrednosti.consentOffers)) oznake.push(osnova + ' privolitev: ponudbe');
+  if (jeResnica(vrednosti.consentContent)) oznake.push(osnova + ' privolitev: vsebine');
   return oznake;
 }
 
@@ -2805,6 +2838,57 @@ function posljiZaostaleVAC() {
   } finally {
     kljucavnica.releaseLock();
   }
+}
+
+/**
+ * ENKRATNI POSEG po preklopu `SAMO_S_PRIVOLITVIJO` s true na false: leade, ki so
+ * v AC že pristali kot odjavljeni (status 2, ki ga je nastavila prejšnja
+ * različica te skripte), naroči na seznam in jim pripne oznake, ki jih tedaj še
+ * ni bilo (privolitev). Vrstic s prazno celico ali NAPAKA se ne dotika — te
+ * pobere ura, po novem pravilu.
+ *
+ * Varno večkrat: `contactLists` s statusom 1 in `contactTags` sta idempotentna.
+ * Ključavnice ne drži in v list ne piše, zato oddaje medtem tečejo naprej.
+ * Naročilo VSILI mimo varovala v `acNaSeznam`, kar je tu prav: stanje, ki ga
+ * popravlja, je nastavila skripta in ne človek s klikom na odjavo. Če je na ta
+ * seznam že šla kampanja in se je kdo odjavil sam, tega NE poganjajte, ne da bi
+ * prej v AC preverili, kdo — tudi njega bi naročilo znova.
+ */
+function narociObstojeceVAC() {
+  var n = acNastavitve();
+  if (!n) return 'ni nastavljen';
+
+  var list = pridobiList();
+  var glava = preberiGlavo(list);
+  var stolpecAC = glava.indexOf(AC_STOLPEC) + 1;
+  if (!stolpecAC) return 'lista brez stolpca activeCampaign';
+
+  var vrstic = list.getLastRow() - 1;
+  if (vrstic < 1) return 'ni vrstic';
+
+  var podatki = list.getRange(2, 1, vrstic, glava.length).getValues();
+  var narocenih = 0;
+  var padlo = 0;
+  for (var i = 0; i < podatki.length; i++) {
+    var id = String(podatki[i][stolpecAC - 1] || '').trim();
+    if (!/^\d+$/.test(id)) continue;
+
+    var vrednosti = {};
+    for (var j = 0; j < glava.length; j++) vrednosti[glava[j]] = podatki[i][j];
+
+    try {
+      acNaSeznam(id, vrednosti, n.seznam, true);
+      acOznaci(id, acOznake(vrednosti));
+      narocenih++;
+    } catch (err) {
+      console.warn('Vrstica ' + (i + 2) + ' (kontakt ' + id + ') ni šla na seznam: ' + err);
+      padlo++;
+    }
+  }
+
+  var izid = 'Naročenih: ' + narocenih + ', padlo: ' + padlo + '.';
+  console.log(izid);
+  return izid;
 }
 
 /**
