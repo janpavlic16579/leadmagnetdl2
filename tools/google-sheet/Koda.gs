@@ -364,6 +364,10 @@ function doGet() {
     'ActiveCampaign: ' + acStanje(),
     'Zadnji v AC: ' + (lastnosti.getProperty('AC_ZADNJI') || 'še nobeden'),
     'Zadnja napaka AC: ' + (lastnosti.getProperty('AC_ZADNJA_NAPAKA') || 'brez'),
+    // Izid enkratnega poseganja po preklopu SAMO_S_PRIVOLITVIJO: brez te vrstice
+    // je viden samo v dnevniku izvedb. Hkrati je znamenje nove različice.
+    'Ponovno naročilo obstoječih (narociObstojeceVAC): ' +
+      (lastnosti.getProperty('AC_NAROCILO_OBSTOJECIH') || 'še ni teklo'),
     'Vrstic v listu (getMaxRows): ' + list.getMaxRows() + ', stolpcev: ' + list.getMaxColumns(),
     // Pravi leadi proti vsem vrsticam. Razlika je edini znak za okvaro, ki je
     // od zunaj videti kot "leadi se ne vpisujejo": prazne vrstice s sledjo
@@ -2284,6 +2288,7 @@ var AC_LASTNOST = {
   OZNAKE: 'AC_IDJI_OZNAK',
   ZADNJI: 'AC_ZADNJI',
   ZADNJA_NAPAKA: 'AC_ZADNJA_NAPAKA',
+  NAROCILO: 'AC_NAROCILO_OBSTOJECIH',
 };
 
 /**
@@ -2853,6 +2858,9 @@ function posljiZaostaleVAC() {
  * popravlja, je nastavila skripta in ne človek s klikom na odjavo. Če je na ta
  * seznam že šla kampanja in se je kdo odjavil sam, tega NE poganjajte, ne da bi
  * prej v AC preverili, kdo — tudi njega bi naročilo znova.
+ *
+ * Izid gre v lastnost skripte in na /exec (vrstica "Ponovno naročilo
+ * obstoječih"), da ga ni treba iskati v dnevniku izvedb.
  */
 function narociObstojeceVAC() {
   var n = acNastavitve();
@@ -2887,6 +2895,10 @@ function narociObstojeceVAC() {
   }
 
   var izid = 'Naročenih: ' + narocenih + ', padlo: ' + padlo + '.';
+  PropertiesService.getScriptProperties().setProperty(
+    AC_LASTNOST.NAROCILO,
+    new Date().toISOString() + ' — ' + izid,
+  );
   console.log(izid);
   return izid;
 }
