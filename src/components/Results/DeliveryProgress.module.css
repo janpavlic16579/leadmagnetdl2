@@ -1,0 +1,88 @@
+/*
+ * Vrstica stoji na mestu gumbov (EmailGate .actions): obrazec je oddan,
+ * klikanje je mimo. Brez lastne kartice — tik nad njo je kartica svetovanja z
+ * obarvanim ozadjem in obrobo, druga ploskev pod njo bi se brala kot opozorilo.
+ */
+.panel {
+  padding-top: var(--space-1);
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+/* Isti zapis kot .stepLabel ("KORAK 9 OD 10"): vrstica je korak, ne opozorilo. */
+.title {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* tabular-nums: "9 %" in "10 %" sta enako široka, številka med štetjem ne pleše. */
+.percent {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/*
+ * Mera in polnilo iz CompositionBar.module.css (ista vrstica, drug pomen),
+ * podlaga iz vrstice korakov v glavi (StepShell.module.css .progressTrack):
+ * --color-accent bi na ozadju strani, kjer vrstica stoji, izginila — sestava na
+ * rezultatih leži v beli kartici, ta pa ne.
+ */
+.track {
+  height: 14px;
+  background: var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+/*
+ * Širina in ne transform: polnilo se ob vsakem tiku premakne za odstotek ali
+ * dva, prehod ga zgladi. Med sinhrono gradnjo PDF-ja prehod obstane skupaj z
+ * glavno nitjo — gibanje tedaj nosi lesk spodaj.
+ */
+.fill {
+  position: relative;
+  height: 100%;
+  background: var(--color-primary);
+  border-radius: inherit;
+  overflow: hidden;
+  transition: width 0.3s ease-out;
+}
+
+/*
+ * Lesk, ki drsi po polnilu. Animira se SAMO transform, zato teče na sestavljalni
+ * niti in se premika tudi, ko jsPDF in base64 blokirata glavno nit — prav takrat
+ * je edini znak, da aplikacija ni obstala (isto načelo kot .spinner v
+ * styles/buttons.module.css). Ob prefers-reduced-motion ga globalno pravilo v
+ * tokens.css ustavi v končni legi zunaj polnila — vrstica ostane mirna, brez
+ * leska; odstotek in napis povesta vse.
+ */
+.sheen {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.5) 50%, transparent 100%);
+  transform: translateX(-100%);
+  animation: sheen 1.6s ease-in-out infinite;
+}
+
+@keyframes sheen {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.phase {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
