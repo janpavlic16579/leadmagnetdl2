@@ -33,7 +33,7 @@ import { assessHoursPlausibility, hoursPlausibilityWarning } from '../../lib/pla
 import { selectFollowUpSequence } from '../../lib/followUp';
 import { triageScoreLabel } from '../../lib/answerLabels';
 import { track } from '../../lib/analytics';
-import { deliverLead, loadDeliveryModules, type CustomerReportDelivery } from '../../lib/deliverLead';
+import { type SubmitOutcome, deliverLead, loadDeliveryModules, type CustomerReportDelivery } from '../../lib/deliverLead';
 import { readProgress, saveProgress } from '../../lib/progressStorage';
 import type { ModuleDefinition } from '../../config/modules/moduleTypes';
 import type { SalesReport } from '../../lib/salesReport';
@@ -54,6 +54,14 @@ import { StepCostBasis } from './StepCostBasis';
 import { StepInputs } from './StepInputs';
 import { ResultsView } from '../Results/ResultsView';
 import { EmailGate } from '../Results/EmailGate';
+import { nextPaint } from '../../lib/nextPaint';
+import type { DeliveryPhase } from '../../lib/deliveryProgress';
+
+/**
+ * Postanek pri 100 %, preden obrazec zamenjajo rezultati (handleEmailSubmit):
+ * dovolj, da se konec vidi, premalo, da bi ga kdo čakal.
+ */
+const DONE_HOLD_MS = 450;
 
 interface CalculatorFlowProps {
   /** Dejavnost, ki jo prednastavi kampanjski ?s= — obiskovalec jo na uvodnem zaslonu vidi in sme popraviti. */
@@ -157,6 +165,12 @@ export function CalculatorFlow({
    * lib/deliverLead.ts); rezultati jo tedaj ponudijo kot gumb.
    */
   const [salesReport, setSalesReport] = useState<SalesReport | null>(null);
+  /**
+   * Faza dostave, ki teče — za napredovalno vrstico na obrazcu (EmailGate,
+   * lib/deliveryProgress.ts). Null, dokler oddaja ne teče; nova oddaja začne pri
+   * 'modules', faze naprej javlja deliverLead.
+   */
+  const [deliveryPhase, setDeliveryPhase] = useState<DeliveryPhase | null>(null);
   /**
    * Kam je šlo strankino poročilo (druga tabela v lib/deliverLead.ts): po
    * e-pošti — rezultati pokažejo obvestilo — ali s prenosom kot rezervo. Po
@@ -748,8 +762,20 @@ export function CalculatorFlow({
     // Orkestracija dostave živi v lib/deliverLead.ts: vitest teče brez jsdom, zato
     // je bilo tu — sredi komponente — pravilo "prodajna priprava nikoli k stranki"
     // nepreverljivo s testom. Tu ostane samo vezava na stanje in na navigacijo.
+    setDeliveryPhase('modules');
+    // Šele ko je napredovalna vrstica IZRISANA: sicer bi jo sinhrona gradnja
+    // PDF-ja prehitela in prvi odstotki bi se pokazali, ko je delo že opravljeno
+    // (lib/nextPaint).
+    await nextPaint();
     const modules = await loadDeliveryModules();
 
+    /**
+     * Izid se uveljavi šele po kratkem postanku: vrstica doseže 100 % in obstane
+     * trenutek, preden se zaslon zamenja — rezultati sredi vrstice bi izpadli kot
+     * prekinitev in ne kot zaključek. Vse, kar je onSubmitted nosil doslej, se
+     * uveljavi skupaj, zato se rezultati še vedno izrišejo enkrat.
+     */
+    const outcome: { value: SubmitOutcome | null } = { value: null };
     await deliverLead(
       {
         contact: submission.contact,
@@ -777,17 +803,22 @@ export function CalculatorFlow({
       modules,
       {
         onSalesReport: setSalesReport,
-        onSubmitted: ({ customerReport: delivery }) => {
-          setLead(submission);
-          setCustomerReport(delivery);
-          setSubmitted(true);
-          // Rezultati NADOMESTIJO vnos obrazca v zgodovini: brskalnikov "Nazaj"
-          // (in gib "swipe back") z rezultatov pelje v vnose, ne na oddan obrazec.
-          replaceNextHistoryRef.current = true;
-          setStep('results');
+        onProgress: setDeliveryPhase,
+        onSubmitted: (result) => {
+          outcome.value = result;
         },
       },
     );
+    const result = outcome.value;
+    if (!result) return;
+    await new Promise((resolve) => setTimeout(resolve, DONE_HOLD_MS));
+    setLead(submission);
+    setCustomerReport(result.customerReport);
+    setSubmitted(true);
+    // Rezultati NADOMESTIJO vnos obrazca v zgodovini: brskalnikov "Nazaj"
+    // (in gib "swipe back") z rezultatov pelje v vnose, ne na oddan obrazec.
+    replaceNextHistoryRef.current = true;
+    setStep('results');
   }
 
   /**
@@ -1037,6 +1068,7 @@ export function CalculatorFlow({
           copy={copy.emailGate}
           stepLabel={stepLabel('emailGate')}
           onSubmit={handleEmailSubmit}
+          deliveryPhase={deliveryPhase}
           // Zadnja stran vnosov: inputsModuleId ob prihodu naprej ostane, zato
           // "Nazaj" (skozi zgodovino) pristane tam, od koder je obiskovalec prišel.
           onBack={goBack('emailGate')}

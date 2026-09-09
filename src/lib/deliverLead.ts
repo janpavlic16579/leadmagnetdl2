@@ -9,6 +9,7 @@ import type { TotalsRange } from './range';
 import type { SalesReport } from './salesReport';
 import type { LeadConsents, LeadContact } from '../types';
 import type { DownloadFile } from './download';
+import type { DeliveryPhase } from './deliveryProgress';
 import type { GeneratePdfParams } from './pdf';
 import type {
   CustomerReportOutcome,
@@ -141,6 +142,13 @@ export interface DeliverLeadHooks {
    * razloga nosi tudi odločitev o strankinem poročilu (tabela v glavi).
    */
   onSubmitted: (outcome: SubmitOutcome) => void;
+  /**
+   * Faza dostave se je ZAČELA — za napredovalno vrstico na obrazcu
+   * (lib/deliveryProgress.ts). Javi se začetek, ne konec: konec faze je
+   * začetek naslednje, 'done' pride tik pred onSubmitted. Neobvezen, da
+   * klicatelji brez vrstice (testi) ne nosijo praznega kavlja.
+   */
+  onProgress?: (phase: DeliveryPhase) => void;
 }
 
 /** Kam je šlo strankino poročilo — kar rezultati potrebujejo, da se izrišejo enkrat. */
@@ -225,6 +233,7 @@ async function buildAttachments(
   input: DeliverLeadInput,
   report: SalesReport | null,
   modules: DeliverLeadModules,
+  progress: (phase: DeliveryPhase) => void,
 ): Promise<LeadAttachment[]> {
   const buildResults = modules.buildResultsPdfFile;
   const buildSales = modules.buildSalesPdfFile;
@@ -235,13 +244,14 @@ async function buildAttachments(
 
   // Oznaka občinstva potuje s prilogo: sprejemnik po njej izbere, kaj gre stranki
   // po e-pošti — priprava ('sales') nikoli, tudi če bi bila napačno poimenovana.
-  type Generator = [string, LeadAttachmentAudience, () => Promise<DownloadFile>];
+  type Generator = [string, LeadAttachmentAudience, DeliveryPhase, () => Promise<DownloadFile>];
   const generators: Generator[] = [
-    ['poročilo za stranko', 'customer', () => buildResults(input.customerPdf)],
-    ...(report ? [['priprava na pogovor', 'sales', () => buildSales(report)] as Generator] : []),
+    ['poročilo za stranko', 'customer', 'pdf_customer', () => buildResults(input.customerPdf)],
+    ...(report ? [['priprava na pogovor', 'sales', 'pdf_sales', () => buildSales(report)] as Generator] : []),
   ];
   const attachments: LeadAttachment[] = [];
-  for (const [label, audience, build] of generators) {
+  for (const [label, audience, phase, build] of generators) {
+    progress(phase);
     try {
       attachments.push(await modules.attachmentFromFile(await build(), audience));
     } catch (error) {
@@ -295,7 +305,9 @@ export async function deliverLead(
    */
   const generatedAtISO = now().toISOString();
   let report: SalesReport | null = null;
+  const progress = (phase: DeliveryPhase) => hooks.onProgress?.(phase);
 
+  progress('report');
   try {
     report = modules.buildSalesReport({
       generatedAtISO,
@@ -356,7 +368,8 @@ export async function deliverLead(
       });
       // Prilogi šele, ko je zapis tu: brez privolitve oddaje ni in PDF-ja bi
       // nastala zaman. Brez webhooka se ta veja sploh ne izvede.
-      const attachments = record ? await buildAttachments(input, report, modules) : [];
+      const attachments = record ? await buildAttachments(input, report, modules, progress) : [];
+      if (record) progress('send');
       const result = record
         ? await modules.submitLead(
             { record, salesReportHtml: salesReportHtmlOf(report, modules), attachments },
@@ -399,6 +412,8 @@ export async function deliverLead(
   // njega, ne pa z gumbom, ki se pojavi naknadno. Odločitev o strankinem
   // poročilu potuje z oddajo iz istega razloga.
   if (report && forCustomer) hooks.onSalesReport(report);
+  // 100 % tik pred odklepom rezultatov: vrstica se zapre, preden se zaslon zamenja.
+  progress('done');
   hooks.onSubmitted({ customerReport });
 }
 
