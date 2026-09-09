@@ -2671,8 +2671,16 @@ var AC_POLJA = [
   { tag: 'LM10_PODJETJE', naslov: 'LM-10 podjetje', vrsta: 'text', stolpec: 'companyName' },
   { tag: 'LM10_PANOGA', naslov: 'LM-10 panoga', vrsta: 'text', stolpec: 'industryLabel' },
   { tag: 'LM10_ZAPOSLENI', naslov: 'LM-10 zaposlenih', vrsta: 'text', stolpec: 'employeeCount' },
+  // Velikostni razred ("10–49") ob številu zaposlenih: obvestilo prodaji ga bere
+  // v isti vrstici kot panogo, tako kot ga je pisala pošta iz skripte.
+  { tag: 'LM10_VELIKOST', naslov: 'LM-10 velikost (razred)', vrsta: 'text', stolpec: 'sizeClass' },
   { tag: 'LM10_PROMET', naslov: 'LM-10 letni prihodek (EUR)', vrsta: 'text', stolpec: 'annualRevenueEUR' },
   { tag: 'LM10_LETNO', naslov: 'LM-10 letni izračun (EUR)', vrsta: 'text', stolpec: LETNO },
+  // Trije koši, iz katerih je sestavljen letni izračun. Brez njih obvestilo
+  // prodaji pokaže samo vsoto in svetovalec ne vidi, od kod je.
+  { tag: 'LM10_ODLIV', naslov: 'LM-10 odliv (EUR)', vrsta: 'text', stolpec: 'directLossEUR' },
+  { tag: 'LM10_MARZA', naslov: 'LM-10 nezaslužena marža (EUR)', vrsta: 'text', stolpec: 'lostMarginEUR' },
+  { tag: 'LM10_CAS', naslov: 'LM-10 vrednost časa (EUR)', vrsta: 'text', stolpec: 'capacityEUR' },
   { tag: 'LM10_KAPITAL', naslov: 'LM-10 enkratni kapital (EUR)', vrsta: 'text', stolpec: 'oneTimeCapitalEUR' },
   { tag: 'LM10_ZANESLJIVOST', naslov: 'LM-10 zanesljivost vnosa', vrsta: 'text', stolpec: 'confidence' },
   { tag: 'LM10_PODROCJA', naslov: 'LM-10 izbrana področja', vrsta: 'text', stolpec: 'selectedModules' },
