@@ -25,7 +25,7 @@
 }
 
 /*
- * Gumb, ki DELA (aria-busy): prenos PDF-ja na rezultatih. Ostane onemogočen,
+ * Gumb, ki DELA (aria-busy): oddaja obrazca in prenos PDF-ja. Ostane onemogočen,
  * a ne siv — siva ploskev bere kot »ugasnjeno«, rumena s krogcem kot »dela«.
  * Pravilo stoji ZA :disabled in :hover z enako specifičnostjo, zato ju prevlada:
  * zaseden gumb ni siv in se ob lebdenju ne potemni.

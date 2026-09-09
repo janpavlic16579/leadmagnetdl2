@@ -2,12 +2,12 @@ import { useId, useRef, useState } from 'react';
 import { track } from '../../lib/analytics';
 import { isFilled, isValidEmail, normalizeTaxNumber, phoneState, taxNumberState } from '../../lib/validation';
 import { useStepHeading } from '../../lib/useStepHeading';
-import type { DeliveryPhase } from '../../lib/deliveryProgress';
+import { nextPaint } from '../../lib/nextPaint';
 import type { LeadConsents, LeadContact } from '../../types';
 import type { ResolvedSegmentCopy } from '../../config/copy';
 import buttonStyles from '../../styles/buttons.module.css';
 import styles from './EmailGate.module.css';
-import { DeliveryProgress } from './DeliveryProgress';
+import { BusyLabel } from './BusyLabel';
 
 /**
  * Pravilnik o zasebnosti, na katerega se sklicuje obvezna privolitev.
@@ -55,12 +55,6 @@ interface EmailGateProps {
   }) => void | Promise<void>;
   /** Nazaj na zadnjo stran vnosov. */
   onBack: () => void;
-  /**
-   * Faza dostave, ki teče (starš jo javlja iz lib/deliverLead.ts). Null, dokler
-   * oddaja ne teče. Obrazec jo bere le, dokler je zaseden — po neuspehu ostane
-   * zadnja faza v staršu, vrstice pa ni več.
-   */
-  deliveryPhase: DeliveryPhase | null;
 }
 
 /**
@@ -71,7 +65,7 @@ interface EmailGateProps {
  * obiskovalec pristane na rezultatih. Kar je sledilo zahvali (kontakt prodaje,
  * priprava za svetovalca), živi v Results/NextSteps.tsx.
  */
-export function EmailGate({ copy, stepLabel, onSubmit, onBack, deliveryPhase }: EmailGateProps) {
+export function EmailGate({ copy, stepLabel, onSubmit, onBack }: EmailGateProps) {
   const headingRef = useStepHeading();
   const fieldId = useId();
   const [firstName, setFirstName] = useState('');
@@ -179,6 +173,9 @@ export function EmailGate({ copy, stepLabel, onSubmit, onBack, deliveryPhase }: 
 
     setBusy(true);
     setFailed(false);
+    // Šele ko je zaseden gumb IZRISAN: sicer bi ga sinhrona gradnja PDF-ja
+    // prehitela in krogec bi se pokazal, ko je delo že opravljeno (lib/nextPaint).
+    await nextPaint();
     try {
       await onSubmit({
         contact: {
@@ -527,37 +524,27 @@ export function EmailGate({ copy, stepLabel, onSubmit, onBack, deliveryPhase }: 
           </div>
         ) : null}
 
-        {busy ? (
-          /*
-            Namesto gumbov: obrazec je oddan, klikanje je mimo. Vrstica pove, kaj
-            se dogaja in koliko je še. Prej je gumb "Pripravljam …" v sivem
-            onemogočenem videzu do trinajst sekund molčal in obiskovalec je
-            sklepal, da je obstalo. Brez gumba za oddajo tudi Enter v polju ne
-            sproži druge oddaje; straža `if (busy)` zgoraj ostane za vsak primer.
-            Faza je vedno znana: starš jo nastavi v istem tiku kot obrazec `busy`.
-          */
-          <DeliveryProgress phase={deliveryPhase ?? 'modules'} />
-        ) : (
-          <div className={styles.actions}>
-            {/* Ostane "button": privzeti gumb obrazca bi ob Enterju navigiral nazaj. */}
-            <button type="button" className={buttonStyles.secondaryButton} onClick={onBack}>
-              Nazaj
-            </button>
-            {/*
-              Ni več `disabled`: gumb, ki molči, je bil edini znak, da nekaj manjka.
-              aria-describedby poskrbi, da tudi tisti, ki se na gumb VRNE s tabulatorjem,
-              sliši razlog — sicer bi mu bralnik prebral samo ime gumba, torej isto kot
-              pred klikom, in gumb bi bil "pokvarjen" tudi zanj.
-            */}
-            <button
-              type="submit"
-              className={buttonStyles.primaryButton}
-              aria-describedby={showBlockedSummary || failed ? alertId : undefined}
-            >
-              {SUBMIT_LABEL}
-            </button>
-          </div>
-        )}
+        <div className={styles.actions}>
+          {/* Ostane "button": privzeti gumb obrazca bi ob Enterju navigiral nazaj. */}
+          <button type="button" className={buttonStyles.secondaryButton} onClick={onBack} disabled={busy}>
+            Nazaj
+          </button>
+          {/*
+            Ni več `disabled`: gumb, ki molči, je bil edini znak, da nekaj manjka.
+            aria-describedby poskrbi, da tudi tisti, ki se na gumb VRNE s tabulatorjem,
+            sliši razlog — sicer bi mu bralnik prebral samo ime gumba, torej isto kot
+            pred klikom, in gumb bi bil "pokvarjen" tudi zanj.
+          */}
+          <button
+            type="submit"
+            className={buttonStyles.primaryButton}
+            disabled={busy}
+            aria-busy={busy}
+            aria-describedby={showBlockedSummary || failed ? alertId : undefined}
+          >
+            {busy ? <BusyLabel /> : SUBMIT_LABEL}
+          </button>
+        </div>
       </form>
     </div>
   );
