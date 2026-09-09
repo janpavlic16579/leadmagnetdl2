@@ -7,6 +7,7 @@ import {
   type DeliverLeadModules,
 } from './deliverLead';
 import type { DownloadFile } from './download';
+import type { DeliveryPhase } from './deliveryProgress';
 import type { LeadSubmission, SubmitLeadResult } from './submitLead';
 import { computeModules, findHighestModule, resolveInputs } from './moduleEngine';
 import { aggregateResults, assessConfidence, buildComputeContext } from './potential';
@@ -104,6 +105,8 @@ function harness(overrides: Partial<DeliverLeadModules>, real: DeliverLeadModule
   /** Vrstni red poti navzven — lovi, ali se rezultati odklenejo pred odločitvijo o pripravi. */
   const order: ('webhook' | 'salesReport' | 'submitted')[] = [];
   const posted: LeadSubmission[] = [];
+  /** Faze za napredovalno vrstico, v vrstnem redu javljanja. */
+  const phases: DeliveryPhase[] = [];
   let salesReportSet = false;
   let submitted = false;
   let customerReport: CustomerReportDelivery | null = null;
@@ -141,6 +144,9 @@ function harness(overrides: Partial<DeliverLeadModules>, real: DeliverLeadModule
       submitted = true;
       customerReport = outcome.customerReport;
     },
+    onProgress: (phase: DeliveryPhase) => {
+      phases.push(phase);
+    },
   };
 
   return {
@@ -148,6 +154,7 @@ function harness(overrides: Partial<DeliverLeadModules>, real: DeliverLeadModule
     hooks,
     order,
     posted,
+    phases,
     state: () => ({ salesReportSet, submitted, customerReport }),
   };
 }
@@ -163,6 +170,38 @@ describe('Dostava po oddaji', () => {
     expect(h.state().salesReportSet).toBe(true);
     expect(h.posted).toHaveLength(0);
     expect(h.state().submitted).toBe(true);
+  });
+
+  it('z webhookom javi faze po vrsti: poročilo, oba PDF-ja, pošiljanje, konec', async () => {
+    const real = await loadDeliveryModules();
+    const h = harness({ leadWebhookUrl: () => 'https://example.test/webhook' }, real);
+
+    await deliverLead(scenario(), h.modules, h.hooks);
+
+    expect(h.phases).toEqual(['report', 'pdf_customer', 'pdf_sales', 'send', 'done']);
+    // 'done' pride PRED onSubmitted: vrstica doseže 100 %, šele nato se zaslon zamenja.
+    expect(h.order.at(-1)).toBe('submitted');
+  });
+
+  it('brez webhooka: samo poročilo in konec — faze pošiljanja ni', async () => {
+    const real = await loadDeliveryModules();
+    const h = harness({}, real);
+
+    await deliverLead(scenario(), h.modules, h.hooks);
+
+    expect(h.phases).toEqual(['report', 'done']);
+  });
+
+  it('brez jsPDF: PDF-fazi odpadeta, pošiljanje in konec ostaneta', async () => {
+    const real = await loadDeliveryModules();
+    const h = harness(
+      { leadWebhookUrl: () => 'https://example.test/webhook', buildResultsPdfFile: null, buildSalesPdfFile: null },
+      real,
+    );
+
+    await deliverLead(scenario(), h.modules, h.hooks);
+
+    expect(h.phases).toEqual(['report', 'send', 'done']);
   });
 
   it('z webhookom: priprava gre na strežnik in se stranki NE ponudi', async () => {
