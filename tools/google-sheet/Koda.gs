@@ -3047,7 +3047,13 @@ function preveriKontaktVAC(email) {
       (vstopi.length
         ? vstopi
             .map(function (v) {
-              return '"' + (imePoId[String(v.automation)] || v.automation) + '"';
+              // Datum vstopa loči "sprožilo se je danes" od "sprožilo se je ob
+              // prvem obisku pred dnevi" — pri sprožilcu na naročilo na seznam
+              // se ponovni obisk iste osebe ne šteje.
+              return (
+                '"' + (imePoId[String(v.automation)] || v.automation) + '" (vstop ' + (v.adddate || '?') +
+                (String(v.status) === '1' ? ', še teče' : ', končana') + ')'
+              );
             })
             .join(', ')
         : 'NOBENO — sprožilec se ni sprožil'),
