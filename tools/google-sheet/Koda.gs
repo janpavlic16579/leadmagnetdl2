@@ -2927,6 +2927,18 @@ function acUstvariPolje(polje) {
   return id;
 }
 
+/** Vse avtomatizacije računa, po straneh po sto; varovalo pri dva tisoč. */
+function acVseAvtomatizacije() {
+  var vse = [];
+  var odmik = 0;
+  while (true) {
+    var stran = (acZahteva('automations?limit=100&offset=' + odmik, 'get') || {}).automations || [];
+    vse = vse.concat(stran);
+    if (stran.length < 100 || odmik >= 2000) return vse;
+    odmik += 100;
+  }
+}
+
 /** Zapomnjeni id-ji polj. Prazno pomeni, da `pripraviAC` še ni tekel. */
 function acIdjiPolj() {
   var shranjeno = PropertiesService.getScriptProperties().getProperty(AC_LASTNOST.POLJA);
@@ -2936,6 +2948,140 @@ function acIdjiPolj() {
   } catch (err) {
     return {};
   }
+}
+
+/**
+ * DIAGNOSTIKA, ki jo poženete v urejevalniku (Zaženi): kaj o kontaktu v resnici
+ * ve ActiveCampaign. Obstaja, ker AC upravlja kdo drug in vanj ni vpogleda,
+ * skripta pa o svojih klicih ve le, da so vrnili "v redu".
+ *
+ * Brez argumenta vzame e-naslov zadnje vrstice lista. Izpiše štiri stvari, ki
+ * skupaj povedo, kje se je sporočilo ustavilo:
+ *  1. seznami s statusom — ali je kontakt na obeh seznamih kot naročen;
+ *  2. ključna polja — ali sta povezavi in čas oddaje res zapisani v AC;
+ *  3. vse avtomatizacije računa s stanjem — ali sta sploh vklopljeni;
+ *  4. v katere avtomatizacije je TA kontakt vstopil — ali se je sprožilec sprožil.
+ *
+ * Branje: če sta 1 in 2 v redu, 4 pa prazen, je težava v AC (avtomatizacija ni
+ * vklopljena ali sprožilec ne ustreza polju). Če 2 manjka, je težava v skripti.
+ * Samo bere, ničesar ne spreminja.
+ */
+function preveriKontaktVAC(email) {
+  var n = acNastavitve();
+  if (!n) throw new Error('ActiveCampaign ni nastavljen (glej pripraviAC).');
+
+  email = String(email || '').trim();
+  if (!email) {
+    var list = pridobiList();
+    var glava = preberiGlavo(list);
+    var stolpec = glava.indexOf('email') + 1;
+    if (!stolpec || list.getLastRow() < 2) throw new Error('Na listu ni vrstice z e-naslovom.');
+    email = String(list.getRange(list.getLastRow(), stolpec).getValue() || '').trim();
+  }
+
+  var vrstice = ['Kontakt: ' + email];
+  var najdeni = acZahteva('contacts?email=' + encodeURIComponent(email), 'get');
+  var kontakt = najdeni && najdeni.contacts && najdeni.contacts[0];
+  if (!kontakt) {
+    vrstice.push('V AC GA NI — skripta ga ni poslala ali je klic padel. Glej stolpec activeCampaign in /exec.');
+    console.log(vrstice.join('\n'));
+    return vrstice.join('\n');
+  }
+  var id = String(kontakt.id);
+  vrstice.push(
+    'Id v AC: ' + id + ' (ustvarjen ' + (kontakt.cdate || '?') + ', posodobljen ' + (kontakt.udate || '?') + ')',
+  );
+
+  // 1. Seznami — AC statusi: 1 naročen, 2 odjavljen, 0 nepotrjen, 3 odbit.
+  var STATUSI = { '1': 'naročen', '2': 'ODJAVLJEN', '0': 'nepotrjen', '3': 'odbit' };
+  var seznami = (acZahteva('contacts/' + id + '/contactLists', 'get') || {}).contactLists || [];
+  vrstice.push(
+    'Seznami: ' +
+      (seznami.length
+        ? seznami
+            .map(function (s) {
+              return s.list + ' (' + (STATUSI[String(s.status)] || s.status) + ')';
+            })
+            .join(', ')
+        : 'NA NOBENEM'),
+  );
+
+  // 2. Polja — id-je prevede nazaj v oznake, da je izpis berljiv.
+  var idji = acIdjiPolj();
+  var oznakaPoId = {};
+  Object.keys(idji).forEach(function (tag) {
+    oznakaPoId[String(idji[tag])] = tag;
+  });
+  var vrednosti = (acZahteva('contacts/' + id + '/fieldValues', 'get') || {}).fieldValues || [];
+  var nastavljena = {};
+  vrednosti.forEach(function (p) {
+    if (String(p.value || '').trim() !== '') {
+      nastavljena[oznakaPoId[String(p.field)] || 'polje ' + p.field] = String(p.value);
+    }
+  });
+  var kljucna = ['PDF_LINK', 'PDF_LINK_PRODAJA', 'LM10_ODDAJA', 'LM10_POSVET'];
+  vrstice.push('Ključna polja:');
+  kljucna.forEach(function (tag) {
+    vrstice.push('  ' + tag + ' = ' + (nastavljena[tag] || 'PRAZNO'));
+  });
+  var drugih = Object.keys(nastavljena).filter(function (t) {
+    return kljucna.indexOf(t) === -1;
+  }).length;
+  vrstice.push('  drugih izpolnjenih polj: ' + drugih);
+
+  // 3. Avtomatizacije računa, VSE strani: račun jih ima lahko več sto in
+  // najnovejše — naše — so na zadnji strani. Izpišejo se samo tiste z osnovno
+  // oznako v imenu; dnevnik izvedb namreč dolg izpis odreže in bi ravno
+  // odločilne vrstice izginile.
+  var avtomatizacije = acVseAvtomatizacije();
+  var imePoId = {};
+  avtomatizacije.forEach(function (a) {
+    imePoId[String(a.id)] = a.name;
+  });
+
+  // 4. V katere je vstopil ta kontakt — edini dokaz, da se je sprožilec sprožil.
+  // Pred seznamom avtomatizacij, da je ta vrstica vidna, tudi če bi bil izpis odrezan.
+  var vstopi = (acZahteva('contacts/' + id + '/contactAutomations', 'get') || {}).contactAutomations || [];
+  vrstice.push(
+    'Ta kontakt je vstopil v: ' +
+      (vstopi.length
+        ? vstopi
+            .map(function (v) {
+              // Datum vstopa loči "sprožilo se je danes" od "sprožilo se je ob
+              // prvem obisku pred dnevi" — pri sprožilcu na naročilo na seznam
+              // se ponovni obisk iste osebe ne šteje.
+              return (
+                '"' + (imePoId[String(v.automation)] || v.automation) + '" (vstop ' + (v.adddate || '?') +
+                (String(v.status) === '1' ? ', še teče' : ', končana') + ')'
+              );
+            })
+            .join(', ')
+        : 'NOBENO — sprožilec se ni sprožil'),
+  );
+
+  var osnova = String(NASTAVITVE.AC.OSNOVNA_OZNAKA || 'LM-10').toLowerCase();
+  var nase = avtomatizacije.filter(function (a) {
+    return String(a.name || '').toLowerCase().indexOf(osnova) !== -1;
+  });
+  vrstice.push(
+    'Avtomatizacije z "' + NASTAVITVE.AC.OSNOVNA_OZNAKA + '" v imenu:' +
+      (nase.length ? '' : ' NOBENE — v AC še niso zgrajene ali so poimenovane drugače'),
+  );
+  nase.forEach(function (a) {
+    vrstice.push(
+      '  "' +
+        a.name +
+        '" — ' +
+        (String(a.status) === '1' ? 'aktivna' : 'NEAKTIVNA') +
+        ', vstopilo kontaktov: ' +
+        (a.entered || '0'),
+    );
+  });
+  vrstice.push('  (drugih avtomatizacij v računu: ' + (avtomatizacije.length - nase.length) + ', izpuščene)');
+
+  var izid = vrstice.join('\n');
+  console.log(izid);
+  return izid;
 }
 
 /**

@@ -1347,7 +1347,15 @@ const AC_NASLOV = 'https://primer.api-us1.com';
 function ponarediAC(
   skripta,
   lastnosti,
-  { stanjeNaSeznamu = null, stanjeNaSeznamuProdaja = null, seznamProdaja = '' } = {},
+  {
+    stanjeNaSeznamu = null,
+    stanjeNaSeznamuProdaja = null,
+    seznamProdaja = '',
+    // Za preveriKontaktVAC: kaj AC vrne o avtomatizacijah in vstopih kontakta.
+    avtomatizacije = [],
+    vstopi = [],
+    vrednostiPolj = [],
+  } = {},
 ) {
   // S poševnico na koncu, kot jo ljudje prilepijo — skripta jo mora odrezati.
   lastnosti.set('AC_NASLOV', `${AC_NASLOV}/`);
@@ -1388,6 +1396,18 @@ function ponarediAC(
     if (pot.startsWith('lists/')) {
       return odgovor(200, { list: { name: pot === 'lists/245' ? 'LEADI' : 'PRODAJA' } });
     }
+    if (pot.startsWith('contacts?email=')) {
+      const email = decodeURIComponent(pot.split('email=')[1]);
+      return odgovor(200, {
+        contacts:
+          email === 'nikogar@primer.si'
+            ? []
+            : [{ id: '77', email, cdate: '2026-09-10T09:00', udate: '2026-09-10T09:16' }],
+      });
+    }
+    if (pot === 'contacts/77/fieldValues') return odgovor(200, { fieldValues: vrednostiPolj });
+    if (pot.startsWith('automations?')) return odgovor(200, { automations: avtomatizacije });
+    if (pot === 'contacts/77/contactAutomations') return odgovor(200, { contactAutomations: vstopi });
     if (pot === 'contactLists') return odgovor(201, { contactList: telo.contactList });
     if (pot === 'contactTags') return odgovor(201, { contactTag: telo.contactTag });
     if (pot.startsWith('tags?')) {
@@ -1798,4 +1818,44 @@ test('narociObstojeceVAC z obema seznamoma: obstoječi kontakti pristanejo tudi 
     { list: '247', contact: '77', status: 1 },
   ]);
   assert.equal(preverjanjaStanja(zahteve), 0, 'naročilo je vsiljeno — stanja ne preverja');
+});
+
+test('preveriKontaktVAC pove, kje se je sporočilo ustavilo: polja so v AC, avtomatizacija pa neaktivna in brez vstopa', () => {
+  const { skripta, lastnosti } = naloziSkripto();
+  ponarediAC(skripta, lastnosti, {
+    seznamProdaja: '247',
+    stanjeNaSeznamu: '1',
+    stanjeNaSeznamuProdaja: '1',
+    vrednostiPolj: [
+      { field: '3', value: 'https://drive.google.com/file/d/p/view' },
+      { field: '4', value: 'https://drive.google.com/file/d/s/view' },
+      { field: '6', value: '2026-09-10 11:16' },
+      { field: '1', value: 'Kovinar d.o.o.' },
+    ],
+    avtomatizacije: [
+      { id: '1', name: 'Scoring - Page views', status: '1', entered: '116516' },
+      { id: '9', name: 'LM-10 poročilo stranki', status: '1', entered: '3' },
+      { id: '10', name: 'LM-10 obvestilo prodaji', status: '2', entered: '0' },
+    ],
+    vstopi: [{ automation: '9', status: '2', adddate: '2026-09-08T04:28:30-05:00' }],
+  });
+
+  const izpis = skripta.preveriKontaktVAC('ana@kovinar.si');
+  assert.match(izpis, /^Kontakt: ana@kovinar\.si\nId v AC: 77/);
+  assert.match(izpis, /Seznami: 245 \(naročen\), 247 \(naročen\)/);
+  assert.match(izpis, /PDF_LINK = https:\/\/drive\.google\.com\/file\/d\/p\/view/);
+  assert.match(izpis, /PDF_LINK_PRODAJA = https:\/\/drive\.google\.com\/file\/d\/s\/view/);
+  assert.match(izpis, /LM10_ODDAJA = 2026-09-10 11:16/);
+  assert.match(izpis, /LM10_POSVET = PRAZNO/);
+  assert.match(izpis, /drugih izpolnjenih polj: 1/);
+  assert.match(izpis, /"LM-10 poročilo stranki" — aktivna, vstopilo kontaktov: 3/);
+  assert.match(izpis, /"LM-10 obvestilo prodaji" — NEAKTIVNA, vstopilo kontaktov: 0/);
+  assert.match(izpis, /Ta kontakt je vstopil v: "LM-10 poročilo stranki" \(vstop 2026-09-08T04:28:30-05:00, končana\)/);
+  assert.doesNotMatch(izpis, /Scoring - Page views/, 'tuje avtomatizacije se ne izpišejo');
+  assert.match(izpis, /drugih avtomatizacij v računu: 1, izpuščene/);
+  // Vrstica o vstopu je PRED seznamom avtomatizacij: odrezan dnevnik je ne sme skriti.
+  assert.ok(izpis.indexOf('Ta kontakt je vstopil v') < izpis.indexOf('Avtomatizacije z "LM-10"'));
+
+  // Kontakt, ki ga v AC ni: kratek izpis s kazalcem na skripto.
+  assert.match(skripta.preveriKontaktVAC('nikogar@primer.si'), /V AC GA NI/);
 });
