@@ -504,8 +504,8 @@ Dokler nastavitev ni, se ne zgodi nič — zbiralnik dela natanko kot doslej.
 
 ### Kaj pride v ActiveCampaign
 
-Standardna polja: e-naslov, ime, priimek, telefon. Poleg njih sedemnajst polj po
-meri, uporabnih v personalizaciji e-pošte:
+Standardna polja: e-naslov, ime, priimek, telefon. Poleg njih enaindvajset polj
+po meri, uporabnih v personalizaciji e-pošte:
 
 | Polje | Vsebina |
 |---|---|
@@ -513,10 +513,15 @@ meri, uporabnih v personalizaciji e-pošte:
 | `%PDF_LINK_PRODAJA%` | povezava do priprave na pogovor |
 | `%LM10_ODDAJA%` | čas zadnje oddaje — edino polje, ki se spremeni ob VSAKI oddaji |
 | `%LM10_DAVCNA%` | davčna številka |
-| `%LM10_PODJETJE%`, `%LM10_PANOGA%`, `%LM10_ZAPOSLENI%`, `%LM10_PROMET%` | podjetje in velikost |
-| `%LM10_LETNO%`, `%LM10_KAPITAL%`, `%LM10_ZANESLJIVOST%` | izračun |
+| `%LM10_PODJETJE%`, `%LM10_PANOGA%`, `%LM10_ZAPOSLENI%`, `%LM10_VELIKOST%`, `%LM10_PROMET%` | podjetje in velikost |
+| `%LM10_LETNO%` | letni izračun (vsota) |
+| `%LM10_ODLIV%`, `%LM10_MARZA%`, `%LM10_CAS%` | trije koši, iz katerih je vsota |
+| `%LM10_KAPITAL%`, `%LM10_ZANESLJIVOST%` | enkratni kapital in zanesljivost vnosa |
 | `%LM10_PODROCJA%`, `%LM10_TVEGANJA%`, `%LM10_POSVET%` | kaj je izbral in ali prosi za posvet |
 | `%LM10_SEKVENCA%`, `%LM10_VIR%`, `%LM10_VLOGA%` | za segmentacijo |
+
+Zneski gredo v CRM kot gola števila (`25000`), brez ločil in valute — v
+preglednici jih oblikuje list, ne skripta.
 
 Polji `PDF_LINK` in `PDF_LINK_PRODAJA` **ustvarite v AC ročno** (Settings →
 Fields), preden poženete `pripraviAC` — skripta ju najde po personalizacijski
@@ -570,6 +575,11 @@ prepove, se datoteke shranijo, povezave pa ne delujejo.
 |---|---|---|
 | poročilo stranki | *Field changes* → `PDF Link`, runs multiple times | *Wait 1 minute*, nato *Send email* s povezavo `%PDF_LINK%` |
 | obvestilo prodaji | *Field changes* → `LM-10 čas zadnje oddaje`, multiple times, pogoj »je na seznamu prodaje« | *Send notification* na prodajni naslov z obema povezavama |
+
+Obvestilo prodaji je zapisano tako, da je enako pošti, ki jo je prej pošiljala
+skripta (`posljiObvestilo`) — iste vrstice v istem vrstnem redu, le da sta
+priponki zamenjani s povezavama. Polja `LM10_VELIKOST`, `LM10_ODLIV`,
+`LM10_MARZA` in `LM10_CAS` obstajajo prav zaradi tega sporočila.
 
 Čakanje ene minute pri prvi je namerno: kontakt pride na seznam šele s klicem,
 ki polje nastavi. Sprožilec druge je **čas oddaje** in ne povezava do priprave:
