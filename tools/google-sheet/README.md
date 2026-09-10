@@ -178,9 +178,9 @@ izcimilo** — šele nato številke:
 
 ```
 prejeto · firstName · lastName · companyName · industryLabel · employeeCount
-phone · kliciTakoj · email · letno · risks
-poklicano · sestanek · opombe
-… nato zneski, področja, privolitve, kontekst, urne postavke
+annualRevenueEUR · email · phone · kliciTakoj
+poklicano · risks · sestanek · sestanek datum · ura · opombe
+letno · … nato zneski, področja, privolitve, kontekst, urne postavke
 ```
 
 To ni isto kot `CSV_COLUMNS` v aplikaciji in ne sme biti: tam je zaporedje
@@ -197,19 +197,49 @@ vrne z desnim klikom med sosednjima stolpcema.
 
 ### Izpeljana stolpca in stolpci za klicatelja
 
-Štirih stolpcev aplikacija ne pošlje — nastanejo tu:
+Sedmih stolpcev aplikacija ne pošlje — nastanejo tu:
 
 | Stolpec | Kaj je |
 |---|---|
 | `kliciTakoj` | `DA`, kadar je obiskovalec prosil za posvet. Isto pove `consentConsulting`, le strojno; ta ostane skrit za filtre. |
 | `letno` | Odliv + nezaslužena marža + vrednost časa. Ista številka kot v e-obvestilu; doslej je klicatelj moral seštevati tri stolpce. |
 | `poklicano` | Potrditveno polje. Prazno = klic še ni opravljen. |
-| `sestanek` | Spustni seznam: `sestanek`, `ne želi`, `drugič`. |
+| `sestanek` | Potrditveno polje. Obkljukano = sestanek je dogovorjen. |
+| `sestanek datum` | Datum dogovorjenega sestanka. Celica je stroga: sprejme samo datum (koledarski izbirnik), oblika je `d. m. yyyy`. |
+| `ura` | Ura tega sestanka, oblika `HH:mm`. Vpisano `9:30` se izriše kot `09:30`. |
 | `opombe` | Prosto besedilo, oblikovano kot navadno besedilo, da vpisani datum ali `=` ostaneta, kar sta. |
 
-Zadnji trije so **klicateljevi** in jih oddaja ne more povoziti: vrstica se piše
+Zadnjih pet je **klicateljevih** in jih oddaja ne more povoziti: vrstica se piše
 po imenih stolpcev, teh imen pa v oddaji ni. Nova oddaja jih v svoji vrstici
 pusti prazne in se že vpisanih vrstic sploh ne dotakne.
+
+`sestanek` je bil prej spustni seznam s tremi izidi (`sestanek`, `ne želi`,
+`drugič`). Kljukica pove edino, kar lijak šteje — sestanek je ali ga ni —, razlog
+zavrnitve pa sodi v `opombe`, kjer ima zanj cel stavek. Cena je ena: **„poklican,
+izida še nisem vpisal" ni več ločljiv od „poklican, sestanka ni"**, ker
+neobkljukano polje pomeni oboje; analitika zato tega ne šteje več in namesto
+tega opozori na dogovorjen sestanek brez vpisanega datuma.
+
+Datum in ura sta **dva stolpca** in ne en časovni žig zato, ker se ura pogosto
+uskladi šele za datumom: kot del datuma bi pomenila, da klicatelj najprej vpiše
+polnoč in se k celici vrača, popravek same ure pa bi moral skozi datumsko polje,
+ki zanjo ni.
+
+> **Ob prehodu s spustnega seznama na kljukico** je treba pognati `urediStolpce`
+> — dvoje uredi sam:
+>
+> - **Stolpca `sestanek datum` in `ura` naredi**, če ju še ni. Če ste stolpec za
+>   datum dodali ročno, mora njegova glava pisati natanko `sestanek datum` (male
+>   črke, en presledek); drugačno ime skripta razume kot tuj stolpec, ga odrine
+>   na desni rob in zraven naredi svojega, praznega. Popravite glavo (vpisani
+>   datumi ostanejo) ali, če je stolpec še prazen, ga pobrišite.
+> - **Stare izide klica pretvori v kljukico**: `sestanek` postane obkljukano
+>   polje, vsaka druga vpisana beseda (`ne želi`, `drugič`, karkoli prilepljenega)
+>   pa se preseli na začetek `opomb` in polje ostane prazno. Brez tega bi stara
+>   besedila obležala v stolpcu — kljukica jih ne zavrne, `COUNTIF(…;TRUE)` pa
+>   jih ne šteje, zato bi lijak in graf pokazala **nič sestankov**, kar je videti
+>   kot veljavna številka. Izpis zagona pove, koliko jih je bilo pretvorjenih;
+>   drugi zagon ne pretvarja več ničesar.
 
 **IMEN NE PREIMENUJTE.** Vezava je po imenu; preimenovan stolpec skripta razume
 kot tuj in ob naslednji oddaji nastane nov, prazen zraven. Če je glava
@@ -260,8 +290,8 @@ nič: ure na mesec bi se v podedovani obliki brale kot evri, nad glavo pa bi
 viselo pojasnilo sosednjega stolpca. `urediVidez` vse troje takoj za tem postavi
 znova, po imenu stolpca.
 
-Pred prepisom se **odstranijo pravila veljavnosti** (spustni seznam, potrditveno
-polje). Nujno: seznam v stolpcu `sestanek` je strog, veljavnost pa se s
+Pred prepisom se **odstranijo pravila veljavnosti** (potrditveni polji, datumska
+celica). Nujno: celica v stolpcu `sestanek datum` je stroga, veljavnost pa se s
 prerazporeditvijo ne premakne — ostane na stari fizični celici, in ko prepis vanjo
 zapiše podatek drugega stolpca, ga Google zavrne in cel poseg pade. `urediVidez`
 pravila takoj za tem postavi znova, po imenu stolpca.
@@ -278,7 +308,7 @@ osvežiti s funkcijo **`urediAnalitiko`**.
 | Kje | Kaj |
 |---|---|
 | vrstici 5–6 | **Kartice**: še za poklicati (rdeča — edina, ki je naloga in ne podatek), prosijo za posvet, poklicani, leadov skupaj, letni znesek |
-| pod njimi | **Štirje grafi**: lijak od leada do sestanka, izidi klicev, leadi po mesecih, leadi po dejavnosti |
+| pod njimi | **Štirje grafi**: lijak od leada do sestanka, izidi klicev (sestanek dogovorjen / brez sestanka, med poklicanimi), leadi po mesecih, leadi po dejavnosti |
 | vrstica 44 | **Za poklicati** — samodejen seznam tistih, ki prosijo za posvet in še niso poklicani, najstarejši najprej |
 | stolpec N naprej | **Podatki za grafe**: podrobne številke, lijak, izidi, po mesecih, po dejavnosti, viru, zanesljivosti in velikosti |
 
@@ -289,7 +319,7 @@ spodaj, ker se `FILTER` razteza navzdol in bi karkoli pod njim ob prvem večjem
 odgovoru dobilo `#REF!`.
 
 **Vse številke so žive formule, ne posnetek.** To ni podrobnost izvedbe:
-klicatelj obkljuka `poklicano` in izbere `sestanek` ročno, skripta o tem ne izve
+klicatelj obkljuka `poklicano` in `sestanek` ročno, skripta o tem ne izve
 nikoli, in izračun ob oddaji leada bi bil zastarel od prve kljukice naprej — pri
 čemer bi bile številke videti sveže. Tako pa se preračunajo v isti sekundi.
 

@@ -457,6 +457,9 @@ function ustvariGoogle() {
     SpreadsheetApp: {
       getActive: () => preglednica,
       openById: () => preglednica,
+      // Ponaredek piše sproti, zato flush nima kaj storiti — obstajati pa mora,
+      // sicer `preurediList` pade in cel urediStolpce ostane brez pokritja.
+      flush: () => {},
       ProtectionType: { SHEET: 'SHEET', RANGE: 'RANGE' },
       newDataValidation() {
         const pravilo = { vrsta: '', seznam: null, dovoliNeveljavno: true };
@@ -468,6 +471,10 @@ function ustvariGoogle() {
           requireValueInList(seznam) {
             pravilo.vrsta = 'list';
             pravilo.seznam = seznam.slice();
+            return graditelj;
+          },
+          requireDate() {
+            pravilo.vrsta = 'date';
             return graditelj;
           },
           setAllowInvalid(dovoli) {
@@ -948,15 +955,36 @@ test('doPost z record + sheet zapiše lead na list Leadi z izpeljanima stolpcema
   assert.equal(v.porociloStranki, 'ni poslano: aplikacija ni poslala strankinega PDF-ja');
   assert.equal(v.poklicano, '');
   assert.equal(v.sestanek, '');
+  assert.equal(v['sestanek datum'], '');
+  assert.equal(v.ura, '');
   assert.equal(v.opombe, '');
   assert.equal(
     leadi.oblikaCelice(2, glava.indexOf('poklicano') + 1).dataValidation?.vrsta,
     'checkbox',
     'opremiVrstico doda potrditveno polje',
   );
-  assert.deepEqual(
-    izSkripte(leadi.oblikaCelice(2, glava.indexOf('sestanek') + 1).dataValidation?.seznam ?? []),
-    izSkripte(skripta.SESTANEK_MOZNOSTI),
+  assert.equal(
+    leadi.oblikaCelice(2, glava.indexOf('sestanek') + 1).dataValidation?.vrsta,
+    'checkbox',
+    'sestanek je kljukica in ne več spustni seznam',
+  );
+  const datumCelica = leadi.oblikaCelice(2, glava.indexOf('sestanek datum') + 1);
+  assert.equal(datumCelica.dataValidation?.vrsta, 'date', 'sestanek datum sprejme samo datum');
+  assert.equal(
+    datumCelica.dataValidation?.dovoliNeveljavno,
+    false,
+    'strogo: neveljaven vnos v datumsko celico ne obstane',
+  );
+  assert.equal(datumCelica.numberFormat, 'd. m. yyyy');
+  assert.equal(
+    leadi.oblikaCelice(2, glava.indexOf('ura') + 1).numberFormat,
+    'HH:mm',
+    'ura je gola oblika — brez koledarskega izbirnika',
+  );
+  assert.equal(
+    leadi.oblikaCelice(2, glava.indexOf('ura') + 1).dataValidation,
+    undefined,
+    'nad uro ni veljavnosti, ki bi zavrnila "9:30"',
   );
 
   // Drugi lead: brez posveta in brez zneskov; pristane pod prvim, glava ostane.
@@ -983,6 +1011,64 @@ test('doPost z record + sheet zapiše lead na list Leadi z izpeljanima stolpcema
   assert.equal(v2.letno, 0, 'prazna polja so 0 in ne NaN');
 
   assert.deepEqual(dnevnik.warn, [], 'nobena stranska pot (oprema vrstice, pošta, AC) ni opozorila');
+});
+
+test('urediStolpce: stari izid klica postane kljukica, razlog se preseli v opombe', () => {
+  const { skripta, preglednica } = naloziSkripto();
+  post(skripta, oddaja(LEAD));
+  post(skripta, oddaja({ ...LEAD, firstName: 'Bor', email: 'bor@primer.si' }));
+
+  const leadi = preglednica.getSheetByName('Leadi');
+  const stara = vrstice(leadi)[0];
+  const kje = (ime) => stara.indexOf(ime) + 1;
+
+  // Stanje pred prehodom: v stolpcu `sestanek` stojijo besede starega spustnega
+  // seznama. Kljukica jih ne zavrne, COUNTIF(...,TRUE) pa jih ne šteje — brez
+  // pretvorbe bi lijak pokazal nič sestankov.
+  leadi.getRange(2, kje('sestanek')).setValue('sestanek');
+  leadi.getRange(3, kje('sestanek')).setValue('ne želi');
+  leadi.getRange(3, kje('opombe')).setValue('poklicati čez pol leta');
+
+  const izid = skripta.urediStolpce();
+  assert.match(izid, /Starih izidov klica pretvorjenih v kljukico: 2\./);
+
+  const glava = vrstice(leadi)[0];
+  assert.ok(glava.includes('sestanek datum'), 'manjkajoči stolpec doda urediStolpce sam');
+  assert.ok(glava.includes('ura'));
+  assert.equal(
+    glava.indexOf('ura') - glava.indexOf('sestanek'),
+    2,
+    'datum in ura stojita takoj za kljukico',
+  );
+
+  const v1 = poImenih(leadi, 2);
+  const v2 = poImenih(leadi, 3);
+  assert.equal(v1.sestanek, true, '„sestanek" postane obkljukano polje');
+  assert.equal(v2.sestanek, '', 'zavrnitev ni sestanek — polje ostane prazno');
+  assert.equal(
+    v2.opombe,
+    'ne želi · poklicati čez pol leta',
+    'razlog se ne izgubi in stoji pred obstoječo opombo',
+  );
+  assert.equal(v1.opombe, '', 'brez razloga se opomba ne dotakne');
+
+  // Kljukici, datumska celica in oblika ure so po prerazvrstitvi postavljene znova.
+  assert.equal(leadi.oblikaCelice(2, glava.indexOf('sestanek') + 1).dataValidation?.vrsta, 'checkbox');
+  const datum = leadi.oblikaCelice(2, glava.indexOf('sestanek datum') + 1);
+  assert.equal(datum.dataValidation?.vrsta, 'date');
+  assert.equal(datum.dataValidation?.dovoliNeveljavno, false);
+  assert.equal(datum.numberFormat, 'd. m. yyyy');
+  assert.equal(leadi.oblikaCelice(2, glava.indexOf('ura') + 1).numberFormat, 'HH:mm');
+
+  // Idempotentno: drugič ni več niza, torej ni česa pretvarjati.
+  const drugic = skripta.urediStolpce();
+  assert.ok(!/Starih izidov klica/.test(drugic), 'drugi zagon ne pretvarja ničesar');
+  assert.equal(poImenih(leadi, 2).sestanek, true, 'kljukica preživi drugi zagon');
+  assert.equal(
+    poImenih(leadi, 3).opombe,
+    'ne želi · poklicati čez pol leta',
+    'opomba se ob drugem zagonu ne podvoji',
+  );
 });
 
 test('doPost s prilogama pošlje strankino poročilo na e-naslov iz oddaje — samo njen PDF, priprava nikoli', () => {

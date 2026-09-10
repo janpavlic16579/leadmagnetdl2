@@ -295,14 +295,30 @@ var LETNO = 'letno';
  *
  * IMEN NE PREIMENUJTE v preglednici. Vezava je po imenu: preimenovan stolpec
  * skripta razume kot tuj, ob naslednji oddaji pa nastane nov, prazen zraven.
+ *
+ * ZAKAJ JE `sestanek` KLJUKICA in ne več spustni seznam („sestanek / ne želi /
+ * drugič"): klicatelj z eno kljukico pove edino, kar lijak šteje — sestanek je
+ * ali ga ni —, razlog zavrnitve pa sodi v `opombe`, kjer ima zanj cel stavek
+ * namesto ene od dveh vnaprej izbranih besed. Cena je ena: „poklican, izida še
+ * nisem vpisal" ni več ločljiv od „poklican, sestanka ni", ker neobkljukano
+ * polje pomeni oboje. Analitika tega zato ne šteje več in namesto tega opozori
+ * na dogovorjen sestanek brez vpisanega datuma.
+ *
+ * ZAKAJ STA DATUM IN URA DVA STOLPCA in ne en časovni žig: datum ima strogo
+ * veljavnost in s tem koledarski izbirnik, ura pa je gola oblika `HH:mm`. Ura se
+ * pogosto uskladi šele za datumom; kot del datuma bi pomenila, da klicatelj
+ * najprej vpiše polnoč in se k celici vrača, popravek same ure pa bi moral iti
+ * skozi datumsko polje, ki zanjo ni.
+ *
+ * Ime `sestanek datum` je s presledkom NAMENOMA: tak stolpec na listu že stoji,
+ * vezava pa je po imenu — `sestanekDatum` bi zraven naredil še enega, praznega.
  */
 var POKLICANO = 'poklicano';
 var SESTANEK = 'sestanek';
+var SESTANEK_DATUM = 'sestanek datum';
+var SESTANEK_URA = 'ura';
 var OPOMBE = 'opombe';
-var DELOVNI_STOLPCI = [POKLICANO, SESTANEK, OPOMBE];
-
-/** Edine tri vrednosti, ki jih spustni seznam v stolpcu `sestanek` dovoli. */
-var SESTANEK_MOZNOSTI = ['sestanek', 'ne želi', 'drugič'];
+var DELOVNI_STOLPCI = [POKLICANO, SESTANEK, SESTANEK_DATUM, SESTANEK_URA, OPOMBE];
 
 /**
  * Vrstni red stolpcev na listu — SAMO za branje s strani človeka.
@@ -337,6 +353,11 @@ var VRSTNI_RED = [
   // "koliko".
   'risks',
   SESTANEK,
+  // Datum in ura takoj za kljukico: kdaj je sestanek, se vpiše v isti sapi, ko
+  // se ga dogovori. Vmesni stolpec bi pomenil, da klicatelj med kljukico in
+  // datumom drsi čez nekaj, kar ga v tistem trenutku ne zanima.
+  SESTANEK_DATUM,
+  SESTANEK_URA,
   OPOMBE,
   LETNO,
   'directLossEUR',
@@ -740,7 +761,7 @@ function zapisiVrstico(vrednosti) {
   list.appendRow(vrstica);
   var stVrstice = list.getLastRow();
 
-  // Potrditveno polje in spustni seznam za pravkar dodano vrstico. V try/catch,
+  // Potrditveni polji, datumska celica in oblika ure za pravkar dodano vrstico. V try/catch,
   // ker je to kozmetika: napaka tu ne sme pomeniti, da aplikacija dostavo razume
   // kot neuspelo in prodajno pripravo prenese stranki (načelo 3 v glavi).
   try {
@@ -755,8 +776,8 @@ function zapisiVrstico(vrednosti) {
 }
 
 /**
- * Klicateljevim celicam ene vrstice doda potrditveno polje, spustni seznam in
- * obliko navadnega besedila.
+ * Klicateljevim celicam ene vrstice doda potrditveni polji, datumsko veljavnost
+ * ter obliki ure in navadnega besedila.
  *
  * Zakaj po vrsticah in ne enkrat čez cel stolpec: oblikovanje in veljavnost,
  * nanesena do konca lista, razširita "uporabljeni obseg" — getLastRow tedaj
@@ -775,12 +796,26 @@ function opremiVrstico(list, glava, vrstica) {
       .setHorizontalAlignment('center');
   }
   if (kje(SESTANEK)) {
-    list.getRange(vrstica, kje(SESTANEK)).setDataValidation(
-      SpreadsheetApp.newDataValidation()
-        .requireValueInList(SESTANEK_MOZNOSTI, true)
-        .setAllowInvalid(false)
-        .build(),
-    );
+    list
+      .getRange(vrstica, kje(SESTANEK))
+      .setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build())
+      .setHorizontalAlignment('center');
+  }
+  if (kje(SESTANEK_DATUM)) {
+    list
+      .getRange(vrstica, kje(SESTANEK_DATUM))
+      .setDataValidation(
+        SpreadsheetApp.newDataValidation().requireDate().setAllowInvalid(false).build(),
+      )
+      .setNumberFormat('d. m. yyyy');
+  }
+  if (kje(SESTANEK_URA)) {
+    // Samo oblika, brez veljavnosti: koledarski izbirnik nad uro nima kaj iskati,
+    // "9:30" pa preglednica sama prebere kot čas in ga izriše kot 09:30.
+    list
+      .getRange(vrstica, kje(SESTANEK_URA))
+      .setNumberFormat('HH:mm')
+      .setHorizontalAlignment('center');
   }
   if (kje(OPOMBE)) {
     list.getRange(vrstica, kje(OPOMBE)).setNumberFormat('@');
@@ -882,6 +917,7 @@ function preurediList() {
   });
 
   var nove = [novaGlava];
+  var pretvorjenih = 0;
   for (var r = 1; r < podatki.length; r++) {
     var vrstica = indeksi.map(function (i) {
       // Skozi zaCelico tudi pri premikanju: getValues vrne "+386 1 234 5678"
@@ -892,12 +928,13 @@ function preurediList() {
     // Izpeljanke za nazaj — v pomnilniku, v že zgrajeni vrstici. Noben dodaten
     // zapis in nobena dodatna točka odpovedi; vse gre skozi tisti en setValues.
     izpolniIzpeljanke(vrstica, novaGlava);
+    if (pretvoriStariIzid(vrstica, novaGlava)) pretvorjenih++;
     nove.push(vrstica);
   }
 
   // Veljavnost podatkov mora dol PRED zapisom, sicer prepis sploh ne steče.
   //
-  // Spustni seznam v stolpcu `sestanek` je nastavljen strogo (setAllowInvalid
+  // Datumska celica `sestanek datum` je nastavljena strogo (setAllowInvalid
   // false), veljavnost pa se s prerazporeditvijo NE premakne — ostane na stari
   // fizični celici. Ko prepis vanjo zapiše podatek drugega stolpca, ga Google
   // zavrne z "The data you entered violates the data validation rules" in cel
@@ -940,8 +977,56 @@ function preurediList() {
     ' stolpcev, ' +
     (nove.length - 1) +
     ' vrstic. ' +
+    (pretvorjenih
+      ? 'Starih izidov klica pretvorjenih v kljukico: ' + pretvorjenih + '. '
+      : '') +
     analitika
   );
+}
+
+/**
+ * Stari izid klica („sestanek" / „ne želi" / „drugič") v kljukico — v pomnilniku,
+ * v že zgrajeni vrstici, tik pred edinim zapisom.
+ *
+ * Brez tega bi vse, kar je klicatelj vpisal do prehoda na potrditveno polje,
+ * obležalo v stolpcu kot BESEDILO. Kljukica ga ne zavrne — `requireCheckbox`
+ * pusti setAllowInvalid na privzetem `true` in tako besedilo samo označi kot
+ * neveljavno —, `COUNTIF(...,TRUE)` pa ga ne šteje. Lijak, tortni graf in
+ * „sestanki na poklicanega" bi zato pokazali NIČ sestankov: številka, ki je
+ * videti veljavna in je narobe, kar je najdražja vrsta napake na tem listu.
+ *
+ * Preseljena je vsaka neprazna besedilna vrednost in ne samo tri znane: seznam
+ * je bil sicer strog, a v celico je mogoče prilepiti karkoli, in kar ostane za
+ * kljukico, se ne da več prebrati.
+ *
+ * Vsebina se ne izgubi — razlog gre v `opombe`, PRED obstoječo opombo, ker je
+ * starejši od nje. Kljukica pozna samo „je" in „ni", cel stavek pa odslej itak
+ * sodi tja.
+ *
+ * Idempotentno: po prvem zagonu v stolpcu ni več niza, torej ni več česa
+ * pretvarjati.
+ */
+function pretvoriStariIzid(vrstica, glava) {
+  var i = glava.indexOf(SESTANEK);
+  if (i === -1 || typeof vrstica[i] !== 'string') return false;
+
+  // zaCelico bi vodilne znake zaklenil z opuščajem; tu ga odstranimo, da se v
+  // opombi ne pojavi.
+  var besedilo = vrstica[i].replace(/^'/, '').trim();
+  if (besedilo === '') return false;
+
+  if (besedilo.toLowerCase() === SESTANEK) {
+    vrstica[i] = true;
+    return true;
+  }
+
+  var j = glava.indexOf(OPOMBE);
+  if (j !== -1) {
+    var opomba = vrstica[j] === null || vrstica[j] === undefined ? '' : String(vrstica[j]).trim();
+    vrstica[j] = zaCelico(opomba ? besedilo + ' · ' + opomba : besedilo);
+  }
+  vrstica[i] = '';
+  return true;
 }
 
 /**
@@ -1099,8 +1184,10 @@ function popraviGlavo() {
  *
  * Ničla je tu iz istega razloga: izpeljanka `letno` je nekoč vanje zapisala 0.
  *
- * Merilo je namerno široko: klicatelj v `poklicano`, `sestanek` ali `opombe` ne
- * vpiše ne "false" ne ničle, `prejeto` pa je pri vsakem leadu datum. Nasprotna
+ * Merilo je namerno široko: klicatelj v nobenega od svojih petih stolpcev
+ * (`poklicano`, `sestanek`, `sestanek datum`, `ura`, `opombe`) ne vpiše ne
+ * "false" ne ničle — datum in ura sta števili nad nič —, `prejeto` pa je pri
+ * vsakem leadu datum. Nasprotna
  * napaka — pustiti prazno vrstico — je poceni, brisanje leada pa ni, zato je
  * vse, kar ni na tem ozkem seznamu, vsebina.
  */
@@ -1181,7 +1268,7 @@ function pociistiOdvecneVrstice(list, glava) {
 
 /**
  * V glavo doda imena, ki jih aplikacija nikoli ne pošlje: izpeljanki
- * (`kliciTakoj`, `letno`) in tri klicateljeve stolpce.
+ * (`kliciTakoj`, `letno`) in pet klicateljevih stolpcev.
  *
  * Piše izključno v stolpce, ki hip prej niso obstajali, zato zapisanega podatka
  * ne more poškodovati. Če bi karkoli za tem padlo, ostane list z nekaj praznimi
@@ -1292,18 +1379,20 @@ var POJASNILA = {
   activeCampaign: 'Id kontakta v ActiveCampaignu. Prazno ali "NAPAKA:" pomeni, da tam še ni — tako vrstico pobere ura (posljiZaostaleVAC).',
   porociloPdf: 'Povezava do strankinega PDF-ja na Drivu — isti dokument, kot ga je dobila po e-pošti; gre tudi v ActiveCampaign (%LM10_POROCILO%). "NAPAKA:" = Drive je odpovedal, stranka ima PDF vseeno.',
   poklicano: 'Obkljukajte, ko je klic opravljen.',
-  sestanek: 'Izid klica: sestanek / ne želi / drugič.',
+  sestanek: 'Obkljukajte, ko je sestanek dogovorjen. Zakaj ga ni, pripišite v opombe.',
+  'sestanek datum': 'Datum dogovorjenega sestanka. Celica sprejme samo datum — vpišite ga ali izberite v koledarju.',
+  ura: 'Ura sestanka iz sosednjega stolpca. Vpišite npr. 9:30 in celica jo izriše kot 09:30.',
   opombe: 'Prosto besedilo. Oblikovano kot navadno besedilo, da datumi in formule ostanejo, kot jih vpišete.',
 };
 
 /**
  * Vidna podoba lista: skriti strojni stolpci, širine, oblike, potrditvena polja,
- * spustni seznam, filter.
+ * datumska veljavnost, filter.
  *
  * Vse to je treba postavljati ZNOVA ob vsakem preurejanju. `setValues` premakne
  * samo VREDNOSTI — veljavnost podatkov, oblike števil, širine in zapiski ostanejo
- * na starem indeksu stolpca. Brez tega bi po prerazvrstitvi spustni seznam
- * obtičal sredi e-naslovov, potrditveno polje pa sredi zneskov.
+ * na starem indeksu stolpca. Brez tega bi po prerazvrstitvi datumska celica
+ * obtičala sredi e-naslovov, potrditveno polje pa sredi zneskov.
  */
 function urediVidez(list, glava) {
   var vrstic = Math.max(0, list.getLastRow() - 1);
@@ -1346,7 +1435,9 @@ function urediVidez(list, glava) {
     letno: 110,
     risks: 300,
     poklicano: 90,
-    sestanek: 120,
+    sestanek: 90,
+    'sestanek datum': 110,
+    ura: 70,
     opombe: 320,
     prodajnaPriprava: 220,
     porociloPdf: 220,
@@ -1382,7 +1473,7 @@ function urediVidez(list, glava) {
 
     if (!vrstic) continue;
 
-    if (ime === POKLICANO) {
+    if (ime === POKLICANO || ime === SESTANEK) {
       // requireCheckbox in NE insertCheckboxes: slednji v vsako celico razpona
       // ZAPIŠE false — s tem potisne getLastRow na konec lista (naslednja oddaja
       // pristane stotine vrstic niže) in odkljuka vse, kar je klicatelj označil.
@@ -1391,13 +1482,19 @@ function urediVidez(list, glava) {
         .setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox().build())
         .setHorizontalAlignment('center');
     }
-    if (ime === SESTANEK) {
-      list.getRange(2, stolpec, vrstic, 1).setDataValidation(
-        SpreadsheetApp.newDataValidation()
-          .requireValueInList(SESTANEK_MOZNOSTI, true)
-          .setAllowInvalid(false)
-          .build(),
-      );
+    if (ime === SESTANEK_DATUM) {
+      list
+        .getRange(2, stolpec, vrstic, 1)
+        .setDataValidation(
+          SpreadsheetApp.newDataValidation().requireDate().setAllowInvalid(false).build(),
+        )
+        .setNumberFormat('d. m. yyyy');
+    }
+    if (ime === SESTANEK_URA) {
+      list
+        .getRange(2, stolpec, vrstic, 1)
+        .setNumberFormat('HH:mm')
+        .setHorizontalAlignment('center');
     }
     if (ime === OPOMBE) {
       // Navadno besedilo, dokler je stolpec še prazen: sicer preglednica vnos
@@ -1434,7 +1531,7 @@ function urediVidez(list, glava) {
  * za klicanje in podatkovni del, iz katerega grafi jemljejo.
  *
  * VSE ŠTEVILKE SO ŽIVE FORMULE, ne izračun skripte, in to je bistvo.
- * Klicatelj obkljuka `poklicano` in izbere `sestanek` ROČNO, v preglednici —
+ * Klicatelj obkljuka `poklicano` in `sestanek` ROČNO, v preglednici —
  * skripta o tem ne izve nikoli. Posnetek, izračunan ob oddaji leada, bi bil
  * zastarel od prve kljukice do naslednjega obiskovalca, in to nevidno: številke
  * bi bile videti sveže. Formula se preračuna sama, v isti sekundi.
@@ -1478,14 +1575,18 @@ function urediAnalitiko() {
   var stevilo = R(PREJETO);
   var posvet = R(KLICI_TAKOJ);
   var klicano = R(POKLICANO);
-  var izid = R(SESTANEK);
+  var dogovorjen = R(SESTANEK);
+  var datumSestanka = R(SESTANEK_DATUM);
   var letno = R(LETNO);
 
   var skupaj = 'COUNTA(' + stevilo + ')';
   var poklicanih = 'COUNTIF(' + klicano + ',TRUE)';
   var prosijo = 'COUNTIF(' + posvet + ',"DA")';
   var caka = prosijo + '-COUNTIFS(' + posvet + ',"DA",' + klicano + ',TRUE)';
-  var sestankov = 'COUNTIF(' + izid + ',"' + SESTANEK_MOZNOSTI[0] + '")';
+  // TRUE in ne COUNTA: odkljukano polje ni prazna celica, ampak FALSE, in COUNTA
+  // bi ga štela — vsak sestanek, ki ga je kdo obkljukal in nato odkljukal, bi
+  // ostal v številki za vedno.
+  var sestankov = 'COUNTIF(' + dogovorjen + ',TRUE)';
 
   // ── Kartice: pet številk, ki jih človek prebere v dveh sekundah ────────────
   var kartice = [
@@ -1502,7 +1603,12 @@ function urediAnalitiko() {
     ['Novi zadnjih 7 dni', '=COUNTIFS(' + stevilo + ',">="&TODAY()-6)', '#.##0'],
     ['Novi zadnjih 30 dni', '=COUNTIFS(' + stevilo + ',">="&TODAY()-29)', '#.##0'],
     ['Brez telefonske številke', '=' + skupaj + '-COUNTA(' + R('phone') + ')', '#.##0'],
-    ['Poklicani brez vpisanega izida', '=MAX(0,' + poklicanih + '-COUNTA(' + izid + '))', '#.##0'],
+    // Nadomestilo za „poklicani brez vpisanega izida": odkar je `sestanek`
+    // kljukica, neobkljukano polje pomeni tako „sestanka ni" kot „še nisem
+    // vpisal" in tega dvojega ni mogoče razločiti. Dogovorjen sestanek brez
+    // datuma pa je enako zanesljiv znak nedokončanega vnosa — in ga je mogoče
+    // prešteti.
+    ['Sestanki brez vpisanega datuma', '=MAX(0,' + sestankov + '-COUNTIFS(' + dogovorjen + ',TRUE,' + datumSestanka + ',"<>"))', '#.##0'],
     ['Delež poklicanih', '=IF(' + skupaj + '=0,"—",' + poklicanih + '/' + skupaj + ')', '0 %'],
     // Odstotek pri malo klicih ni metrika, ampak motnja: pri treh klicih skače
     // med 0, 33, 67 in 100 %. Pod desetimi zato pokaže n in ne deleža.
@@ -1521,10 +1627,13 @@ function urediAnalitiko() {
     ['Sestanki', '=' + sestankov],
   ];
 
-  var izidi = SESTANEK_MOZNOSTI.map(function (moznost) {
-    return [moznost, '=COUNTIF(' + izid + ',"' + moznost + '")'];
-  });
-  izidi.push(['brez vpisanega izida', '=MAX(0,' + poklicanih + '-COUNTA(' + izid + '))']);
+  // Dva deleža in ne več štirje: kljukica pozna samo dogovorjen sestanek in vse
+  // ostalo. Imenovalec so POKLICANI in ne vsi leadi — sicer bi graf govoril o
+  // tem, koliko klicev še ni bilo, ne o tem, kako se klici iztečejo.
+  var izidi = [
+    ['sestanek dogovorjen', '=' + sestankov],
+    ['brez sestanka', '=MAX(0,' + poklicanih + '-' + sestankov + ')'],
+  ];
 
   var vrsta =
     '=IFERROR(SORT(FILTER({' +
@@ -1752,7 +1861,7 @@ function zascitiOpozorilno(list, opis) {
  * številke in vrne 0 — kar je videti kot veljaven odgovor.
  */
 function kontrolnaFormula(vir, glava) {
-  var pogoji = [PREJETO, KLICI_TAKOJ, POKLICANO, SESTANEK, OPOMBE, LETNO].map(function (ime) {
+  var pogoji = [PREJETO, KLICI_TAKOJ, POKLICANO, SESTANEK, SESTANEK_DATUM, OPOMBE, LETNO].map(function (ime) {
     return vir + '$' + crkaStolpca(glava, ime) + '$1="' + ime + '"';
   });
   return (
