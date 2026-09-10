@@ -2707,8 +2707,12 @@ var AC_POLJA = [
   { tag: 'LM10_DAVCNA', naslov: 'LM-10 davčna številka', vrsta: 'text', stolpec: 'taxNumber' },
   // Čas zadnje oddaje. V CRM-ju je podatek, hkrati pa je to EDINO polje, ki se
   // spremeni ob VSAKI oddaji — tudi ko PDF-ja ni in povezavi ostaneta stari.
-  // Zato je zanesljiv sprožilec za obvestilo prodaji (glej README).
-  { tag: 'LM10_ODDAJA', naslov: 'LM-10 čas zadnje oddaje', vrsta: 'text', stolpec: PREJETO },
+  // `sprozilec: true`: obe avtomatizaciji v AC visita na tem polju, zato ga
+  // `posljiVAC` pošlje ZADNJE, v ločenem klicu za naročilom na sezname. Na
+  // kontaktu, ki že obstaja in je na obeh seznamih, je sprememba polja prava
+  // sprememba in ne del ustvarjanja, pogoj "je na seznamu" v avtomatizaciji pa
+  // drži. V enem klicu z ustvarjanjem kontakta se sprožilec ni sprožil.
+  { tag: 'LM10_ODDAJA', naslov: 'LM-10 čas zadnje oddaje', vrsta: 'text', stolpec: PREJETO, sprozilec: true },
   { tag: 'LM10_SEKVENCA', naslov: 'LM-10 sekvenca', vrsta: 'text', stolpec: 'followUpSequence' },
   { tag: 'LM10_VIR', naslov: 'LM-10 vir (utm_source)', vrsta: 'text', stolpec: 'utmSource' },
   { tag: 'LM10_VLOGA', naslov: 'LM-10 vloga', vrsta: 'text', stolpec: 'role' },
@@ -2927,6 +2931,36 @@ function acUstvariPolje(polje) {
   return id;
 }
 
+/** Čas iz AC ("2026-09-08T04:28:23-05:00") v ms; neberljiv ali prazen je 0. */
+function acCasMs(niz) {
+  var t = Date.parse(String(niz || ''));
+  return isNaN(t) ? 0 : t;
+}
+
+/**
+ * Sprožilci avtomatizacije v eni vrstici: vrsta, na kaj je vezan (relid ali
+ * params) in ali teče večkrat. Končna točka je v API-ju nedokumentirana, zato
+ * ob napaki funkcija to pove, ne pa vrže — diagnostika mora priti do konca.
+ */
+function acOpisSprozilcev(idAvtomatizacije) {
+  try {
+    var odgovor = acZahteva('automations/' + idAvtomatizacije + '/triggers', 'get');
+    var sprozilci = (odgovor && (odgovor.automationTriggers || odgovor.triggers)) || [];
+    if (!sprozilci.length) return 'AC ni vrnil sprožilcev';
+    return sprozilci
+      .map(function (s) {
+        var deli = ['vrsta ' + String(s.type || '?')];
+        if (s.relid) deli.push('relid ' + s.relid);
+        if (s.params) deli.push(typeof s.params === 'string' ? s.params : JSON.stringify(s.params).slice(0, 120));
+        deli.push(String(s.multientry) === '1' ? 'večkrat' : 'enkrat');
+        return deli.join(', ');
+      })
+      .join(' | ');
+  } catch (err) {
+    return 'AC sprožilcev ne razkrije (' + String(err).slice(0, 80) + ')';
+  }
+}
+
 /** Vse avtomatizacije računa, po straneh po sto; varovalo pri dva tisoč. */
 function acVseAvtomatizacije() {
   var vse = [];
@@ -3059,13 +3093,19 @@ function preveriKontaktVAC(email) {
         : 'NOBENO — sprožilec se ni sprožil'),
   );
 
+  // Avtomatizacije, ki nas zadevajo: z osnovno oznako v imenu ALI ustvarjene oz.
+  // spremenjene v zadnjih štirinajstih dneh — skrbnik AC jih poimenuje po svoje.
+  // Za vsako še sprožilec, ker je ravno tam navadno vzrok, da kontakt ne vstopi.
   var osnova = String(NASTAVITVE.AC.OSNOVNA_OZNAKA || 'LM-10').toLowerCase();
+  var meja = Date.now() - 14 * 24 * 60 * 60 * 1000;
   var nase = avtomatizacije.filter(function (a) {
-    return String(a.name || '').toLowerCase().indexOf(osnova) !== -1;
+    var poImenu = String(a.name || '').toLowerCase().indexOf(osnova) !== -1;
+    var nedavna = acCasMs(a.mdate) >= meja || acCasMs(a.cdate) >= meja;
+    return poImenu || nedavna;
   });
   vrstice.push(
-    'Avtomatizacije z "' + NASTAVITVE.AC.OSNOVNA_OZNAKA + '" v imenu:' +
-      (nase.length ? '' : ' NOBENE — v AC še niso zgrajene ali so poimenovane drugače'),
+    'Avtomatizacije z "' + NASTAVITVE.AC.OSNOVNA_OZNAKA + '" v imenu ali spremenjene v 14 dneh:' +
+      (nase.length ? '' : ' NOBENE — v AC še niso zgrajene'),
   );
   nase.forEach(function (a) {
     vrstice.push(
@@ -3074,8 +3114,11 @@ function preveriKontaktVAC(email) {
         '" — ' +
         (String(a.status) === '1' ? 'aktivna' : 'NEAKTIVNA') +
         ', vstopilo kontaktov: ' +
-        (a.entered || '0'),
+        (a.entered || '0') +
+        ', spremenjena ' +
+        (a.mdate || a.cdate || '?'),
     );
+    vrstice.push('     sprožilec: ' + acOpisSprozilcev(a.id));
   });
   vrstice.push('  (drugih avtomatizacij v računu: ' + (avtomatizacije.length - nase.length) + ', izpuščene)');
 
@@ -3108,8 +3151,48 @@ function posljiVAC(vrednosti) {
     throw new Error('Id-ji polj niso znani — poženite pripraviAC.');
   }
 
+  // Polja v dveh koših. Navadna gredo s kontaktom; sprožilna (`sprozilec: true`)
+  // ŠELE po naročilu na sezname, v svojem klicu — samo v načinu AC, kjer na njih
+  // visita avtomatizaciji. Pri novem kontaktu bi polje, nastavljeno v istem
+  // klicu, ki kontakt ustvari, veljalo za del ustvarjanja in ne za spremembo,
+  // kontakt pa v tistem trenutku še ne bi bil na seznamu 247 — oba pogoja
+  // sprožilca bi padla in prodaja ne bi dobila obvestila za noben nov lead.
+  var lociSprozilna = postaPrekAC();
+  var navadna = acVrednostiPolj(vrednosti, idji, lociSprozilna ? 'navadna' : 'vsa');
+  var sprozilna = lociSprozilna ? acVrednostiPolj(vrednosti, idji, 'sprozilna') : [];
+
+  var odgovor = acZahteva('contact/sync', 'post', {
+    contact: {
+      email: email,
+      firstName: acVrednost(vrednosti, 'firstName'),
+      lastName: acVrednost(vrednosti, 'lastName'),
+      phone: acVrednost(vrednosti, 'phone'),
+      fieldValues: navadna,
+    },
+  });
+  var id = odgovor && odgovor.contact ? String(odgovor.contact.id) : '';
+  if (!id) throw new Error('AC ni vrnil id-ja kontakta.');
+
+  var narocen = acNaSeznam(id, vrednosti, acSeznami(n));
+  acOznaci(id, acOznake(vrednosti));
+
+  if (sprozilna.length) {
+    acZahteva('contact/sync', 'post', { contact: { email: email, fieldValues: sprozilna } });
+  }
+  return { id: id, narocen: narocen };
+}
+
+/**
+ * Vrednosti polj po meri za en klic v AC. `kos` je 'navadna', 'sprozilna' ali
+ * 'vsa'. Prazne vrednosti izpadejo: AC bi prazen niz zapisal kot spremembo in
+ * sprožil avtomatizacijo brez povezave.
+ */
+function acVrednostiPolj(vrednosti, idji, kos) {
   var polja = [];
   AC_POLJA.forEach(function (polje) {
+    var jeSprozilno = Boolean(polje.sprozilec);
+    if (kos === 'navadna' && jeSprozilno) return;
+    if (kos === 'sprozilna' && !jeSprozilno) return;
     var id = idji[polje.tag];
     if (!id) return;
     if (polje.izpusti && polje.izpusti()) return;
@@ -3118,22 +3201,7 @@ function posljiVAC(vrednosti) {
     if (vrednost === '') return;
     polja.push({ field: id, value: vrednost });
   });
-
-  var odgovor = acZahteva('contact/sync', 'post', {
-    contact: {
-      email: email,
-      firstName: acVrednost(vrednosti, 'firstName'),
-      lastName: acVrednost(vrednosti, 'lastName'),
-      phone: acVrednost(vrednosti, 'phone'),
-      fieldValues: polja,
-    },
-  });
-  var id = odgovor && odgovor.contact ? String(odgovor.contact.id) : '';
-  if (!id) throw new Error('AC ni vrnil id-ja kontakta.');
-
-  var narocen = acNaSeznam(id, vrednosti, acSeznami(n));
-  acOznaci(id, acOznake(vrednosti));
-  return { id: id, narocen: narocen };
+  return polja;
 }
 
 /**
@@ -3318,7 +3386,9 @@ function acPoisciOznako(ime, poStraneh) {
 function acVrednost(vrednosti, ime) {
   var vrednost = vrednosti[ime];
   if (vrednost === undefined || vrednost === null) return '';
-  if (vrednost instanceof Date) return Utilities.formatDate(vrednost, 'Europe/Ljubljana', 'yyyy-MM-dd HH:mm');
+  // S sekundami: čas oddaje je sprožilec avtomatizacij in dve oddaji iste osebe
+  // v isti minuti morata biti dve različni vrednosti, sicer druga ne sproži nič.
+  if (vrednost instanceof Date) return Utilities.formatDate(vrednost, 'Europe/Ljubljana', 'yyyy-MM-dd HH:mm:ss');
   return String(vrednost).trim();
 }
 

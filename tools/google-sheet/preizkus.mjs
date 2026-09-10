@@ -1355,6 +1355,8 @@ function ponarediAC(
     avtomatizacije = [],
     vstopi = [],
     vrednostiPolj = [],
+    // id avtomatizacije → seznam sprožilcev; 'napaka' = AC vrne 404.
+    sprozilci = {},
   } = {},
 ) {
   // S poševnico na koncu, kot jo ljudje prilepijo — skripta jo mora odrezati.
@@ -1407,6 +1409,11 @@ function ponarediAC(
     }
     if (pot === 'contacts/77/fieldValues') return odgovor(200, { fieldValues: vrednostiPolj });
     if (pot.startsWith('automations?')) return odgovor(200, { automations: avtomatizacije });
+    if (/^automations\/[^/]+\/triggers$/.test(pot)) {
+      const id = pot.split('/')[1];
+      if (sprozilci[id] === 'napaka') return odgovor(404, { message: 'No Result found for Automation' });
+      return odgovor(200, { automationTriggers: sprozilci[id] || [] });
+    }
     if (pot === 'contacts/77/contactAutomations') return odgovor(200, { contactAutomations: vstopi });
     if (pot === 'contactLists') return odgovor(201, { contactList: telo.contactList });
     if (pot === 'contactTags') return odgovor(201, { contactTag: telo.contactTag });
@@ -1448,9 +1455,10 @@ test('AC z vroče poti: kontakt sinhroniziran, naročen na seznam, privolitev ko
     'naslov brez podvojene poševnice, ključ v glavi vsake zahteve',
   );
 
-  const sync = zahteve.find((z) => z.pot === 'contact/sync');
-  assert.equal(sync.metoda, 'post');
-  assert.deepEqual(sync.telo.contact, {
+  const synci = zahteve.filter((z) => z.pot === 'contact/sync');
+  assert.equal(synci.length, 2, 'kontakt s polji, nato ločeno sprožilno polje');
+  assert.equal(synci[0].metoda, 'post');
+  assert.deepEqual(synci[0].telo.contact, {
     email: 'ana@kovinar.si',
     firstName: 'Ana',
     lastName: 'Novak',
@@ -1459,11 +1467,20 @@ test('AC z vroče poti: kontakt sinhroniziran, naročen na seznam, privolitev ko
       { field: '1', value: 'Kovinar d.o.o.' },
       { field: '2', value: 'Proizvodnja — kovine' },
       { field: '5', value: '01234567' },
-      { field: '6', value: sync.telo.contact.fieldValues[3].value },
     ],
   });
-  // Brez prilog povezav ni, čas oddaje pa gre vedno — to je sprožilec obvestila prodaji.
-  assert.match(sync.telo.contact.fieldValues[3].value, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+  // Sprožilno polje (čas oddaje) gre ZADNJE, samo z e-naslovom, ko je kontakt že
+  // na seznamih in z oznakami — na obstoječem kontaktu je to prava sprememba.
+  assert.deepEqual(Object.keys(synci[1].telo.contact), ['email', 'fieldValues']);
+  assert.equal(synci[1].telo.contact.fieldValues.length, 1);
+  assert.equal(synci[1].telo.contact.fieldValues[0].field, '6');
+  assert.match(synci[1].telo.contact.fieldValues[0].value, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+  const poti = zahteve.map((z) => z.pot);
+  assert.ok(
+    poti.lastIndexOf('contact/sync') > poti.lastIndexOf('contactLists') &&
+      poti.lastIndexOf('contact/sync') > poti.lastIndexOf('contactTags'),
+    'sprožilno polje šele po seznamih in oznakah',
+  );
 
   assert.deepEqual(naSeznam(zahteve), [{ list: '245', contact: '77', status: 1 }], 'naročen, ne odjavljen');
   assert.equal(preverjanjaStanja(zahteve), 0, 's privolitvijo stanja na seznamu ni treba preverjati');
@@ -1541,7 +1558,7 @@ test('narociObstojeceVAC naroči kontakte z id-jem v celici; prazne in NAPAKA pu
   // Ura pobere, kar je enkratni poseg pustil pri miru.
   zahteve.length = 0;
   assert.equal(skripta.posljiZaostaleVAC(), 'Poslano: 2, padlo: 0.');
-  assert.equal(zahteve.filter((z) => z.pot === 'contact/sync').length, 2);
+  assert.equal(zahteve.filter((z) => z.pot === 'contact/sync').length, 4, 'dva klica na vrstico: polja, nato sprožilec');
   assert.equal(poImenih(leadi, 3).activeCampaign, '77');
   assert.equal(poImenih(leadi, 4).activeCampaign, '77');
   assert.match(lastnosti.get('AC_ZADNJI'), / — ura: Poslano: 2, padlo: 0\.$/);
@@ -1552,11 +1569,19 @@ test('narociObstojeceVAC naroči kontakte z id-jem v celici; prazne in NAPAKA pu
 // Strankin PDF na Drivu in povezava v ActiveCampaign
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** Vrednost polja z danim id-jem v vsakem contact/sync po vrsti; null, kadar polja ni. */
-const poljeVAC = (zahteve, id) =>
-  zahteve
-    .filter((z) => z.pot === 'contact/sync')
-    .map((z) => z.telo.contact.fieldValues.find((polje) => polje.field === id) ?? null);
+/**
+ * Vrednost polja z danim id-jem na vsako ODDAJO po vrsti; null, kadar polja ni.
+ * Oddaja sta v načinu AC dva klica contact/sync: glavni s kontaktom (ima
+ * firstName) in ločeni s sprožilnim poljem (samo email) — tu se zlijeta.
+ */
+const poljeVAC = (zahteve, id) => {
+  const oddaje = [];
+  for (const z of zahteve.filter((z) => z.pot === 'contact/sync')) {
+    if ('firstName' in z.telo.contact || !oddaje.length) oddaje.push([]);
+    oddaje[oddaje.length - 1].push(...z.telo.contact.fieldValues);
+  }
+  return oddaje.map((polja) => polja.find((polje) => polje.field === id) ?? null);
+};
 
 test('doPost s prilogama shrani strankin PDF na Drive: povezava v stolpcu porociloPdf in v polju PDF_LINK', () => {
   const { skripta, preglednica, lastnosti, dnevnik, drive } = naloziSkripto();
@@ -1674,7 +1699,7 @@ test('pošta prek AC: oba PDF-ja na Drive deljena s povezavo, MailApp molči, ko
   assert.deepEqual(poljeVAC(zahteve, '3'), [{ field: '3', value: porocilo.url }], 'PDF_LINK = strankin PDF');
   assert.deepEqual(poljeVAC(zahteve, '4'), [{ field: '4', value: priprava.url }], 'PDF_LINK_PRODAJA = priprava');
   assert.deepEqual(poljeVAC(zahteve, '5'), [{ field: '5', value: '01234567' }]);
-  assert.match(poljeVAC(zahteve, '6')[0].value, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+  assert.match(poljeVAC(zahteve, '6')[0].value, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/, 's sekundami — dve oddaji v isti minuti sta dve spremembi');
 
   assert.deepEqual(naSeznam(zahteve), [
     { list: '245', contact: '77', status: 1 },
@@ -1833,11 +1858,18 @@ test('preveriKontaktVAC pove, kje se je sporočilo ustavilo: polja so v AC, avto
       { field: '1', value: 'Kovinar d.o.o.' },
     ],
     avtomatizacije: [
-      { id: '1', name: 'Scoring - Page views', status: '1', entered: '116516' },
-      { id: '9', name: 'LM-10 poročilo stranki', status: '1', entered: '3' },
-      { id: '10', name: 'LM-10 obvestilo prodaji', status: '2', entered: '0' },
+      { id: '1', name: 'Scoring - Page views', status: '1', entered: '116516', mdate: '2018-03-01T10:00:00-05:00' },
+      { id: '9', name: 'LM-10 poročilo stranki', status: '1', entered: '3', mdate: '2026-09-09T05:00:00-05:00' },
+      { id: '10', name: 'LM-10 obvestilo prodaji', status: '2', entered: '0', mdate: '2026-09-09T05:10:00-05:00' },
+      // Skrbnikova, poimenovana po svoje, a spremenjena včeraj: mora biti v izpisu.
+      { id: '11', name: 'TEST-LEAD Subscription - Lead Magnet PDF Delivery', status: '1', entered: '1', mdate: new Date(Date.now() - 86400000).toISOString() },
     ],
     vstopi: [{ automation: '9', status: '2', adddate: '2026-09-08T04:28:30-05:00' }],
+    sprozilci: {
+      '9': [{ type: 'field_change', relid: '6', multientry: '1' }],
+      '10': [{ type: 'field_change', relid: '6', params: 'list:247', multientry: '0' }],
+      '11': 'napaka',
+    },
   });
 
   const izpis = skripta.preveriKontaktVAC('ana@kovinar.si');
@@ -1848,14 +1880,34 @@ test('preveriKontaktVAC pove, kje se je sporočilo ustavilo: polja so v AC, avto
   assert.match(izpis, /LM10_ODDAJA = 2026-09-10 11:16/);
   assert.match(izpis, /LM10_POSVET = PRAZNO/);
   assert.match(izpis, /drugih izpolnjenih polj: 1/);
-  assert.match(izpis, /"LM-10 poročilo stranki" — aktivna, vstopilo kontaktov: 3/);
-  assert.match(izpis, /"LM-10 obvestilo prodaji" — NEAKTIVNA, vstopilo kontaktov: 0/);
+  assert.match(izpis, /"LM-10 poročilo stranki" — aktivna, vstopilo kontaktov: 3, spremenjena 2026-09-09T05:00:00-05:00\n     sprožilec: vrsta field_change, relid 6, večkrat/);
+  assert.match(izpis, /"LM-10 obvestilo prodaji" — NEAKTIVNA, vstopilo kontaktov: 0.*\n     sprožilec: vrsta field_change, relid 6, list:247, enkrat/);
+  assert.match(izpis, /"TEST-LEAD Subscription - Lead Magnet PDF Delivery" — aktivna.*\n     sprožilec: AC sprožilcev ne razkrije \(/);
   assert.match(izpis, /Ta kontakt je vstopil v: "LM-10 poročilo stranki" \(vstop 2026-09-08T04:28:30-05:00, končana\)/);
-  assert.doesNotMatch(izpis, /Scoring - Page views/, 'tuje avtomatizacije se ne izpišejo');
+  assert.doesNotMatch(izpis, /Scoring - Page views/, 'stare tuje avtomatizacije se ne izpišejo');
   assert.match(izpis, /drugih avtomatizacij v računu: 1, izpuščene/);
   // Vrstica o vstopu je PRED seznamom avtomatizacij: odrezan dnevnik je ne sme skriti.
   assert.ok(izpis.indexOf('Ta kontakt je vstopil v') < izpis.indexOf('Avtomatizacije z "LM-10"'));
 
   // Kontakt, ki ga v AC ni: kratek izpis s kazalcem na skripto.
   assert.match(skripta.preveriKontaktVAC('nikogar@primer.si'), /V AC GA NI/);
+});
+
+test('sprožilno polje gre v ločenem klicu samo v načinu AC in samo, če ima id; sicer en sync z vsem', () => {
+  // Način MailApp: avtomatizacij ni, en klic z vsemi polji kot doslej.
+  const mail = naloziSkripto();
+  const zahteveMail = ponarediAC(mail.skripta, mail.lastnosti);
+  mail.skripta.NASTAVITVE.POSTA_PREK_AC = false;
+  mail.skripta.posljiVAC({ ...LEAD, prejeto: new Date() });
+  const synciMail = zahteveMail.filter((z) => z.pot === 'contact/sync');
+  assert.equal(synciMail.length, 1, 'v načinu MailApp en sam klic');
+  assert.ok(synciMail[0].telo.contact.fieldValues.some((p) => p.field === '6'), 'čas oddaje gre v istem klicu');
+
+  // Način AC, a pripraviAC še ni ustvaril polja za čas oddaje: drugega klica ni,
+  // ker ne bi imel česa poslati — in nič ne pade.
+  const brez = naloziSkripto();
+  const zahteveBrez = ponarediAC(brez.skripta, brez.lastnosti);
+  brez.lastnosti.set('AC_IDJI_POLJ', JSON.stringify({ LM10_PODJETJE: '1', PDF_LINK: '3' }));
+  assert.equal(brez.skripta.posljiVAC({ ...LEAD, prejeto: new Date() }).id, '77');
+  assert.equal(zahteveBrez.filter((z) => z.pot === 'contact/sync').length, 1, 'brez sprožilnega polja ni drugega klica');
 });
