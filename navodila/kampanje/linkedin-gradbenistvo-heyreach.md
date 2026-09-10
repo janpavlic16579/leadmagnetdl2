@@ -235,9 +235,11 @@ pusti (README, razdelek Segmenti). Za vejo podizvajalcev uporabite `utm_campaign
 za strojegradnjo `?s=storitve&utm_campaign=strojegradnja` — sicer v Google Sheetu ne boste ločili, katera veja
 je delovala.
 
-Javni naslov je repozitorijska spremenljivka `VITE_PUBLIC_URL`; `base` v `vite.config.ts` je
-`/leadmagnetdl2/`. Preverite objavljeni naslov pred zagonom. Skrajševalnikov ne uporabljajte — izgubite
-predogledno kartico, ki je v `index.html` že nastavljena.
+Javni naslov je `VITE_PUBLIC_URL` tiste objave, na katero kampanja kaže; pot objave ni več trdo zapisana —
+na Vercelu je koren (`https://leadmagnetdl2.vercel.app/gradbenistvo/`), na GitHub Pages `/leadmagnetdl2/`
+(README, razdelek **Objava**). Dokler je Vercelov projekt na načrtu Hobby, ki je po Vercelovih pravilih
+nekomercialen, naj kampanja kaže na Pages. Preverite objavljeni naslov pred zagonom. Skrajševalnikov ne
+uporabljajte — izgubite predogledno kartico, ki je v `index.html` že nastavljena.
 
 ---
 

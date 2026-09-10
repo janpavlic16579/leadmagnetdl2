@@ -101,10 +101,15 @@ Ob spremembi dejavnosti se odgovori zavržejo samo, kadar se spremeni tudi **seg
 
 Poti so id-ji glavnih dejavnosti brez "Drugo" (`INDUSTRY_PATHS` v `src/config/industries.ts`): "Drugo"
 ni popoln odgovor, pod-dejavnosti pa nosijo oznako "Drugo — …", ki o obiskovalcu s povezave ne velja.
-Pot stoji ZA potjo objave in PRED `?`: `<objava>/storitve/?utm_source=linkedin`. Ob gradnji za vsako pot
-nastane `dist/<pot>/index.html` (vtičnik `industryEntryPages` v `vite.config.ts`), zato naslov postreže
-GitHub Pages in vsak statični strežnik brez pravila za SPA — z odgovorom 200, ne prek `404.html`, ki bi
-ga oglaševalske platforme ob preverjanju cilja povezave zavrnile. Obisk prek poti se lijaku sporoči z
+Pot stoji ZA potjo objave in PRED `?`: `<objava>/storitve/?utm_source=linkedin`. Konkretno, za obe objavi:
+`https://leadmagnetdl2.vercel.app/proizvodnja/?utm_source=linkedin` in
+`https://janpavlic16579.github.io/leadmagnetdl2/proizvodnja/?utm_source=linkedin`. V kampanje gre oblika
+**s poševnico**: Vercel postreže obe obliki brez preusmeritve (`trailingSlash` ni nastavljen), Pages pa
+obliko brez poševnice preusmeri s 301 — deluje, a je en skok več. Ob gradnji za vsako pot nastane
+`dist/<pot>/index.html` (vtičnik `industryEntryPages` v `vite.config.ts`), zato naslov postreže GitHub
+Pages, Vercel (preverjeno: obe obliki 200) in vsak statični strežnik brez pravila za SPA — z odgovorom
+200, ne prek `404.html`, ki bi ga oglaševalske platforme ob preverjanju cilja povezave zavrnile.
+Obisk prek poti se lijaku sporoči z
 `lm10_industry_selected` (`source: link`) pred prvim prikazom koraka; sprejemnik ga po tem šteje kot nov
 obisk in ne kot nadaljevanje (glej **Merjenje lijaka**).
 
