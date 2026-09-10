@@ -624,6 +624,20 @@ kontakta.
 Nazaj na MailApp: `POSTA_PREK_AC: false` in nova različica razmestitve;
 avtomatizaciji v AC tedaj izklopite, sicer bosta sporočili odšli dvakrat.
 
+### Ko sporočilo ne pride: `preveriKontaktVAC`
+
+Skripta o svojih klicih v AC ve le, da so vrnili »v redu«; ali je avtomatizacija
+nato poslala sporočilo, se vidi šele v AC, kamor pogosto ni vpogleda. Zato je v
+urejevalniku funkcija **`preveriKontaktVAC`**: poženite jo (brez argumenta vzame
+zadnjo vrstico lista) in v dnevniku dobite štiri stvari o kontaktu — na katerih
+seznamih je in s kakšnim statusom, ali sta polji `PDF_LINK` in
+`PDF_LINK_PRODAJA` ter čas oddaje res zapisani, katere avtomatizacije ima račun
+in ali so vklopljene, ter v katere je TA kontakt vstopil.
+
+Branje izpisa: če so seznami in polja v redu, pod »vstopil v« pa piše NOBENO, je
+težava na strani AC — avtomatizacija ni vklopljena ali njen sprožilec ne ustreza
+polju. Če so polja PRAZNO, je težava v skripti. Funkcija samo bere.
+
 ### Privolitve
 
 Na seznam pride vsak, ki odda obrazec, in to kot *naročen* (status *active*) —
