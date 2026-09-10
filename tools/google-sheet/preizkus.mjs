@@ -1833,10 +1833,11 @@ test('preveriKontaktVAC pove, kje se je sporočilo ustavilo: polja so v AC, avto
       { field: '1', value: 'Kovinar d.o.o.' },
     ],
     avtomatizacije: [
+      { id: '1', name: 'Scoring - Page views', status: '1', entered: '116516' },
       { id: '9', name: 'LM-10 poročilo stranki', status: '1', entered: '3' },
       { id: '10', name: 'LM-10 obvestilo prodaji', status: '2', entered: '0' },
     ],
-    vstopi: [],
+    vstopi: [{ automation: '9', status: '1' }],
   });
 
   const izpis = skripta.preveriKontaktVAC('ana@kovinar.si');
@@ -1849,7 +1850,11 @@ test('preveriKontaktVAC pove, kje se je sporočilo ustavilo: polja so v AC, avto
   assert.match(izpis, /drugih izpolnjenih polj: 1/);
   assert.match(izpis, /"LM-10 poročilo stranki" — aktivna, vstopilo kontaktov: 3/);
   assert.match(izpis, /"LM-10 obvestilo prodaji" — NEAKTIVNA, vstopilo kontaktov: 0/);
-  assert.match(izpis, /Ta kontakt je vstopil v: NOBENO — sprožilec se ni sprožil/);
+  assert.match(izpis, /Ta kontakt je vstopil v: "LM-10 poročilo stranki"/);
+  assert.doesNotMatch(izpis, /Scoring - Page views/, 'tuje avtomatizacije se ne izpišejo');
+  assert.match(izpis, /drugih avtomatizacij v računu: 1, izpuščene/);
+  // Vrstica o vstopu je PRED seznamom avtomatizacij: odrezan dnevnik je ne sme skriti.
+  assert.ok(izpis.indexOf('Ta kontakt je vstopil v') < izpis.indexOf('Avtomatizacije z "LM-10"'));
 
   // Kontakt, ki ga v AC ni: kratek izpis s kazalcem na skripto.
   assert.match(skripta.preveriKontaktVAC('nikogar@primer.si'), /V AC GA NI/);

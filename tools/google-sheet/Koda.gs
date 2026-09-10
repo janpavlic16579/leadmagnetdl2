@@ -2927,6 +2927,18 @@ function acUstvariPolje(polje) {
   return id;
 }
 
+/** Vse avtomatizacije računa, po straneh po sto; varovalo pri dva tisoč. */
+function acVseAvtomatizacije() {
+  var vse = [];
+  var odmik = 0;
+  while (true) {
+    var stran = (acZahteva('automations?limit=100&offset=' + odmik, 'get') || {}).automations || [];
+    vse = vse.concat(stran);
+    if (stran.length < 100 || odmik >= 2000) return vse;
+    odmik += 100;
+  }
+}
+
 /** Zapomnjeni id-ji polj. Prazno pomeni, da `pripraviAC` še ni tekel. */
 function acIdjiPolj() {
   var shranjeno = PropertiesService.getScriptProperties().getProperty(AC_LASTNOST.POLJA);
@@ -3017,23 +3029,18 @@ function preveriKontaktVAC(email) {
   }).length;
   vrstice.push('  drugih izpolnjenih polj: ' + drugih);
 
-  // 3. Avtomatizacije v računu — status 1 je aktivna.
-  var avtomatizacije = (acZahteva('automations?limit=100', 'get') || {}).automations || [];
+  // 3. Avtomatizacije računa, VSE strani: račun jih ima lahko več sto in
+  // najnovejše — naše — so na zadnji strani. Izpišejo se samo tiste z osnovno
+  // oznako v imenu; dnevnik izvedb namreč dolg izpis odreže in bi ravno
+  // odločilne vrstice izginile.
+  var avtomatizacije = acVseAvtomatizacije();
   var imePoId = {};
-  vrstice.push('Avtomatizacije v računu:' + (avtomatizacije.length ? '' : ' NOBENE'));
   avtomatizacije.forEach(function (a) {
     imePoId[String(a.id)] = a.name;
-    vrstice.push(
-      '  "' +
-        a.name +
-        '" — ' +
-        (String(a.status) === '1' ? 'aktivna' : 'NEAKTIVNA') +
-        ', vstopilo kontaktov: ' +
-        (a.entered || '0'),
-    );
   });
 
   // 4. V katere je vstopil ta kontakt — edini dokaz, da se je sprožilec sprožil.
+  // Pred seznamom avtomatizacij, da je ta vrstica vidna, tudi če bi bil izpis odrezan.
   var vstopi = (acZahteva('contacts/' + id + '/contactAutomations', 'get') || {}).contactAutomations || [];
   vrstice.push(
     'Ta kontakt je vstopil v: ' +
@@ -3045,6 +3052,26 @@ function preveriKontaktVAC(email) {
             .join(', ')
         : 'NOBENO — sprožilec se ni sprožil'),
   );
+
+  var osnova = String(NASTAVITVE.AC.OSNOVNA_OZNAKA || 'LM-10').toLowerCase();
+  var nase = avtomatizacije.filter(function (a) {
+    return String(a.name || '').toLowerCase().indexOf(osnova) !== -1;
+  });
+  vrstice.push(
+    'Avtomatizacije z "' + NASTAVITVE.AC.OSNOVNA_OZNAKA + '" v imenu:' +
+      (nase.length ? '' : ' NOBENE — v AC še niso zgrajene ali so poimenovane drugače'),
+  );
+  nase.forEach(function (a) {
+    vrstice.push(
+      '  "' +
+        a.name +
+        '" — ' +
+        (String(a.status) === '1' ? 'aktivna' : 'NEAKTIVNA') +
+        ', vstopilo kontaktov: ' +
+        (a.entered || '0'),
+    );
+  });
+  vrstice.push('  (drugih avtomatizacij v računu: ' + (avtomatizacije.length - nase.length) + ', izpuščene)');
 
   var izid = vrstice.join('\n');
   console.log(izid);
