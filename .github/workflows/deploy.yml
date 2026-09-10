@@ -35,6 +35,9 @@ jobs:
       - name: Build
         run: npm run build
         env:
+          # GitHub Pages objavlja pod imenom repozitorija, privzetek v vite.config.ts
+          # pa je koren (Vercel). Brez te vrstice bi bila objava na Pages bela stran.
+          VITE_BASE_PATH: /leadmagnetdl2/
           # Brez naslova prodajna priprava nima poti do Datalaba. Ni "secret" v
           # pravem pomenu: predpona VITE_ pomeni, da naslov pristane v javnem
           # svežnju, zato se mora končna točka braniti sama (omejevanje hitrosti,

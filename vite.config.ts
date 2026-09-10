@@ -120,9 +120,31 @@ function industryEntryPages(): Plugin {
   }
 }
 
+/**
+ * Pot objave. Privzeto **koren**, ker tam stoji Vercel in vsak statični strežnik
+ * brez podmape; GitHub Pages objavlja pod imenom repozitorija, zato si podpot
+ * nastavi sam (`VITE_BASE_PATH` v `.github/workflows/deploy.yml`).
+ *
+ * Privzetek je koren namenoma, čeprav je bila dosedanja objava na podpoti: pot,
+ * ki se pozabi nastaviti, je tu vidna v repozitoriju, medtem ko je nastavitev v
+ * Vercelovi nadzorni plošči nevidna. Napaka je draga in tiha — Vite `base` vpeče
+ * kot **absolutno** predpono v vsak sklic v `index.html` (vstopni skript, CSS,
+ * ikone, prednaložene pisave), zato zgrajena stran na napačni poti pokaže belo
+ * stran s samimi 404.
+ */
+function publishBasePath(): string {
+  const raw = process.env.VITE_BASE_PATH
+  if (!raw) return '/'
+  // Poševnici na obeh koncih sta zahteva Vita, ne olepšava: brez zaključne se
+  // sklici sestavijo v '/leadmagnetdl2assets/index-*.js'. Ker je prav ta izpust
+  // najpogostejša napaka ob objavi, se pot popravi tu in ne v glavi objavljalca.
+  const path = `/${raw.replace(/^\/+|\/+$/g, '')}/`
+  return path === '//' ? '/' : path
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/leadmagnetdl2/',
+  base: publishBasePath(),
   plugins: [react(), canonicalUrl(), preloadFonts(), industryEntryPages()],
   server: {
     port: process.env.PORT ? Number(process.env.PORT) : 5173,
