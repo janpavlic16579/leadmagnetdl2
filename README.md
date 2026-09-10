@@ -28,8 +28,10 @@ deploy ob potisku na `main`: napaka tipov se je pokazala šele ob objavi. Razli�
 |---|---|
 | `VITE_LEAD_WEBHOOK_URL` | lead nima poti do Datalaba, strankino poročilo ne gre po e-pošti (stranka ga prenese z gumbom) in prodajna priprava se ponudi stranki (glej **Kaj se zgodi ob oddaji**) |
 | `VITE_PUBLIC_URL` | `canonical`, `og:url` in `og:image` se ne izpišejo — napačen kanonični naslov je slabši od nobenega |
+| `VITE_BASE_PATH` | pot objave je koren `/` — prav za Vercel in vsak strežnik brez podmape; GitHub Pages jo v `deploy.yml` nastavi na `/leadmagnetdl2/` |
 
-Obe se v objavi bereta iz repozitorijskih spremenljivk (`vars`) v `.github/workflows/deploy.yml`.
+Na GitHub Pages se bereta iz repozitorijskih spremenljivk (`vars`) v `.github/workflows/deploy.yml`,
+na Vercelu iz nastavitev projekta (glej **Objava** spodaj).
 Predpona `VITE_` pomeni, da vrednost pristane v javnem svežnju — webhook se mora zato braniti sam
 (omejevanje hitrosti, CORS, preverjanje izvora) in ne s skrivnostjo naslova.
 
@@ -37,9 +39,33 @@ Sprejemnik webhooka, ki oddaje **beleži v Google Sheet**, je v
 [`tools/google-sheet/`](tools/google-sheet/README.md) — Apps Script v preglednici, brez strežnika.
 Vzorec `.env` je v [`.env.example`](.env.example).
 
-Aplikacija se objavlja na podpot `/leadmagnetdl/` (`base` v `vite.config.ts`). Poti do datotek v `public/`
-je zato treba sestaviti prek `import.meta.env.BASE_URL` — Vite prepiše samo poti v `index.html`, ne pa
-tudi tistih v kodi ali v CSS `url()`.
+Pot objave (`base` v `vite.config.ts`) ni trdo zapisana: privzeto je koren, `VITE_BASE_PATH` jo
+premakne na podmapo. Poti do datotek v `public/` je zato treba sestaviti prek `import.meta.env.BASE_URL`
+— Vite prepiše samo poti v `index.html`, ne pa tudi tistih v kodi ali v CSS `url()`.
+
+### Objava
+
+Dve objavi iz iste kode, vsaka s svojo potjo:
+
+| Kje | Sproži | Pot | Nastavitve |
+|---|---|---|---|
+| **Vercel** | vsak potisk na `main` (produkcija) in vsak PR (predogled) | `/` | `vercel.json` + spremenljivke v projektu na Vercelu |
+| **GitHub Pages** | potisk na `main` | `/leadmagnetdl2/` | `.github/workflows/deploy.yml` |
+
+[`vercel.json`](vercel.json) nosi troje, česar Vercel sam ne bi uganil: ukaz gradnje, ki **pred**
+`npm run build` zgradi karto vprašalnika (sicer `dist` odide brez `/karta/`, glej `deploy.yml`);
+izhodno mapo `dist`; in `Cache-Control: immutable` za `/assets/`, kjer so imena zgoščena (`index.html`
+ostane na Vercelovem privzetku `max-age=0, must-revalidate`, zato obiskovalec nikoli ne dobi starega
+HTML-ja s sklici na datoteke, ki jih ni več). Pravila za SPA (`rewrites` na `index.html`) namenoma
+**ni**: aplikacija naslova nikoli ne spremeni, vstopne strani dejavnosti so prave datoteke, in
+pravilo bi vsaki napačni povezavi vrnilo 200 namesto 404.
+
+Spremenljivki `VITE_LEAD_WEBHOOK_URL` in `VITE_PUBLIC_URL` na Vercelu nastavite **samo za okolje
+Production**. Predogledne objave PR-jev so javne in delujoče — s webhookom bi vsak klik v predogledu
+vpisal pravi lead v preglednico in stranki poslal e-pošto. Brez webhooka predogled dela naprej po
+rezervni poti (PDF na gumb), kar za pregled PR-ja zadošča. Node različica: Vercel `.nvmrc` ne bere
+in privzeto vzame zadnji LTS; če se gradnja razlikuje od CI, jo v nastavitvah projekta postavite
+na 22.
 
 ## Segmenti
 
