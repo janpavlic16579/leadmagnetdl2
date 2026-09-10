@@ -573,18 +573,24 @@ prepove, se datoteke shranijo, povezave pa ne delujejo.
 
 | Avtomatizacija | Sprožilec | Dejanje |
 |---|---|---|
-| poročilo stranki | *Field changes* → `PDF Link`, runs multiple times | *Wait 1 minute*, nato *Send email* s povezavo `%PDF_LINK%` |
-| obvestilo prodaji | *Field changes* → `LM-10 čas zadnje oddaje`, multiple times, pogoj »je na seznamu prodaje« | *Send notification* na prodajni naslov z obema povezavama |
+| poročilo stranki | *Field changes* → `LM-10 čas zadnje oddaje`, runs multiple times, pogoj segmenta »PDF Link is not blank« | *Send email* s povezavo `%PDF_LINK%` |
+| obvestilo prodaji | *Field changes* → `LM-10 čas zadnje oddaje`, runs multiple times, pogoj segmenta »is on list« seznam prodaje | *Send notification* na prodajni naslov z obema povezavama |
 
 Obvestilo prodaji je zapisano tako, da je enako pošti, ki jo je prej pošiljala
 skripta (`posljiObvestilo`) — iste vrstice v istem vrstnem redu, le da sta
 priponki zamenjani s povezavama. Polja `LM10_VELIKOST`, `LM10_ODLIV`,
 `LM10_MARZA` in `LM10_CAS` obstajajo prav zaradi tega sporočila.
 
-Čakanje ene minute pri prvi je namerno: kontakt pride na seznam šele s klicem,
-ki polje nastavi. Sprožilec druge je **čas oddaje** in ne povezava do priprave:
-če priprave ni (PDF ni nastal, HTML ni prišel), se povezava ne spremeni in
-prodaja obvestila ne bi dobila — čas oddaje se spremeni vedno. Vsebino sporočila
+**Obe visita na istem polju, času oddaje, in ne na povezavah.** Skripta ga
+pošlje ZADNJE, v ločenem klicu, ko je kontakt že ustvarjen, na obeh seznamih in
+označen. Zato je sprememba tega polja za AC prava sprememba na obstoječem
+kontaktu, pogoj »je na seznamu« pa drži. Povezavi (`PDF Link`) sta za sprožilec
+neprimerni: pri novem kontaktu sta nastavljeni v klicu, ki kontakt ustvari, in
+AC tega ne šteje za spremembo — sprožilec bi zgrešil vsak nov lead, kar se je
+10. 9. tudi zgodilo. Čas oddaje ima sekunde, da sta dve oddaji iste osebe dve
+spremembi. Pogoj »PDF Link is not blank« pri stranki pokrije primer, ko PDF ni
+nastal (redko: povratnik brez PDF-ja bi dobil staro povezavo). Čakanja pred
+pošiljanjem ni treba: povezavi sta v AC pred sprožilcem. Vsebino sporočila
 stranki povzemite po `sestaviSporociloStranki`, obvestilo prodaji po
 `posljiObvestilo` (obe funkciji ostaneta v skripti kot vzorec in kot rezervna
 pot).
@@ -637,6 +643,13 @@ in ali so vklopljene, ter v katere je TA kontakt vstopil.
 Branje izpisa: če so seznami in polja v redu, pod »vstopil v« pa piše NOBENO, je
 težava na strani AC — avtomatizacija ni vklopljena ali njen sprožilec ne ustreza
 polju. Če so polja PRAZNO, je težava v skripti. Funkcija samo bere.
+
+Izpis našteje avtomatizacije z `LM-10` v imenu ali spremenjene v zadnjih
+štirinajstih dneh (skrbnik AC jih poimenuje po svoje) in za vsako sprožilec:
+vrsto, na kaj je vezan in ali teče večkrat. Pravilno je »field_change« na polju
+`LM-10 čas zadnje oddaje` z »večkrat«; »subscribe« na seznam se sproži samo ob
+prvem naročilu in ponovnega obiskovalca zgreši. Če AC sprožilcev prek API-ja ne
+razkrije, izpis to pove in jih preveri skrbnik.
 
 ### Privolitve
 
