@@ -23,16 +23,22 @@ Odpadanje po korakih merijo dogodki lijaka, ki pridejo po istem webhooku na list
 ## Namestitev (~10 minut, enkrat)
 
 1. **Ustvarite preglednico** — npr. „LM-10 – oddaje vprašalnika". Lista ni treba
-   pripraviti: skripta list `Leadi` in glavo ustvari sama ob prvi oddaji.
+   pripraviti: skripta list `Leadi` in glavo ustvari sama ob prvi oddaji. Takoj v
+   *Datoteka → Nastavitve* preverite območne nastavitve (Slovenija) in časovni pas
+   (Ljubljana): nov račun ima lahko ameriške privzetke, s katerimi zneski v
+   Analitiki in čas `prejeto` kažejo narobe. Isto za časovni pas projekta v
+   *Nastavitvah projekta* urejevalnika.
 2. **Razširitve → Apps Script.** V urejevalniku izbrišite vsebino datoteke
    `Code.gs` in prilepite celotno vsebino [`Koda.gs`](Koda.gs). Shranite.
 3. **Razmesti → Nova razmestitev** (*Deploy → New deployment*):
    - vrsta: **Spletna aplikacija** (*Web app*),
    - *Execute as*: **Jaz** (`Me`) — skripta piše v preglednico z vašim dostopom,
-   - *Who has access*: **Kdorkoli** (`Anyone`).
-   Prvič bo zahtevala dovoljenja (preglednica + Drive). Google svojo neverificirano
-   skripto označi z opozorilom — pot je *Napredno → Pojdi na projekt (nevarno)*;
-   gre za vašo lastno kodo v vašem računu.
+   - *Who has access*: **Kdorkoli** (`Anyone`) — ne »Anyone with Google account«,
+     ta obiskovalce brez prijave zavrne.
+   Prvič bo zahtevala dovoljenja (preglednica, Drive, zunanje zahteve, pošta,
+   izvajanje v odsotnosti — označite vsa). Google svojo neverificirano skripto
+   označi z opozorilom — pot je *Napredno → Pojdi na projekt (nevarno)*; gre za
+   vašo lastno kodo v vašem računu.
 4. **Kopirajte naslov razmestitve** (`https://script.google.com/macros/s/…/exec`)
    in ga odprite v brskalniku. Odgovoriti mora: `LM-10 zbiralnik deluje. List: Leadi…`.
 5. **Nastavite naslov v objavi.** GitHub → *Settings → Secrets and variables →
@@ -399,6 +405,70 @@ test vidi naslovnika, prilogi in besedilo; `DriveApp` (mape, datoteke, deljenje)
 in `UrlFetchApp` (zahteve v AC) prav tako. Česar ne pokrije: to, kako prava
 preglednica razlaga zapisane nize (uvodni opuščaj, pretvorba `"true"`) —
 ponaredek hrani natanko to, kar skripta zapiše.
+
+### Selitev na drug Google račun
+
+Skripta je vezana na preglednico, razmestitev pa na račun, ki jo je razmestil.
+Preseliti jo pomeni namestiti jo na novo — nič se ne »prenese«, ker se prenesti
+ne da. Tako je bila 11. 9. 2026 preseljena z osebnega računa na Datalabov skupni
+Google račun (navaden Gmail, ne Workspace). Kaj je vezano na račun:
+
+- **razmestitev in njen naslov `/exec`** — nov naslov gre v `VITE_LEAD_WEBHOOK_URL`
+  in zahteva novo objavo;
+- **dovoljenja** — ob prvem zagonu jih Google zahteva znova;
+- **lastnosti skripte** — ročno prepišite samo `AC_NASLOV`, `AC_KLJUC`, `AC_SEZNAM`
+  in `AC_SEZNAM_PRODAJA`; vse druge (`AC_IDJI_*`, `ID_MAPE_*`, `ZADNJ*`,
+  `AC_ZADNJI`, `LIJAK_ZADNJI`) nastanejo same in bi prepisane kazale na tuj Drive
+  ali tujo zgodovino;
+- **sprožilca** (`namestiUroZaAC`, `namestiUroZaLijak`) — pripadata računu, ki ju
+  namesti; drug urejevalec bi z zagonom dodal drugo uro in vsak lead bi šel v AC
+  dvakrat;
+- **mapi na Drivu** — `pridobiMapo` ju najde po imenu ali ustvari na novo; stare
+  datoteke ostanejo na starem računu, stare povezave v že poslanih sporočilih
+  kažejo tja;
+- **deljenje »vsi s povezavo«** in pošiljatelj MailApp (v načinu AC nepomembno).
+
+Kar se ne spremeni: ActiveCampaign (seznama, polja, avtomatizaciji — `pripraviAC`
+polja najde po oznaki in jih ne podvoji), koda in aplikacija razen naslova.
+
+**Potek** (približno pol ure, brez sprememb kode):
+
+1. Nova preglednica na novem računu z območnimi nastavitvami in časovnim pasom
+   (korak 1 namestitve). Listov ne ustvarjajte.
+2. *Razširitve → Apps Script*, prilepite `Koda.gs`, shranite; preverite časovni
+   pas projekta.
+3. Štiri lastnosti skripte (zgoraj) — vrednosti iz starega projekta.
+4. `preizkusDeljenja` — prvi zagon zahteva dovoljenja; povezavo iz dnevnika
+   odprite v zasebnem oknu. Nastane mapa poročil.
+5. `pripraviAC` — pod »Na novo ustvarjena« mora biti `—`; karkoli drugega pomeni
+   napačen račun AC ali napačno oznako. Ne nadaljujte.
+6. `namestiUroZaAC`.
+7. *Razmesti → Nova razmestitev* (spletna aplikacija, *Me*, *Anyone*); razmestitev
+   zahteva še eno potrditev dovoljenj. Odprite `/exec`: 0 vrstic,
+   `ActiveCampaign: seznam … + prodaja …, polj: 21`, `Zadnja napaka deljenja na
+   Drivu: brez`.
+8. GitHub → `VITE_LEAD_WEBHOOK_URL` = novi naslov → nova objava; isti naslov v
+   lokalni `.env`.
+9. Ena testna oddaja z objavljene strani (zasebno okno): rezultati s »Poročilo
+   pošiljamo na …« in brez gumba »Priprava v PDF«; `/exec` z vrstico, časoma pri
+   »Poročilo na Drivu« in »Zadnja poslana pošta«; obe e-pošti prispeta. Prva oddaja
+   je počasnejša (ustvari še mapo priprav).
+10. Šele zdaj, ko glava obstaja: `urediStolpce`, `sestaviLijak`,
+    `namestiUroZaLijak`. Nova različica razmestitve ni potrebna.
+11. Stari račun, v tem vrstnem redu: `odstraniUroZaAC` (in `odstraniUroZaLijak`),
+    izbris lastnosti `AC_*`, *Upravljaj razmestitve → Arhiviraj* šele, ko
+    objavljeni sveženj zagotovo kaže na novi naslov (do tedaj je stara razmestitev
+    rezerva za obiskovalce s starim svežnjem), nato mapi na Drivu in stara
+    preglednica; testne kontakte v AC izbriše skrbnik.
+
+Stare preglednice in map ne delite z novim računom, dokler ta ni shranil id-jev
+svojih map (korak 4 in prva oddaja): `pridobiMapo` išče po imenu in bi lahko
+zadela tujo mapo.
+
+**Kvote brezplačnega računa** ostanejo: ura vsako minuto porabi 12–72 minut od
+90 minut dnevne kvote sprožilcev; znak izčrpanja je `Zadnji v AC`, ki obstane, in
+napaka o kvoti med *Izvedbami*. Navaden Google račun tudi nima pogodbe o obdelavi
+podatkov z Googlom — to reši šele Workspace.
 
 ## Lijak — kje obiskovalci odnehajo
 

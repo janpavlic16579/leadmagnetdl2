@@ -145,6 +145,11 @@ vsakomur, ki pozna naslov«. `robots.txt` v podmapi iskalnikov ne veže. Odloči
 
 ### B3. Čiščenje preglednice in ActiveCampaigna, ura lijaka
 
+**Selitev 11. 9. 2026:** zbiralnik teče na Datalabovem skupnem Google računu s prazno preglednico, ura
+lijaka je nameščena; stari list, mape na Drivu in testni kontakti v AC gredo v čiščenje ob ugašanju
+starega računa (potek: `tools/google-sheet/README.md`, »Selitev na drug Google račun«). Spodnje besedilo
+je stanje pred selitvijo.
+
 Diagnostika `/exec` 11. 9.: `Vrstic v listu (getMaxRows): 2 … Od tega pravih leadov: 1` — to je
 naročnikova testna oddaja z 10. 9. (`j***@lexora.si`). Izbrisati kot **vrstico** (desni klik → Izbriši
 vrstico), ne s tipko Delete: prazna, a oblikovana vrstica ostane za Google »uporabljena« in leadi
