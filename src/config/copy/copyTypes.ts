@@ -57,7 +57,7 @@ export interface SegmentCopy {
    * odgovor (isCompleteIndustryChoice); do tedaj velja NEUTRAL_COPY.landing.
    * Sam "drugo" ni odgovor, ker manjka podizbira, zato hero tam še ne zamenja.
    *
-   * Obljuba ponudbe (brez e-naslova, koliko časa vzame) je v SHARED_COPY -
+   * Obljuba ponudbe (koliko časa vzame, kontakt pred rezultatom) je v SHARED_COPY -
    * enaka je za vse in sedem prepisov bi se razšlo ob prvi spremembi.
    */
   landing: {

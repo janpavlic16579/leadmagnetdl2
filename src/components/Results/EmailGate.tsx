@@ -12,11 +12,12 @@ import { DeliveryProgress } from './DeliveryProgress';
 /**
  * Pravilnik o zasebnosti, na katerega se sklicuje obvezna privolitev.
  *
- * Prazen niz = URL še ni znan; povezava se tedaj ne izriše, stavek pa ostane cel.
- * Ko ga marketing pošlje, mora biti ABSOLUTEN — aplikacija teče na podpoti
- * /leadmagnetdl/, zato bi se relativna povezava razrešila znotraj nje.
+ * ABSOLUTEN naslov: aplikacija teče na podpoti (VITE_BASE_PATH), relativna
+ * povezava bi se razrešila znotraj nje. Prazen niz povezavo umakne in pusti
+ * stavek cel — to je bilo začasno stanje, dokler naslova ni bilo; privolitev,
+ * ki se sklicuje na pravilnik brez povezave nanj, za objavo ne zadošča.
  */
-const PRIVACY_POLICY_URL = '';
+const PRIVACY_POLICY_URL = 'https://www.datalab.si/politika-zasebnosti/';
 
 /**
  * Napis gumba za oddajo. Ena konstanta, ker ga navaja tudi povzetek zadržkov

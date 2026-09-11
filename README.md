@@ -29,6 +29,7 @@ deploy ob potisku na `main`: napaka tipov se je pokazala šele ob objavi. Razli�
 | `VITE_LEAD_WEBHOOK_URL` | lead nima poti do Datalaba, strankino poročilo ne gre po e-pošti (stranka ga prenese z gumbom) in prodajna priprava se ponudi stranki (glej **Kaj se zgodi ob oddaji**) |
 | `VITE_PUBLIC_URL` | `canonical`, `og:url` in `og:image` se ne izpišejo — napačen kanonični naslov je slabši od nobenega |
 | `VITE_BASE_PATH` | pot objave je koren `/` — prav za Vercel in vsak strežnik brez podmape; GitHub Pages jo v `deploy.yml` nastavi na `/leadmagnetdl2/` |
+| `VITE_INTERNAL_TOKEN` | interni način (`?debug=<žeton>`, glej **Kaj se zgodi ob oddaji**) je izklopljen — prodajne priprave na objavljeni strani ni mogoče pregledati |
 
 Na GitHub Pages se bereta iz repozitorijskih spremenljivk (`vars`) v `.github/workflows/deploy.yml`,
 na Vercelu iz nastavitev projekta (glej **Objava** spodaj).
@@ -860,9 +861,9 @@ Pravila preverjanja so v čisti `src/lib/validation.ts` (testljiva v okolju `nod
 mogoče testirati). Davčna se preverja s kontrolno vsoto mod-11 in **normalizira natanko enkrat, ob
 oddaji** — normalizacija med tipkanjem premakne kazalec na konec polja.
 
-Povezava na pravilnik o zasebnosti v obvezni privolitvi še ni znana: konstanta `PRIVACY_POLICY_URL`
-je prazna, zato se stavek izriše brez povezave. Ko URL prispe, mora biti **absoluten** — aplikacija
-teče na podpoti `/leadmagnetdl/`.
+Obvezna privolitev se sklicuje na pravilnik o zasebnosti s povezavo
+`https://www.datalab.si/politika-zasebnosti/` (konstanta `PRIVACY_POLICY_URL` v `EmailGate.tsx`). Naslov
+je **absoluten**, ker aplikacija teče na podpoti; prazen niz bi povezavo umaknil, stavek pa pustil cel.
 
 ## Kaj se zgodi ob oddaji obrazca
 
@@ -917,9 +918,12 @@ Dostava je odvisna od build spremenljivke **`VITE_LEAD_WEBHOOK_URL`** (`.env`):
   stanje**: dokler naslova ni, je posredovanje po stranki edina pot, po kateri svetovalec pripravo
   sploh dobi. Cena je, da ima stranka na disku dokument, napisan o njej. Ko naslov nastavite, gumb
   ugasne sam — preklop je uspeh dostave in ne dodatna zastavica.
-- **Interni način `?debug=1`:** gumb za pripravo se ponudi tudi ob delujočem webhooku, gumb za
-  prenos poročila pa ostane tudi ob poslani pošti. Namenjen razvoju in pregledu vsebine; besedilo
-  je označeno z „[interno]".
+- **Interni način `?debug=<žeton>`** (žeton je build spremenljivka `VITE_INTERNAL_TOKEN`,
+  `src/lib/internalMode.ts`): gumb za pripravo se ponudi tudi ob delujočem webhooku, gumb za prenos
+  poročila pa ostane tudi ob poslani pošti. Namenjen pregledu vsebine na objavljeni strani; besedilo je
+  označeno z „[interno]". Nekdanji `?debug=1` je odpadel, ker je interni dokument o stranki odpiral
+  vsakomur, ki je poskusil. Žeton je zaradi predpone `VITE_` v javnem svežnju — ni skrivnost, je pa
+  neuganljiv, kar tu zadošča.
 
 | Datoteka | Za koga | Kaj vsebuje |
 |---|---|---|

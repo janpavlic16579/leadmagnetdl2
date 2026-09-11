@@ -75,7 +75,7 @@ interface CalculatorFlowProps {
   skipIndustryStep?: boolean;
   utmSource: string | null;
   /**
-   * Interni način (?debug=1): prodajna priprava se na rezultatih ponudi tudi ob
+   * Interni način (?debug=<žeton>, lib/internalMode.ts): prodajna priprava se na rezultatih ponudi tudi ob
    * delujočem webhooku. Brez njega gre tedaj samo na strežnik — dokument je
    * napisan O stranki in ne ZANJO.
    */
