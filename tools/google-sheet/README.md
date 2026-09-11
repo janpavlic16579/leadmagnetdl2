@@ -11,7 +11,7 @@ razred, kontakt, privolitve, vsi koši zneskov, izbrana področja, triažne ocen
 zanesljivost, urni postavki z izvorom, `utm_source` in follow-up sekvenca. Skripta
 doda še `prejeto` (čas prejema), `prodajnaPriprava` (povezava do priprave na
 Drive) in `porociloPdf` (povezava do strankinega PDF-ja na Drive — ta gre tudi v
-ActiveCampaign, glej [Povezava do strankinega PDF-ja](#povezava-do-strankinega-pdf-ja)).
+ActiveCampaign, glej [Pošta prek ActiveCampaigna](#pošta-prek-activecampaigna)).
 Ob vsaki oddaji lahko pošlje tudi obvestilo na e-pošto (spodaj).
 
 **Kdo v list `Leadi` NE pride.** Kdor vprašalnik zapusti pred obrazcem — brez
@@ -154,8 +154,8 @@ ostaneta, aplikacija pa ob `sent: false` ponudi prenos.
 
 **Kopija na Drivu.** Isti PDF, ki gre stranki, skripta shrani še v mapo
 `LM-10 poročila strankam` (`shraniPorocilo`), povezavo zapiše v stolpec
-`porociloPdf` in jo pošlje v ActiveCampaign kot polje `%LM10_POROCILO%` — glej
-[Povezava do strankinega PDF-ja](#povezava-do-strankinega-pdf-ja).
+`porociloPdf` in jo pošlje v ActiveCampaign kot polje `%PDF_LINK%` — glej
+[Pošta prek ActiveCampaigna](#pošta-prek-activecampaigna).
 
 **Preizkus iz urejevalnika:** funkcija **`preizkusPorocilaStranki`** pošlje
 vzorčno sporočilo z vzorčnim PDF-jem na prvi naslov iz `E_NASLOV_ZA_OBVESTILA`
