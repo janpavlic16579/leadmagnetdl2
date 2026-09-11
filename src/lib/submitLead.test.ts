@@ -282,13 +282,13 @@ describe('attachmentFromFile', () => {
 
 describe('requestTimeoutMs', () => {
   /**
-   * Rok raste s telesom: samo HTML ostane pri desetih sekundah, s prilogama
-   * (≈ 175 kB) pa počasna mobilna povezava dobi čas za prenos — prekoračitev
-   * namreč pošlje prodajno pripravo stranki in ponudi prenos poročila, ki je
-   * po e-pošti morda že na poti.
+   * Rok raste s telesom: samo HTML ostane pri petindvajsetih sekundah, s
+   * prilogama (≈ 175 kB) pa počasna mobilna povezava dobi čas za prenos —
+   * prekoračitev namreč šteje kot neuspela dostava in ponudi prenos poročila,
+   * ki je po e-pošti morda že na poti.
    */
-  it('samo HTML ≈ 10 s, s prilogama ≈ 13,5 s', () => {
-    expect(requestTimeoutMs(10_000)).toBe(10_200);
-    expect(requestTimeoutMs(175_000)).toBe(13_500);
+  it('samo HTML ≈ 25 s, s prilogama ≈ 28,5 s', () => {
+    expect(requestTimeoutMs(10_000)).toBe(25_200);
+    expect(requestTimeoutMs(175_000)).toBe(28_500);
   });
 });

@@ -879,10 +879,12 @@ trenutnega stanja, zato ustreza zaslonu tudi po popravku vnosov; poslani PDF je 
 enako kot vrstica v preglednici in obvestilo prodaji. Tabela s pravilom je v glavi
 `src/lib/deliverLead.ts`, varuje jo `src/lib/deliverLead.test.ts`.
 
-**Ob delujočem webhooku stranka prodajne priprave ne vidi.** Priprava je interni dokument — napisan
-je O stranki (ocena ustreznosti, priporočilo licenc, pričakovani ugovori z odgovori) in ne ZANJO —
-zato tedaj na njeno napravo ne gre. Dokler webhooka ni, se ji na rezultatih ponudi kot gumb; glej
-razlago pod tabelo.
+**Ob nastavljenem webhooku stranka prodajne priprave ne vidi — tudi ob neuspeli dostavi ne.** Priprava
+je interni dokument — napisan je O stranki (ocena ustreznosti, priporočilo licenc, pričakovani ugovori
+z odgovori) in ne ZANJO — zato na njeno napravo ne gre. Neuspela dostava je v praksi prekoračen rok,
+po katerem sprejemnik delo vseeno konča in je priprava pri prodaji (od 11. 9. 2026; prej se je tedaj
+ponudila stranki kot rezerva). Dokler webhooka ni, se ji na rezultatih ponudi kot gumb; glej razlago
+pod tabelo.
 
 Dostava je odvisna od build spremenljivke **`VITE_LEAD_WEBHOOK_URL`** (`.env`):
 
@@ -901,11 +903,13 @@ Dostava je odvisna od build spremenljivke **`VITE_LEAD_WEBHOOK_URL`** (`.env`):
   ostane prazen). Dostava ni pogojena s pripravo — dokler je bila, je napaka v prodajnem delu
   lead tiho pokopala.
   S tem se prvič lahko zaprejo kalibracijske zanke ("preveriti po ~50 vnosih"). Rok zahteve raste
-  s telesom (`requestTimeoutMs`: deset sekund osnove plus čas prenosa po počasni mobilni povezavi —
-  samo HTML ≈ 10 s, s prilogama ≈ 13,5 s; sprejemnik pred odgovorom pošlje dve sporočili): viseč
-  strežnik ne sme zadrževati rezultatov v nedogled, prekoračitev pa šteje kot neuspela dostava,
-  pripravo pošlje stranki in ji ponudi prenos poročila, ki je po e-pošti morda že na poti, zato je
-  lažen padec dražji od daljšega čakanja. Rezultati se pokažejo, ko je POST končan — šele takrat je
+  s telesom (`requestTimeoutMs`: petindvajset sekund osnove plus čas prenosa po počasni mobilni
+  povezavi — samo HTML ≈ 25 s, s prilogama ≈ 28,5 s; sprejemnik pred odgovorom shrani oba PDF-ja na
+  Drive in pokliče CRM, Apps Script pa doda še 3–7 s zagona in preusmeritve odgovora): viseč
+  strežnik ne sme zadrževati rezultatov v nedogled, prekoračitev pa šteje kot neuspela dostava in
+  stranki ponudi prenos poročila, ki je po e-pošti morda že na poti (priprave ne), zato je lažen
+  padec dražji od daljšega čakanja. Z desetimi sekundami je bila po selitvi skripte na nov Google
+  račun (11. 9. 2026) vsaka oddaja lažen padec. Rezultati se pokažejo, ko je POST končan — šele takrat je
   znano, ali stranka gumb za pripravo potrebuje in ali je poročilo odšlo po e-pošti. Tip vsebine je
   `text/plain` in ne `application/json`: slednji sproži
   predhodno zahtevo CORS (`OPTIONS`), na katero Apps Script ne odgovori. `keepalive` (zahteva

@@ -52,13 +52,20 @@ import type {
  * |---------|----------------|-----------------------------------------|
  * | ne      | —              | ponudi se STRANKI (gumb na rezultatih)  |
  * | da      | da             | samo na strežnik                        |
- * | da      | ne             | ponudi se STRANKI (rezerva, isti gumb)  |
+ * | da      | ne             | nikamor — stranka dobi samo poročilo    |
  *
  * Prva vrstica je začasna: dokler `VITE_LEAD_WEBHOOK_URL` ni nastavljen, je
  * prenos pri stranki edina pot, po kateri svetovalec pripravo sploh dobi —
  * stranka mu jo posreduje. Ko naslov nastavite, se gumb umakne sam, brez posega
  * v kodo. Cena te začasnosti: dokument je napisan O stranki (ocena ustreznosti,
  * priporočilo licenc, pričakovani ugovori) in ne ZANJO.
+ *
+ * Tretja vrstica je od 11. 9. 2026 »nikamor« namenoma. Neuspela dostava je v
+ * praksi prekoračen rok (submitLead.ts), po katerem sprejemnik delo vseeno
+ * konča: vrstica, oba PDF-ja na Drivu, kontakt v CRM — priprava je torej pri
+ * prodaji in ponuditi jo stranki bi pomenilo dati ji dokument O njej zaradi
+ * lažnega padca. Kadar sprejemnik zares odpove, priprava odpade; lead je tedaj
+ * izgubljen tudi za prodajo, stranka pa ima svoje poročilo in telefon.
  *
  * KAM GRE STRANKINO POROČILO — isto pravilo, obrnjeno k stranki. Obrazec obljublja
  * PDF na vpisani e-naslov; pošlje ga sprejemnik (Koda.gs, `posljiPorociloStranki`)
@@ -290,9 +297,9 @@ export async function deliverLead(
   const webhookUrl = modules.leadWebhookUrl();
   /**
    * Ali priprava pripada stranki (tabela v glavi): brez webhooka vedno, v
-   * internem načinu poleg strežnika, ob neuspeli dostavi kot rezerva.
+   * internem načinu poleg strežnika; ob neuspeli dostavi NE.
    */
-  let forCustomer = !webhookUrl || input.internalMode;
+  const forCustomer = !webhookUrl || input.internalMode;
   /**
    * Kam gre strankino poročilo (druga tabela v glavi). Začne kot prenos brez
    * webhooka; e-pošta postane šele, ko jo sprejemnik potrdi.
@@ -389,9 +396,9 @@ export async function deliverLead(
         customerReport = customerReportOf(result.customerReport, input);
       } else {
         track('lm10_delivery_failed', { reason: record ? 'rejected' : 'no_record' });
-        // Rezerva: brez uspele dostave svetovalec do priprave nima nobene poti —
-        // in stranka do poročila ne, razen s prenosom.
-        forCustomer = true;
+        // Priprava se stranki NE ponudi (tabela v glavi): zavrnitev je največkrat
+        // prekoračen rok, po katerem sprejemnik delo konča in je priprava pri
+        // prodaji. Stranka dobi samo prenos svojega poročila.
         customerReport = {
           emailedTo: null,
           downloadOffered: true,
@@ -399,11 +406,9 @@ export async function deliverLead(
         };
       }
     } catch {
-      // Izjema JE neuspela dostava — pravilo iz glave velja enako kot za zavrnitev.
-      // Prej je ta veja rezervo preskočila, ker bi drugi prenos iz ugasle geste
-      // tako ali tako odpadel; gumb na rezultatih te omejitve nima.
+      // Izjema JE neuspela dostava — isto pravilo kot pri zavrnitvi: gumb za
+      // poročilo, priprave ne.
       track('lm10_delivery_failed', { reason: 'error' });
-      forCustomer = true;
       customerReport = { emailedTo: null, downloadOffered: true, reason: 'delivery_failed' };
     }
   }
