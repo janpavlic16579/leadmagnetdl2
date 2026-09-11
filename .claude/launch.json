@@ -3,10 +3,10 @@
   "configurations": [
     {
       "name": "kalkulator",
-      "runtimeExecutable": "npm",
+      "runtimeExecutable": "sh",
       "runtimeArgs": [
-        "run",
-        "dev"
+        "-c",
+        "VITE_LEAD_WEBHOOK_URL= npm run dev"
       ],
       "port": 5173,
       "autoPort": true
