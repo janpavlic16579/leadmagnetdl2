@@ -28,7 +28,7 @@ interni dokument o stranki.
 
 **Najdražje tveganje po objavi ni tehnično, ampak vsebinsko:** ob vsaki neuspeli dostavi — tudi ob
 prekoračenem roku — gre stranki v prenos prodajna priprava, napisana o njej. To je pravilo iz časa, ko
-webhooka še ni bilo, torej odločitev in ne hrošč; sprejeti jo je vredno pred objavo (B5).
+webhooka še ni bilo, torej odločitev in ne hrošč; sprejeti jo je vredno pred objavo (B5). **Rešeno 11. 9. 2026, glej B5.**
 
 ## A. Blokade — popraviti v kodi pred objavo
 
@@ -171,6 +171,13 @@ obiske s pravimi (`LIJAK_OBDOBJE_DNI` ostane 0).
   ustreznost). Ko Pages ni več potreben, repozitorij prestaviti na zasebnega.
 
 ### B5. Odločitev: prodajna priprava k stranki ob neuspeli dostavi
+
+**Rešeno 11. 9. 2026** (veja `rok-dostave-in-priprava`): rok `REQUEST_TIMEOUT_MS` 10 s → 25 s (s prilogama
+≈ 28,5 s) in ob neuspeli dostavi samo strankin PDF — priprava se ponudi le brez webhooka in v internem
+načinu. Povod: po selitvi skripte na Datalabov Google račun je vsaka testna oddaja končala kot
+`lm10_delivery_failed` (`rejected`) po 13,5 s, čeprav je skripta delo končala (vrstica, PDF-ja, kontakt,
+e-pošta); izmerjeni Googlov del brez dela skripte je 3–7 s, izjemoma 25 s. Spodnje besedilo je stanje
+pred popravkom.
 
 Tabela v [deliverLead.ts:51-55](../../src/lib/deliverLead.ts): brez webhooka → priprava stranki; z
 webhookom in uspelo dostavo → samo na strežnik; **z webhookom in neuspelo dostavo → priprava stranki**
@@ -342,7 +349,7 @@ ni. Kratka noga s podjetjem, povezavo na pravilnik in izjavo bi zaprla oboje.
 | 3. 9. | B6 `?debug=1` | odprto → **A4** |
 | 3. 9. | B7 `og:description` | odprto → **A1** |
 | 3. 9. | B8 pot objave proti dokumentaciji | `base` iz okolja rešeno 10. 9.; zastareli sklici → C5 |
-| 3. 9. | C1 rok webhooka | delno: 10 s + prenos; delo skripte je zraslo → B5 |
+| 3. 9. | C1 rok webhooka | delno: 10 s + prenos; delo skripte je zraslo → B5; **11. 9.: 25 s, B5 rešen** |
 | 3. 9. | C3, C4, C6, C7 | odprto → C3 |
 | 3. 9. | B1–B5, B9, B10, C2, C5, C8–C13 | v tem pregledu niso bile ponovno preverjene |
 | 7. 9. | A1 trdo zapisana pot | rešeno 10. 9. (PR #34, `VITE_BASE_PATH`) |

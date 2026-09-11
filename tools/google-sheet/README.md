@@ -719,9 +719,10 @@ Da stolpec pristane na svojem mestu med že zapisanimi vrsticami, enkrat poženi
 ### Zakaj se pošilja dvakrat
 
 Ob oddaji gre kontakt v AC takoj, a le, če je do tedaj poteklo manj kot 4,5
-sekunde. Aplikacija namreč čaka odgovor deset sekund in ob prekoračitvi razume
-dostavo kot neuspelo ter prodajno pripravo prenese stranki. Počasen CRM tega ne
-sme povzročiti, zato ob zamudi klic odpade in vrstico v minuti ali dveh pobere ura.
+sekunde (v načinu AC 6). Aplikacija namreč čaka odgovor petindvajset sekund in ob
+prekoračitvi razume dostavo kot neuspelo (stranki ponudi prenos poročila, ki je
+morda že na poti). Počasen CRM tega ne sme povzročiti, zato ob zamudi klic odpade
+in vrstico v minuti ali dveh pobere ura.
 Iz istega razloga napaka v AC nikoli ne pade ven: pristane v stolpcu in gre v
 ponovni poskus.
 

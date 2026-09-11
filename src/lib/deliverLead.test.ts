@@ -218,7 +218,9 @@ describe('Dostava po oddaji', () => {
     expect(h.state().submitted).toBe(true);
   });
 
-  it('neuspela dostava: priprava se ponudi stranki, da se lead ne izgubi', async () => {
+  it('neuspela dostava: priprava se stranki NE ponudi, gumb za poročilo ostane', async () => {
+    // Zavrnitev je v praksi prekoračen rok, po katerem sprejemnik delo konča —
+    // priprava je pri prodaji; stranki bi jo ponudili zaradi lažnega padca.
     const real = await loadDeliveryModules();
     const h = harness(
       {
@@ -230,13 +232,12 @@ describe('Dostava po oddaji', () => {
 
     await deliverLead(scenario(), h.modules, h.hooks);
 
-    expect(h.state().salesReportSet).toBe(true);
+    expect(h.state().salesReportSet).toBe(false);
     expect(h.state().submitted).toBe(true);
   });
 
-  it('napaka med dostavo šteje kot neuspela dostava', async () => {
-    // Prej je izjema rezervo preskočila, ker bi drugi prenos iz ugasle geste
-    // tako ali tako odpadel. Gumb na rezultatih te omejitve nima.
+  it('napaka med dostavo šteje kot neuspela dostava: priprave ni, poročilo na gumb', async () => {
+    // Isto pravilo kot pri zavrnitvi.
     const real = await loadDeliveryModules();
     const h = harness(
       {
@@ -250,7 +251,7 @@ describe('Dostava po oddaji', () => {
 
     await deliverLead(scenario(), h.modules, h.hooks);
 
-    expect(h.state().salesReportSet).toBe(true);
+    expect(h.state().salesReportSet).toBe(false);
     expect(h.state().submitted).toBe(true);
   });
 
@@ -347,13 +348,14 @@ describe('Dostava po oddaji', () => {
 
   /**
    * Rezultati se izrišejo z gumbom za pripravo ali brez njega — ne pa z gumbom,
-   * ki se pod obiskovalcem pojavi deset sekund pozneje, ko webhook obupa.
+   * ki se pod obiskovalcem pojavi pozneje. Z webhookom se gumb pokaže samo še v
+   * internem načinu, zato vrstni red preverja ta primer.
    */
   it('rezultati se odklenejo šele, ko je o pripravi odločeno', async () => {
     const real = await loadDeliveryModules();
-    const h = harness({ leadWebhookUrl: () => 'https://example.test/webhook', submitLead: rejected }, real);
+    const h = harness({ leadWebhookUrl: () => 'https://example.test/webhook' }, real);
 
-    await deliverLead(scenario(), h.modules, h.hooks);
+    await deliverLead({ ...scenario(), internalMode: true }, h.modules, h.hooks);
 
     expect(h.order.at(-1)).toBe('submitted');
     expect(h.order.indexOf('webhook')).toBeLessThan(h.order.indexOf('salesReport'));
@@ -568,7 +570,7 @@ describe('Dostava po oddaji', () => {
       expect(h.state().customerReport).toEqual({ emailedTo: null, downloadOffered: true, reason: 'no_webhook' });
     });
 
-    it('neuspela dostava: gumb za poročilo IN priprava se ponudi (nespremenjeno)', async () => {
+    it('neuspela dostava: gumb za poročilo, priprava se NE ponudi', async () => {
       const real = await loadDeliveryModules();
       const h = harness({ leadWebhookUrl: () => 'https://example.test/webhook', submitLead: rejected }, real);
 
@@ -579,7 +581,7 @@ describe('Dostava po oddaji', () => {
         downloadOffered: true,
         reason: 'delivery_failed',
       });
-      expect(h.state().salesReportSet).toBe(true);
+      expect(h.state().salesReportSet).toBe(false);
     });
 
     it('interni način: poročilo gre po e-pošti IN gumb ostane za pregled', async () => {

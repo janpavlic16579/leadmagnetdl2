@@ -17,8 +17,8 @@
  *    pripne na konec glave, obstoječe vrstice pa ostanejo poravnane.
  * 3. NAPAKA SE VRŽE NAPREJ. Apps Script pri `ContentService` vedno odgovori 200,
  *    zato aplikacija bere TELO odgovora: `{ ok: true }` je uspeh, vse drugo —
- *    tudi Googlova stran z napako — je neuspela dostava, po kateri prodajno
- *    pripravo prenese stranki. Vsaka pot, ki ne konča z zapisano vrstico, mora
+ *    tudi Googlova stran z napako — je neuspela dostava, po kateri stranka dobi
+ *    samo prenos svojega poročila. Vsaka pot, ki ne konča z zapisano vrstico, mora
  *    zato pustiti napako ven (glej `doPost`).
  * 4. PRIPRAVA NIKOLI STRANKI. Strankino poročilo gre tudi STRANKI — na naslov
  *    iz obrazca, s samo njenim PDF-jem. Odloča oznaka `audience` na prilogi:
@@ -211,9 +211,9 @@ var NASTAVITVE = {
      * Nizko namenoma. Ura drži ISTO ključavnico kot oddaja leada, in to ves čas
      * svoje zanke — pri vsaki vrstici gredo trije klici v ActiveCampaign, torej
      * bi trideset vrstic ključavnico držalo tudi pol minute. Oddaja, ki bi
-     * medtem prišla, bi čakala; aplikacija ima na voljo deset sekund, ob
-     * prekoračitvi pa razume dostavo kot neuspelo in prodajno pripravo — dokument
-     * O stranki — prenese stranki.
+     * medtem prišla, bi čakala; aplikacija ima na voljo petindvajset sekund, ob
+     * prekoračitvi pa razume dostavo kot neuspelo in stranki ponudi prenos
+     * poročila, ki je morda že na poti.
      *
      * Pet vrstic drži ključavnico nekaj sekund. Zaostanek se zato pobere v več
      * zaporednih zagonih, kar pri minutnem intervalu (`namestiUroZaAC`) ni ovira:
@@ -500,7 +500,7 @@ function doPost(e) {
     throw new Error('Zahteva je brez telesa.');
   }
 
-  // Merjeno od začetka obdelave: aplikacija čaka odgovor deset sekund (plus čas
+  // Merjeno od začetka obdelave: aplikacija čaka odgovor petindvajset sekund (plus čas
   // prenosa telesa) in vse, kar sledi, se dogaja znotraj njih — v načinu AC
   // dva zapisa na Drive, vrstica in klici v AC, sicer isto brez deljenja, a s
   // pošto stranki in prodaji.
@@ -2715,8 +2715,8 @@ function pridobiMapo(imeMape, imeLastnosti) {
  * 2. IZID SE ZAPIŠE V STOLPEC `activeCampaign`. Prazna celica ali "NAPAKA: …"
  *    pomeni "še ni v AC" in je edino, po čemer ura (`posljiZaostaleVAC`) ve, kaj
  *    naj ponovi. Brez tega stolpca je vsak neuspeh tih in nepovraten.
- * 3. NA VROČI POTI JE ROK. Aplikacija čaka odgovor deset sekund; če ga ne dobi,
- *    pade v rezervno pot in pripravo prenese stranki. Zato se AC ob oddaji
+ * 3. NA VROČI POTI JE ROK. Aplikacija čaka odgovor petindvajset sekund; če ga ne
+ *    dobi, šteje dostavo za neuspelo in stranki ponudi prenos poročila. Zato se AC ob oddaji
  *    pokliče le, če je do tedaj poteklo manj kot `AC_ROK_MS` — sicer ga pobere
  *    ura. Lead ne sme biti izgubljen zato, ker je bil CRM počasen.
  * 4. KLJUČ NI V TEJ DATOTEKI. Datoteka je v repozitoriju; ključ API bi bil s tem

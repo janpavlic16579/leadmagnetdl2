@@ -120,20 +120,25 @@ export { leadWebhookUrl } from './webhookUrl';
  * čas za prenos telesa (requestTimeoutMs).
  *
  * Brez omejitve je viseč strežnik pomenil, da obiskovalec gleda vrteči se gumb,
- * dokler ne obupa. Deset sekund je krepko čez vsak zdrav odziv na majhno telo; s
- * prilogama (≈ 175 kB) pa gre na počasni mobilni povezavi nekaj sekund samo za
- * prenos, preden strežnik telo sploh dobi. Prekoračitev ni le čas: dostava se šteje kot
- * neuspela in prodajna priprava gre stranki (deliverLead.ts), zato je daljši rok
- * cenejši od lažnega padca. Z osmih na deset sekund, odkar sprejemnik pred
- * odgovorom opravi še delo za obe sporočili — shrani oba PDF-ja na Drive in
- * pokliče CRM (v načinu MailApp namesto tega pošlje dve sporočili): lažen padec
- * zdaj pomeni tudi gumb za prenos ob pošti, ki je že na poti.
+ * dokler ne obupa. Rok pa ne sme biti krajši od poštenega odziva sprejemnika:
+ * prekoračitev ni le čas, ampak lažen padec — dostava se šteje kot neuspela in
+ * rezultati ponudijo prenos poročila, ki je po e-pošti morda že na poti. S
+ * prilogama (≈ 175 kB) gre na počasni mobilni povezavi nekaj sekund samo za
+ * prenos, preden strežnik telo sploh dobi (requestTimeoutMs to prišteje).
+ *
+ * Z deset na petindvajset sekund (11. 9. 2026). Sprejemnik v načinu AC pred
+ * odgovorom shrani oba PDF-ja na Drive, zapiše vrstico in pokliče CRM, Apps
+ * Script pa k temu doda še zagon skripte in preusmeritev odgovora — izmerjeno
+ * 3 do 7 s brez vsakega dela, izjemoma 25 s. Z desetimi sekundami je bila po
+ * selitvi skripte na nov Google račun VSAKA oddaja lažen padec (dogodek
+ * lm10_delivery_failed z razlogom rejected), čeprav je skripta vse končala.
+ * Čakanje pokriva napredovalna vrstica na obrazcu.
  */
-const REQUEST_TIMEOUT_MS = 10_000;
+const REQUEST_TIMEOUT_MS = 25_000;
 /** Počasna mobilna povezava, s katero računamo prenos telesa: ~50 kB/s. */
 const SLOW_UPLINK_BYTES_PER_MS = 50;
 
-/** Rok zahteve glede na velikost telesa: samo HTML ≈ 10 s, s prilogama ≈ 13,5 s. */
+/** Rok zahteve glede na velikost telesa: samo HTML ≈ 25 s, s prilogama ≈ 28,5 s. */
 export function requestTimeoutMs(bodyBytes: number): number {
   return REQUEST_TIMEOUT_MS + Math.ceil(bodyBytes / SLOW_UPLINK_BYTES_PER_MS);
 }
