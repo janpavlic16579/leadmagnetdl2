@@ -1997,3 +1997,44 @@ test('sprožilno polje gre v ločenem klicu samo v načinu AC in samo, če ima i
   assert.equal(brez.skripta.posljiVAC({ ...LEAD, prejeto: new Date() }).id, '77');
   assert.equal(zahteveBrez.filter((z) => z.pot === 'contact/sync').length, 1, 'brez sprožilnega polja ni drugega klica');
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Formule po območnih nastavitvah preglednice
+// ═══════════════════════════════════════════════════════════════════════════
+
+test('lokalizirajFormulo: vejica postane podpičje zunaj nizov, v poljih poševnica nazaj', () => {
+  const { skripta } = naloziSkripto();
+  const f = skripta.lokalizirajFormulo;
+  assert.equal(f('=COUNTIF(A2:A,"DA")', ','), '=COUNTIF(A2:A,"DA")');
+  assert.equal(f('=COUNTIF(A2:A,"DA, ne")', ';'), '=COUNTIF(A2:A;"DA, ne")');
+  assert.equal(
+    f('=IFERROR(SORT(FILTER({A2:A,B2:B},A2:A<>""),1,TRUE),"x")', ';'),
+    '=IFERROR(SORT(FILTER({A2:A\\B2:B};A2:A<>"");1;TRUE);"x")',
+  );
+  assert.equal(f('=IF(A1="a""b,c",1,2)', ';'), '=IF(A1="a""b,c";1;2)');
+  // Funkcija, gnezdena v polju: njene vejice so ločila argumentov, ne stolpcev.
+  assert.equal(
+    f('=QUERY({ARRAYFORMULA(IF(A2:A="","",TEXT(A2:A,"yyyy-mm"))),B2:B},"select Col1, count(Col1)",0)', ';'),
+    '=QUERY({ARRAYFORMULA(IF(A2:A="";"";TEXT(A2:A;"yyyy-mm")))\\B2:B};"select Col1, count(Col1)";0)',
+  );
+  assert.equal(
+    f('=IFERROR(QUERY(A2:C,"select A, count(B) where A <> \'\' group by A",0),"Ni podatkov.")', ';'),
+    '=IFERROR(QUERY(A2:C;"select A, count(B) where A <> \'\' group by A";0);"Ni podatkov.")',
+  );
+});
+
+test('zaznajLocilo: kadar preglednica formule ne izračuna, ostane vejica in celica je prazna', () => {
+  const { skripta } = naloziSkripto();
+  const list = skripta.pridobiListPoImenu('Analitika');
+  assert.equal(skripta.zaznajLocilo(list.getRange('A3')), ',');
+  assert.equal(list.getRange('A3').getValue(), '');
+});
+
+test('urediStolpce zapiše kartice Analitike z ameriško vejico, ko ločila ni mogoče zaznati', () => {
+  const { skripta, preglednica } = naloziSkripto();
+  post(skripta, oddaja(LEAD));
+  skripta.urediStolpce();
+  const analitika = preglednica.getSheetByName('Analitika');
+  assert.match(String(analitika.getRange('A3').getValue()), /^=IF\(AND\(/);
+  assert.match(String(analitika.getRange(6, 1).getValue()), /COUNTIF\(.*,"DA"\)/);
+});

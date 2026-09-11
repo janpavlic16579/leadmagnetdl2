@@ -351,6 +351,15 @@ se v njej pojavi opozorilo, so se stolpci na `Leadi` premaknili — poženite
 `urediAnalitiko`. Če je na `Leadi` vklopljen filter, se številke z vidnimi
 vrsticami ne bodo ujemale: `COUNTIF` filtrov ne upošteva.
 
+**Ločilo v formulah zazna skripta sama.** `setFormula` formulo razčleni po
+območnih nastavitvah preglednice: pri ameriških je ločilo argumentov vejica, pri
+slovenskih podpičje. Skripta pred zapisom formul v celici `A3` preizkusi obe in
+formule (zapisane z vejico) prepiše v pravo (`zaznajLocilo`, `lokalizirajFormulo`).
+Do 11. 9. 2026 je pri slovenskih nastavitvah vsaka formula z več argumenti
+kazala `#ERROR!`, delovali sta le »Leadov skupaj« in »Letni znesek«. Oblike
+števil so zapisane v ameriškem vzorcu (`#,##0 €`), ki ga preglednica prikaže po
+svojih nastavitvah — pri slovenskih `25.000 €`.
+
 ### Ko skripto spremenite
 
 Google poganja **razmeščeno različico**, ne tiste v urejevalniku. Po vsaki

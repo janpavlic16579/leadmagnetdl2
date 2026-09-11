@@ -1403,7 +1403,7 @@ function urediVidez(list, glava) {
   // Oblike in zapiski se s prerazporeditvijo prav tako NE premaknejo — ostanejo
   // na stari fizični celici, kar je isti vzorec kot pri veljavnosti, le da tu
   // nič ne vrže napake: list samo laže. Brez tega pristanejo ure na mesec v
-  // stolpcu z obliko "#.##0 €" in se berejo kot evri, nad glavo `utmSource` pa
+  // stolpcu z obliko "#,##0 €" in se berejo kot evri, nad glavo `utmSource` pa
   // obvisi pojasnilo sosednjega stolpca. Zato oboje dol in nato znova po imenu.
   //
   // Obseg je natanko podatkovni blok, nikoli do getMaxRows(): tako je nastala
@@ -1461,7 +1461,7 @@ function urediVidez(list, glava) {
       list.getRange(2, stolpec, vrstic, 1).setNumberFormat('d. m. yyyy HH:mm');
     }
     if (DENARNI.indexOf(ime) !== -1 && vrstic) {
-      list.getRange(2, stolpec, vrstic, 1).setNumberFormat('#.##0 €');
+      list.getRange(2, stolpec, vrstic, 1).setNumberFormat('#,##0 €');
     }
     if (ime === KLICI_TAKOJ && vrstic) {
       list
@@ -1590,34 +1590,34 @@ function urediAnalitiko() {
 
   // ── Kartice: pet številk, ki jih človek prebere v dveh sekundah ────────────
   var kartice = [
-    ['ŠE ZA POKLICATI', '=' + caka, '#.##0', true],
-    ['PROSIJO ZA POSVET', '=' + prosijo, '#.##0', false],
-    ['POKLICANI', '=' + poklicanih, '#.##0', false],
-    ['LEADOV SKUPAJ', '=' + skupaj, '#.##0', false],
-    ['LETNI ZNESEK', '=SUM(' + letno + ')', '#.##0 €', false],
+    ['ŠE ZA POKLICATI', '=' + caka, '#,##0', true],
+    ['PROSIJO ZA POSVET', '=' + prosijo, '#,##0', false],
+    ['POKLICANI', '=' + poklicanih, '#,##0', false],
+    ['LEADOV SKUPAJ', '=' + skupaj, '#,##0', false],
+    ['LETNI ZNESEK', '=SUM(' + letno + ')', '#,##0 €', false],
   ];
 
   // ── Podatkovni del: tabele, iz katerih grafi jemljejo ─────────────────────
   var podrobno = [
-    ['Najstarejši nepoklicani (dni)', '=IFERROR(INT(TODAY()-MIN(FILTER(' + stevilo + ',' + stevilo + '<>"",' + klicano + '<>TRUE))),"—")', '#.##0'],
-    ['Novi zadnjih 7 dni', '=COUNTIFS(' + stevilo + ',">="&TODAY()-6)', '#.##0'],
-    ['Novi zadnjih 30 dni', '=COUNTIFS(' + stevilo + ',">="&TODAY()-29)', '#.##0'],
-    ['Brez telefonske številke', '=' + skupaj + '-COUNTA(' + R('phone') + ')', '#.##0'],
+    ['Najstarejši nepoklicani (dni)', '=IFERROR(INT(TODAY()-MIN(FILTER(' + stevilo + ',' + stevilo + '<>"",' + klicano + '<>TRUE))),"—")', '#,##0'],
+    ['Novi zadnjih 7 dni', '=COUNTIFS(' + stevilo + ',">="&TODAY()-6)', '#,##0'],
+    ['Novi zadnjih 30 dni', '=COUNTIFS(' + stevilo + ',">="&TODAY()-29)', '#,##0'],
+    ['Brez telefonske številke', '=' + skupaj + '-COUNTA(' + R('phone') + ')', '#,##0'],
     // Nadomestilo za „poklicani brez vpisanega izida": odkar je `sestanek`
     // kljukica, neobkljukano polje pomeni tako „sestanka ni" kot „še nisem
     // vpisal" in tega dvojega ni mogoče razločiti. Dogovorjen sestanek brez
     // datuma pa je enako zanesljiv znak nedokončanega vnosa — in ga je mogoče
     // prešteti.
-    ['Sestanki brez vpisanega datuma', '=MAX(0,' + sestankov + '-COUNTIFS(' + dogovorjen + ',TRUE,' + datumSestanka + ',"<>"))', '#.##0'],
+    ['Sestanki brez vpisanega datuma', '=MAX(0,' + sestankov + '-COUNTIFS(' + dogovorjen + ',TRUE,' + datumSestanka + ',"<>"))', '#,##0'],
     ['Delež poklicanih', '=IF(' + skupaj + '=0,"—",' + poklicanih + '/' + skupaj + ')', '0 %'],
     // Odstotek pri malo klicih ni metrika, ampak motnja: pri treh klicih skače
     // med 0, 33, 67 in 100 %. Pod desetimi zato pokaže n in ne deleža.
     ['Sestanki na poklicanega', '=IF(' + poklicanih + '<10,"n="&' + poklicanih + '&" — premalo za odstotek",' + sestankov + '/' + poklicanih + ')', '0 %'],
-    ['Letni znesek nepoklicanih', '=SUM(' + letno + ')-SUMIF(' + klicano + ',TRUE,' + letno + ')', '#.##0 €'],
+    ['Letni znesek nepoklicanih', '=SUM(' + letno + ')-SUMIF(' + klicano + ',TRUE,' + letno + ')', '#,##0 €'],
     // Mediana in največji namesto povprečja: pri nekaj leadih en velik posel
     // povsem določi povprečje in številka govori o njem, ne o lijaku.
-    ['Mediana letnega zneska', '=IF(' + skupaj + '=0,"—",MEDIAN(' + letno + '))', '#.##0 €'],
-    ['Največji posamezen znesek', '=IF(' + skupaj + '=0,"—",MAX(' + letno + '))', '#.##0 €'],
+    ['Mediana letnega zneska', '=IF(' + skupaj + '=0,"—",MEDIAN(' + letno + '))', '#,##0 €'],
+    ['Največji posamezen znesek', '=IF(' + skupaj + '=0,"—",MAX(' + letno + '))', '#,##0 €'],
   ];
 
   var lijak = [
@@ -1677,12 +1677,24 @@ function urediAnalitiko() {
       'Vse številke so žive: preračunajo se same, tudi ko klicatelj obkljuka klic. ' +
         'Ta list se ob vsakem zagonu „urediStolpce" sestavi na novo — vanj ne pišite ročno.',
     );
-  list.getRange('A3').setFormula(kontrolna);
+  // Ločilo argumentov (vejica ali podpičje) po območnih nastavitvah preglednice
+  // — glej `zaznajLocilo`. Preizkus teče v A3, ki jo takoj zatem prepiše varovalo.
+  var locilo = zaznajLocilo(list.getRange('A3'));
+  var F = function (obseg, formula) {
+    return obseg.setFormula(lokalizirajFormulo(formula, locilo));
+  };
+  /** Tabele [oznaka, formula] za `setValues`: niz z '=' je za preglednico formula. */
+  var L = function (vrstice) {
+    return vrstice.map(function (v) {
+      return [v[0], lokalizirajFormulo(v[1], locilo)];
+    });
+  };
+  F(list.getRange('A3'), kontrolna);
 
   kartice.forEach(function (kartica, i) {
     var stolpec = 1 + i * 2;
     list.getRange(KARTICE_VRSTICA, stolpec).setValue(kartica[0]);
-    list.getRange(KARTICE_VRSTICA + 1, stolpec).setFormula(kartica[1]).setNumberFormat(kartica[2]);
+    F(list.getRange(KARTICE_VRSTICA + 1, stolpec), kartica[1]).setNumberFormat(kartica[2]);
   });
 
   // Podatkovni del desno od grafov: grafi potrebujejo vir na listu, človek pa
@@ -1693,35 +1705,31 @@ function urediAnalitiko() {
   list.getRange(4, p(0)).setValue('PODATKI ZA GRAFE — ne brišite');
 
   list.getRange(5, p(0)).setValue('PODROBNO');
-  list.getRange(6, p(0), podrobno.length, 2).setValues(
-    podrobno.map(function (v) {
-      return [v[0], v[1]];
-    }),
-  );
+  list.getRange(6, p(0), podrobno.length, 2).setValues(L(podrobno));
   podrobno.forEach(function (v, i) {
     list.getRange(6 + i, p(1)).setNumberFormat(v[2]);
   });
 
   list.getRange(5, p(3)).setValue('LIJAK');
-  list.getRange(6, p(3), lijak.length, 2).setValues(lijak);
+  list.getRange(6, p(3), lijak.length, 2).setValues(L(lijak));
 
   list.getRange(5, p(6)).setValue('IZIDI KLICEV');
-  list.getRange(6, p(6), izidi.length, 2).setValues(izidi);
+  list.getRange(6, p(6), izidi.length, 2).setValues(L(izidi));
 
   list.getRange(5, p(9)).setValue('PO MESECIH');
-  list.getRange(6, p(9)).setFormula(poMesecih);
+  F(list.getRange(6, p(9)), poMesecih);
 
   skupine.forEach(function (blok, i) {
     var stolpec = p(13 + i * 4);
     list.getRange(5, stolpec).setValue(blok[0]);
-    list.getRange(6, stolpec).setFormula(blok[1]);
+    F(list.getRange(6, stolpec), blok[1]);
   });
 
   list.getRange(VRSTA_VRSTICA, 1).setValue('ZA POKLICATI — najstarejši najprej');
   list
     .getRange(VRSTA_VRSTICA + 1, 1, 1, 6)
     .setValues([['Oddal', 'Ime', 'Priimek', 'Podjetje', 'Telefon', 'Letni znesek']]);
-  list.getRange(VRSTA_VRSTICA + 2, 1).setFormula(vrsta);
+  F(list.getRange(VRSTA_VRSTICA + 2, 1), vrsta);
 
   narisiGrafe(list, izidi.length);
   urediVidezAnalitike(list, kartice.length);
@@ -1871,6 +1879,66 @@ function kontrolnaFormula(vir, glava) {
     NASTAVITVE.IME_LISTA +
     ' so se premaknili — številke spodaj so napačne. Poženite urediAnalitiko.")'
   );
+}
+
+/**
+ * Ločilo argumentov v formulah, kot ga pričakuje TA preglednica.
+ *
+ * `setFormula` formulo razčleni po območnih nastavitvah preglednice: pri
+ * ameriških je ločilo vejica, pri slovenskih (in večini evropskih) podpičje in
+ * vejica v formuli da #ERROR!. Na listu Analitika je to ostalo neopaženo, ker
+ * COUNTA in SUM z enim argumentom delujeta, COUNTIF z dvema pa ne — kartici
+ * »Leadov skupaj« in »Letni znesek« sta kazali številke, ostale #ERROR!.
+ *
+ * Namesto seznama območnih nastavitev preizkus na samem listu: formula z vejico
+ * v podano celico, branje izida, nato še s podpičjem. Kar preglednica izračuna
+ * kot 1, je pravo ločilo. Celica ostane prazna. Kadar ne deluje nobeno
+ * (ponarejena preglednica v preizkusu formul ne računa), ostane vejica.
+ */
+function zaznajLocilo(celica) {
+  var locila = [',', ';'];
+  var najdeno = ',';
+  for (var i = 0; i < locila.length; i++) {
+    try {
+      celica.setFormula('=IF(TRUE' + locila[i] + '1' + locila[i] + '2)');
+      SpreadsheetApp.flush();
+      if (celica.getValue() === 1) {
+        najdeno = locila[i];
+        break;
+      }
+    } catch (err) {
+      // Napačno ločilo sme tudi vreči; poskusi naslednjega.
+    }
+  }
+  celica.setValue('');
+  return najdeno;
+}
+
+/**
+ * Formulo, zapisano z ameriško vejico, prepiše v ločilo preglednice. Vejice v
+ * nizih (npr. v poizvedbi QUERY) ostanejo. V zavitih oklepajih (polja) postane
+ * vejica pri podpičju poševnica nazaj, kot to zapiše Sheets sam — a samo tista,
+ * ki loči stolpce polja: vejica v funkciji, gnezdeni v polju
+ * (`{ARRAYFORMULA(IF(a,b,c)),d}`), je še vedno ločilo argumentov. Zato sklad
+ * odprtih oklepajev in ne števec. Podvojeni narekovaj v nizu ("") preklopi
+ * dvakrat in ostane v nizu.
+ */
+function lokalizirajFormulo(formula, locilo) {
+  if (locilo === ',') return formula;
+  var izhod = '';
+  var vNizu = false;
+  var sklad = [];
+  for (var i = 0; i < formula.length; i++) {
+    var znak = formula.charAt(i);
+    if (znak === '"') vNizu = !vNizu;
+    if (!vNizu) {
+      if (znak === '{' || znak === '(') sklad.push(znak);
+      else if (znak === '}' || znak === ')') sklad.pop();
+      else if (znak === ',') znak = sklad.length && sklad[sklad.length - 1] === '{' ? '\\' : locilo;
+    }
+    izhod += znak;
+  }
+  return izhod;
 }
 
 /** QUERY s štetjem in vsoto po eni skupini; prazne skupine odpadejo. */
@@ -3979,20 +4047,20 @@ function sestaviLijakList() {
   // Vse tabele so sestavljene, PREDEN se list počisti (isti razlog kot v
   // urediAnalitiko): napaka zgoraj pusti prejšnji povzetek nedotaknjen.
   var kartice = [
-    ['ZAČETIH OBISKOV', zacetih, '#.##0'],
-    ['DO OBRAZCA', doObrazca, '#.##0'],
-    ['ODDAJ', oddaj, '#.##0'],
+    ['ZAČETIH OBISKOV', zacetih, '#,##0'],
+    ['DO OBRAZCA', doObrazca, '#,##0'],
+    ['ODDAJ', oddaj, '#,##0'],
     ['DELEŽ ODDAJ', zacetih ? oddaj / zacetih : '', '0 %'],
-    ['PRENOSOV POROČILA', prenosov, '#.##0'],
+    ['PRENOSOV POROČILA', prenosov, '#,##0'],
   ];
   var glavaLijaka = ['Korak', 'Obiskov', 'Delež začetnih', 'Končalo tu', 'Odpad', 'Mediana časa'];
-  var oblikeLijaka = [null, '#.##0', '0 %', '#.##0', '0 %', '#.##0 "s"'];
+  var oblikeLijaka = [null, '#,##0', '0 %', '#,##0', '0 %', '#,##0 "s"'];
   var skupni = vrsticeLijaka(zacetni);
   var segmenti = skupine(zacetni, function (o) {
     return o.segment;
   });
   var glavaSkupin = ['', 'Začetih', 'Do obrazca', 'Oddaj', 'Delež oddaj'];
-  var oblikeSkupin = [null, '#.##0', '#.##0', '#.##0', '0 %'];
+  var oblikeSkupin = [null, '#,##0', '#,##0', '#,##0', '0 %'];
 
   var list = pridobiListPoImenu(NASTAVITVE.IME_LISTA_LIJAK);
   list.clear();
@@ -4108,7 +4176,7 @@ function sestaviLijakList() {
     'OBRAZEC — KATERO POLJE USTAVI ODDAJO',
     ['Polje', 'Blokad', 'Obiskov'],
     vrsticeBlokad(obiski),
-    [null, '#.##0', '#.##0'],
+    [null, '#,##0', '#,##0'],
   );
   vrstica = pisiTabelo(
     list,
@@ -4116,7 +4184,7 @@ function sestaviLijakList() {
     'DOSTAVA LEADA (webhook)',
     ['Izid', 'Obiskov'],
     vrsticeDostave(obiski),
-    [null, '#.##0'],
+    [null, '#,##0'],
   );
   vrstica = pisiTabelo(
     list,
@@ -4139,7 +4207,7 @@ function sestaviLijakList() {
       ],
       ['Izpuščeni: interni način (?debug=1) ali brez prikaza koraka', izpusceni],
     ],
-    [null, '#.##0'],
+    [null, '#,##0'],
   );
   vrstica = pisiTabelo(
     list,
@@ -4147,7 +4215,7 @@ function sestaviLijakList() {
     'PO DNEVIH — zadnjih 30 dni',
     ['Dan', 'Začetih', 'Oddaj'],
     vrsticePoDnevih(zacetni, 30),
-    ['yyyy-mm-dd', '#.##0', '#.##0'],
+    ['yyyy-mm-dd', '#,##0', '#,##0'],
   );
 
   urediVidezLijaka(list, kartice.length);
