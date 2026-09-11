@@ -240,7 +240,7 @@ var POROCILO_STRANKI = 'porociloStranki';
 
 /**
  * Povezava do strankinega PDF-ja na Drivu (`shraniPorocilo`) — isti dokument,
- * kot ga stranka dobi po e-pošti. Od tod gre v ActiveCampaign (%LM10_POROCILO%),
+ * kot ga stranka dobi po e-pošti. Od tod gre v ActiveCampaign (%PDF_LINK%),
  * da ga svetovalec odpre iz kartice kontakta, ne da bi brskal po pošti.
  */
 var POROCILO_PDF = 'porociloPdf';
@@ -1377,7 +1377,7 @@ var POJASNILA = {
   hourCostsEstimated: 'true = vsaj ena urna postavka ni vnesena, ampak izbrana ali privzeta.',
   followUpSequence: 'Ključ sekvence za CRM. Ne pove ničesar o stranki.',
   activeCampaign: 'Id kontakta v ActiveCampaignu. Prazno ali "NAPAKA:" pomeni, da tam še ni — tako vrstico pobere ura (posljiZaostaleVAC).',
-  porociloPdf: 'Povezava do strankinega PDF-ja na Drivu — isti dokument, kot ga je dobila po e-pošti; gre tudi v ActiveCampaign (%LM10_POROCILO%). "NAPAKA:" = Drive je odpovedal, stranka ima PDF vseeno.',
+  porociloPdf: 'Povezava do strankinega PDF-ja na Drivu — isti dokument, kot ga je dobila po e-pošti; gre tudi v ActiveCampaign (%PDF_LINK%). "NAPAKA:" = Drive je odpovedal, stranka ima PDF vseeno.',
   poklicano: 'Obkljukajte, ko je klic opravljen.',
   sestanek: 'Obkljukajte, ko je sestanek dogovorjen. Zakaj ga ni, pripišite v opombe.',
   'sestanek datum': 'Datum dogovorjenega sestanka. Celica sprejme samo datum — vpišite ga ali izberite v koledarju.',
