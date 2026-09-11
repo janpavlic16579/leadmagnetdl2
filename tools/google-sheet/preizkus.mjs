@@ -2012,6 +2012,11 @@ test('lokalizirajFormulo: vejica postane podpičje zunaj nizov, v poljih poševn
     '=IFERROR(SORT(FILTER({A2:A\\B2:B};A2:A<>"");1;TRUE);"x")',
   );
   assert.equal(f('=IF(A1="a""b,c",1,2)', ';'), '=IF(A1="a""b,c";1;2)');
+  // Funkcija, gnezdena v polju: njene vejice so ločila argumentov, ne stolpcev.
+  assert.equal(
+    f('=QUERY({ARRAYFORMULA(IF(A2:A="","",TEXT(A2:A,"yyyy-mm"))),B2:B},"select Col1, count(Col1)",0)', ';'),
+    '=QUERY({ARRAYFORMULA(IF(A2:A="";"";TEXT(A2:A;"yyyy-mm")))\\B2:B};"select Col1, count(Col1)";0)',
+  );
   assert.equal(
     f('=IFERROR(QUERY(A2:C,"select A, count(B) where A <> \'\' group by A",0),"Ni podatkov.")', ';'),
     '=IFERROR(QUERY(A2:C;"select A, count(B) where A <> \'\' group by A";0);"Ni podatkov.")',

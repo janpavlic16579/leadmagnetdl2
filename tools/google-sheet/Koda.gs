@@ -1683,6 +1683,12 @@ function urediAnalitiko() {
   var F = function (obseg, formula) {
     return obseg.setFormula(lokalizirajFormulo(formula, locilo));
   };
+  /** Tabele [oznaka, formula] za `setValues`: niz z '=' je za preglednico formula. */
+  var L = function (vrstice) {
+    return vrstice.map(function (v) {
+      return [v[0], lokalizirajFormulo(v[1], locilo)];
+    });
+  };
   F(list.getRange('A3'), kontrolna);
 
   kartice.forEach(function (kartica, i) {
@@ -1699,20 +1705,16 @@ function urediAnalitiko() {
   list.getRange(4, p(0)).setValue('PODATKI ZA GRAFE — ne brišite');
 
   list.getRange(5, p(0)).setValue('PODROBNO');
-  list.getRange(6, p(0), podrobno.length, 2).setValues(
-    podrobno.map(function (v) {
-      return [v[0], v[1]];
-    }),
-  );
+  list.getRange(6, p(0), podrobno.length, 2).setValues(L(podrobno));
   podrobno.forEach(function (v, i) {
     list.getRange(6 + i, p(1)).setNumberFormat(v[2]);
   });
 
   list.getRange(5, p(3)).setValue('LIJAK');
-  list.getRange(6, p(3), lijak.length, 2).setValues(lijak);
+  list.getRange(6, p(3), lijak.length, 2).setValues(L(lijak));
 
   list.getRange(5, p(6)).setValue('IZIDI KLICEV');
-  list.getRange(6, p(6), izidi.length, 2).setValues(izidi);
+  list.getRange(6, p(6), izidi.length, 2).setValues(L(izidi));
 
   list.getRange(5, p(9)).setValue('PO MESECIH');
   F(list.getRange(6, p(9)), poMesecih);
@@ -1914,22 +1916,25 @@ function zaznajLocilo(celica) {
 
 /**
  * Formulo, zapisano z ameriško vejico, prepiše v ločilo preglednice. Vejice v
- * nizih (npr. v poizvedbi QUERY) ostanejo; v zavitih oklepajih (polja) postane
- * vejica pri podpičju poševnica nazaj, kot to zapiše Sheets sam. Podvojeni
- * narekovaj v nizu ("") preklopi dvakrat in ostane v nizu.
+ * nizih (npr. v poizvedbi QUERY) ostanejo. V zavitih oklepajih (polja) postane
+ * vejica pri podpičju poševnica nazaj, kot to zapiše Sheets sam — a samo tista,
+ * ki loči stolpce polja: vejica v funkciji, gnezdeni v polju
+ * (`{ARRAYFORMULA(IF(a,b,c)),d}`), je še vedno ločilo argumentov. Zato sklad
+ * odprtih oklepajev in ne števec. Podvojeni narekovaj v nizu ("") preklopi
+ * dvakrat in ostane v nizu.
  */
 function lokalizirajFormulo(formula, locilo) {
   if (locilo === ',') return formula;
   var izhod = '';
   var vNizu = false;
-  var globina = 0;
+  var sklad = [];
   for (var i = 0; i < formula.length; i++) {
     var znak = formula.charAt(i);
     if (znak === '"') vNizu = !vNizu;
     if (!vNizu) {
-      if (znak === '{') globina++;
-      else if (znak === '}') globina--;
-      else if (znak === ',') znak = globina > 0 ? '\\' : locilo;
+      if (znak === '{' || znak === '(') sklad.push(znak);
+      else if (znak === '}' || znak === ')') sklad.pop();
+      else if (znak === ',') znak = sklad.length && sklad[sklad.length - 1] === '{' ? '\\' : locilo;
     }
     izhod += znak;
   }
