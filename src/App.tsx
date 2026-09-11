@@ -8,6 +8,7 @@ import {
 } from './config/industries';
 import { CalculatorFlow } from './components/Calculator/CalculatorFlow';
 import { Header } from './components/Layout/Header';
+import { isInternalMode } from './lib/internalMode';
 import { applyTheme, readStoredTheme, type Theme } from './lib/theme';
 
 /**
@@ -26,9 +27,9 @@ function readInitialParams() {
     industry: pathIndustry || (segment ? getIndustryForSegment(segment.id) : ''),
     skipIndustryStep: pathIndustry !== '',
     utmSource: params.get('utm_source'),
-    // Interni način: prodajna priprava se prenese na napravo. Namenjen razvoju in
-    // preverjanju vsebine; obiskovalec ga po nesreči ne vklopi.
-    internalMode: params.get('debug') === '1',
+    // Interni način: prodajna priprava se prenese na napravo. Namenjen pregledu
+    // vsebine na objavljeni strani; vklopi ga žeton iz gradnje (lib/internalMode.ts).
+    internalMode: isInternalMode(window.location.search),
   };
 }
 

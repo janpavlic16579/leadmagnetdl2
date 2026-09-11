@@ -13,7 +13,7 @@ interface NextStepsProps {
   reportEmailed?: boolean;
   /**
    * Prenos priprave za svetovalca. Prikaže se, kadar priprava pripada stranki —
-   * brez webhooka, ob neuspeli dostavi ali v internem načinu (?debug=1); glej
+   * brez webhooka, ob neuspeli dostavi ali v internem načinu (?debug=<žeton>); glej
    * tabelo v lib/deliverLead.ts. Ob delujočem webhooku ostane skrit.
    */
   onDownloadSalesPdf?: () => void | Promise<void>;

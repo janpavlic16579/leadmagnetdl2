@@ -47,6 +47,9 @@ jobs:
           # in og:image — deljena povezava je brez predogledne kartice (vtičnik
           # canonicalUrl v vite.config.ts to ob gradnji tudi glasno izpiše).
           VITE_PUBLIC_URL: ${{ vars.VITE_PUBLIC_URL }}
+          # Interni način (?debug=<žeton>) za pregled vsebine na objavljeni strani;
+          # brez spremenljivke je izklopljen — src/lib/internalMode.ts.
+          VITE_INTERNAL_TOKEN: ${{ vars.VITE_INTERNAL_TOKEN }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

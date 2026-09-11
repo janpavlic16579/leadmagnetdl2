@@ -155,7 +155,14 @@ describe('describeVisit', () => {
   const base = { id: 'obisk-1', startedAt: new Date('2026-09-05T08:00:00Z') };
 
   it('prebere utm_source in interni način iz naslova, razred zaslona iz širine', () => {
-    expect(describeVisit({ ...base, search: '?s=proizvodnja&utm_source=linkedin&debug=1', narrowScreen: true })).toEqual({
+    expect(
+      describeVisit({
+        ...base,
+        search: '?s=proizvodnja&utm_source=linkedin&debug=zeton-x',
+        narrowScreen: true,
+        internalToken: 'zeton-x',
+      }),
+    ).toEqual({
       id: 'obisk-1',
       startedAt: '2026-09-05T08:00:00.000Z',
       device: 'mobile',
@@ -172,9 +179,12 @@ describe('describeVisit', () => {
     });
   });
 
-  it('interni način vklopi samo natanko debug=1 — isto pravilo kot App.tsx', () => {
-    expect(describeVisit({ ...base, search: '?debug=true', narrowScreen: false }).internal).toBe(false);
-    expect(describeVisit({ ...base, search: '?debug=1', narrowScreen: false }).internal).toBe(true);
+  it('interni način vklopi samo žeton iz gradnje — isto pravilo kot App.tsx', () => {
+    const token = { narrowScreen: false, internalToken: 'zeton-x' };
+    expect(describeVisit({ ...base, ...token, search: '?debug=1' }).internal).toBe(false);
+    expect(describeVisit({ ...base, ...token, search: '?debug=zeton-x' }).internal).toBe(true);
+    // Brez žetona v gradnji ni internega načina — tudi za nekdanji ?debug=1.
+    expect(describeVisit({ ...base, search: '?debug=1', narrowScreen: false, internalToken: '' }).internal).toBe(false);
   });
 
   it('predolg utm_source obreže — naslov je javen vhod', () => {

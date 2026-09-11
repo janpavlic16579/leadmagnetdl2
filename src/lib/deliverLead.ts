@@ -92,7 +92,7 @@ export interface DeliverLeadInput {
   consents: LeadConsents;
   utmSource: string | null;
   /**
-   * Interni način (?debug=1). Priprava se ponudi stranki tudi ob delujočem
+   * Interni način (?debug=<žeton>, lib/internalMode.ts). Priprava se ponudi stranki tudi ob delujočem
    * webhooku — za razvoj in pregled vsebine.
    */
   internalMode: boolean;

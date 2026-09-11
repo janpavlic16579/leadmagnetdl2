@@ -36,6 +36,8 @@
  * izpusti. Vnosi vprašalnika ne gredo skozi ta modul nikoli.
  */
 
+import { isInternalMode } from './internalMode';
+
 /** Razred zaslona ob začetku obiska — ne naprava, ne user agent. */
 export type FunnelDevice = 'mobile' | 'desktop';
 
@@ -45,7 +47,7 @@ export interface FunnelVisit {
   device: FunnelDevice;
   /** `utm_source` iz naslova ali prazen niz. Isti podatek, kot ga nosi izvozni zapis. */
   utmSource: string;
-  /** Interni način (?debug=1): povzetek te obiske izpusti. */
+  /** Interni način (?debug=<žeton>, lib/internalMode.ts): povzetek te obiske izpusti. */
   internal: boolean;
 }
 
@@ -159,6 +161,11 @@ export interface DescribeVisitInput {
   search: string;
   /** Ozek zaslon ob začetku obiska (matchMedia). */
   narrowScreen: boolean;
+  /**
+   * Žeton internega načina (VITE_INTERNAL_TOKEN). Neobvezen: brez njega velja
+   * vrednost iz gradnje, test poda svojega.
+   */
+  internalToken?: unknown;
 }
 
 /**
@@ -172,9 +179,9 @@ export function describeVisit(input: DescribeVisitInput): FunnelVisit {
     startedAt: input.startedAt.toISOString(),
     device: input.narrowScreen ? 'mobile' : 'desktop',
     utmSource: (params.get('utm_source') ?? '').slice(0, MAX_STRING_LENGTH),
-    // Isti pogoj kot v App.tsx (readInitialParams): interni način vklopi samo
-    // natanko `debug=1`.
-    internal: params.get('debug') === '1',
+    // Isto pravilo kot v App.tsx (readInitialParams) — en vir, lib/internalMode.ts.
+    // Žeton `undefined` pomeni privzetega iz gradnje (privzeti parameter).
+    internal: isInternalMode(input.search, input.internalToken),
   };
 }
 
