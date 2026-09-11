@@ -1,5 +1,9 @@
 # Selitev kalkulatorja na lasten strežnik — kaj se podre in kaj ne
 
+> **Stanje 11. 9. 2026:** A1 (trdo zapisana pot) in prvi popravek iz F sta rešena 10. 9. (`VITE_BASE_PATH`,
+> PR #34); A6, A7 in preostala popravka iz F ostajajo odprti. Nadaljevanje s stanjem pred objavo:
+> [POROCILO-pripravljenost-za-objavo.md](POROCILO-pripravljenost-za-objavo.md).
+
 Pregled opravljen 2026-09-07 na veji `prenova-prodajne-priprave`. Vprašanje, na
 katerega odgovarja: *„ko bom aplikacijo hostal, dal na strežnik — a to kaj podere
 sistem?"* Predpostavka pregleda: aplikacija se preseli z GitHub Pages drugam
